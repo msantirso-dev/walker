@@ -1,0 +1,608 @@
+<title>Tienda Los Ñandúes RC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: banda de club con aros de rugby arriba; colección en grilla; carrito persistente por jugador; barra inferior en celular */
+:root{
+  --paper:#F1F4EE; --surface:#FFFFFF; --ink:#10231C; --muted:#56665E; --line:#D3DCD5;
+  --club:#0F4D3A; --club-deep:#0A3A2B; --gold:#D9A520; --on-club:#F6F3E4; --gold-ink:#3B2C05;
+  --ok:#1F7A4D; --warn:#9A6400; --danger:#B42318; --chip:#E4EBE5;
+  --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0B1712; --surface:#12221B; --ink:#E6EDE8; --muted:#97A89F; --line:#26392F;
+  --club:#145C45; --club-deep:#0C3D2E; --gold:#E6B84A; --on-club:#F6F3E4; --gold-ink:#2A1F03;
+  --ok:#4FBF85; --warn:#E0A53A; --danger:#F07167; --chip:#1B2E25; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0B1712; --surface:#12221B; --ink:#E6EDE8; --muted:#97A89F; --line:#26392F;
+  --club:#145C45; --club-deep:#0C3D2E; --gold:#E6B84A; --on-club:#F6F3E4; --gold-ink:#2A1F03;
+  --ok:#4FBF85; --warn:#E0A53A; --danger:#F07167; --chip:#1B2E25; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.5;padding-bottom:84px}
+h1,h2,h3{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.01em;line-height:.95;margin:0;text-wrap:balance}
+p{margin:0}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:16px}
+.num{font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--f-display);font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:.85rem;color:var(--muted)}
+.sample{background:var(--gold);color:var(--gold-ink);font-size:.82rem;font-weight:600;text-align:center;padding:6px 16px}
+
+/* ---------- HERO ---------- */
+.hero{position:relative;background:var(--club);color:var(--on-club);overflow:hidden}
+.hoops{position:absolute;inset:0;background:repeating-linear-gradient(180deg,transparent 0 46px,color-mix(in srgb,var(--gold) 85%,transparent) 46px 58px,transparent 58px 104px);opacity:.16;pointer-events:none}
+.hero-inner{position:relative;display:grid;grid-template-columns:1.25fr 1fr;gap:24px;align-items:center;padding-block:28px 36px}
+.clubbar{display:flex;align-items:center;gap:12px}
+.crest{width:52px;height:60px;flex:none}
+.clubname{font-family:var(--f-display);font-weight:700;font-size:1.15rem;text-transform:uppercase;letter-spacing:.06em;line-height:1.1}
+.clubname small{display:block;font-family:var(--f-body);text-transform:none;letter-spacing:0;font-weight:500;font-size:.85rem;opacity:.8}
+.status{display:inline-flex;align-items:center;gap:8px;margin-top:22px;background:color-mix(in srgb,var(--on-club) 12%,transparent);border:1px solid color-mix(in srgb,var(--on-club) 30%,transparent);border-radius:999px;padding:4px 12px;font-weight:600;font-size:.9rem}
+.status i{width:8px;height:8px;border-radius:50%;background:var(--gold)}
+.hero h1{font-size:clamp(3rem,9vw,6.4rem);font-weight:800;margin-top:12px}
+.hero h1 span{color:var(--gold)}
+.hero .lead{max-width:44ch;margin-top:14px;font-size:1.08rem;opacity:.92}
+.facts{display:flex;flex-wrap:wrap;gap:10px 28px;margin-top:24px}
+.fact b{display:block;font-family:var(--f-display);font-size:1.5rem;font-weight:700;letter-spacing:.02em}
+.fact span{font-size:.85rem;opacity:.8}
+.hero-art{position:relative;display:grid;place-items:center;min-height:300px}
+.hero-art .big{position:absolute;font-family:var(--f-display);font-weight:800;font-size:clamp(9rem,22vw,15rem);line-height:1;color:transparent;-webkit-text-stroke:2px color-mix(in srgb,var(--on-club) 35%,transparent);user-select:none}
+.hero-art svg{position:relative;width:min(300px,80%);height:auto;filter:drop-shadow(0 18px 28px rgba(0,0,0,.35))}
+.tag{position:absolute;left:10px;top:10px;font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:4px;background:var(--surface);color:var(--ink);border:1px solid var(--line)}
+.hero-art .tag{left:auto;right:4px;top:8px}
+
+/* ---------- PROCESO ---------- */
+section{padding-block:44px}
+.sec-head{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:12px;margin-bottom:22px}
+.sec-head h2{font-size:clamp(2rem,5vw,2.8rem);font-weight:800}
+.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,1fr);gap:0;border-top:3px solid var(--club)}
+.steps li{padding:16px 14px 0 0;position:relative;min-width:0}
+.steps li::before{content:"";position:absolute;top:-9px;left:0;width:15px;height:15px;border-radius:50%;background:var(--paper);border:3px solid var(--club)}
+.steps li.paid::before{background:var(--gold);border-color:var(--gold)}
+.steps .n{font-family:var(--f-display);font-weight:800;font-size:1rem;color:var(--muted);letter-spacing:.08em}
+.steps h3{font-size:1.45rem;font-weight:700;margin-top:4px}
+.steps p{color:var(--muted);font-size:.95rem;margin-top:6px;max-width:28ch}
+
+/* ---------- COLECCIÓN ---------- */
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column}
+.card .pic{position:relative;aspect-ratio:1/1;background:color-mix(in srgb,var(--club) 9%,var(--surface));display:grid;place-items:center;max-width:100%}
+.card .pic svg{width:72%;height:auto}
+.card .body{padding:14px;display:flex;flex-direction:column;gap:6px;flex:1}
+.code{font-family:var(--f-mono);font-size:.75rem;color:var(--muted)}
+.card h3{font-size:1.45rem;font-weight:700}
+.card .desc{color:var(--muted);font-size:.92rem}
+.price{display:flex;align-items:baseline;gap:8px;margin-top:auto;padding-top:8px}
+.price b{font-family:var(--f-display);font-size:1.7rem;font-weight:700}
+.price s{color:var(--muted);font-size:.9rem}
+.btn{appearance:none;border:0;border-radius:8px;padding:12px 16px;font-weight:700;cursor:pointer;min-height:46px;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-align:center}
+.btn-club{background:var(--club);color:var(--on-club)}
+.btn-club:hover{background:var(--club-deep)}
+.btn-gold{background:var(--gold);color:var(--gold-ink)}
+.btn-ghost{background:transparent;border:1.5px solid var(--line);color:var(--ink)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn-block{width:100%}
+
+/* ---------- MEDIDAS ---------- */
+.measure{display:grid;grid-template-columns:1fr 1.4fr;gap:28px;align-items:start}
+.how p{color:var(--muted);margin-top:10px;max-width:52ch}
+.how svg{width:100%;max-width:280px;height:auto;margin-top:16px}
+.seg{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.seg button{border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 14px;font-weight:600;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--club);color:var(--on-club);border-color:var(--club)}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:420px}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+th{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.06em;font-size:.85rem;color:var(--muted);font-weight:700}
+tr.grp td{background:var(--chip);font-weight:700;font-size:.82rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+tbody tr:last-child td{border-bottom:0}
+.note{font-size:.88rem;color:var(--muted);margin-top:10px}
+
+/* ---------- PEDIDO ---------- */
+.order{display:grid;grid-template-columns:1.3fr 1fr;gap:24px;align-items:start}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;min-width:0}
+.panel h3{font-size:1.5rem;font-weight:700;margin-bottom:12px}
+.player{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}
+.player:first-of-type{border-top:0;margin-top:0;padding-top:0}
+.player-h{display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
+.player-h b{font-family:var(--f-display);font-size:1.25rem;text-transform:uppercase;letter-spacing:.02em}
+.player-h span{font-size:.85rem;color:var(--muted)}
+.unit{display:grid;grid-template-columns:1fr auto auto;gap:4px 12px;align-items:start;padding:10px 0;border-bottom:1px dashed var(--line)}
+.unit:last-child{border-bottom:0}
+.unit .meta{font-size:.88rem;color:var(--muted)}
+.unit .pz{font-family:var(--f-mono);font-size:.82rem;background:var(--chip);border-radius:4px;padding:1px 6px;display:inline-block;margin-top:4px}
+.unit .amt{font-weight:700}
+.x{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:1.2rem;line-height:1;padding:2px 6px;border-radius:4px}
+.x:hover{color:var(--danger)}
+.empty{color:var(--muted);padding:18px 0;text-align:center}
+.sum{display:grid;gap:6px}
+.sum div{display:flex;justify-content:space-between;gap:12px}
+.sum .tot{border-top:2px solid var(--ink);padding-top:8px;margin-top:4px;font-weight:700;font-size:1.1rem}
+.sum .now{background:var(--gold);color:var(--gold-ink);border-radius:8px;padding:10px 12px;font-weight:700;font-size:1.1rem}
+.sum .later{color:var(--muted)}
+.field{display:grid;gap:4px;margin-bottom:12px}
+.field label{font-weight:600;font-size:.92rem}
+.field small{color:var(--muted);font-size:.8rem}
+.field input,.field select{width:100%;border:1.5px solid var(--line);background:var(--paper);border-radius:8px;padding:11px 12px;min-height:46px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.radio{display:flex;gap:10px;align-items:flex-start;border:1.5px solid var(--line);border-radius:8px;padding:12px;cursor:pointer;margin-bottom:8px}
+.radio:has(input:checked){border-color:var(--club);background:color-mix(in srgb,var(--club) 7%,transparent)}
+.radio input{margin-top:4px;accent-color:var(--club)}
+.check{display:flex;gap:10px;align-items:flex-start;font-size:.92rem;margin:12px 0}
+.check input{margin-top:4px;accent-color:var(--club);width:18px;height:18px;flex:none}
+.err{color:var(--danger);font-size:.88rem;margin-top:6px}
+
+/* ---------- FAQ ---------- */
+.faq{display:grid;grid-template-columns:1fr 1fr;gap:10px 28px}
+details{border-bottom:1px solid var(--line);padding:12px 0}
+summary{font-weight:700;cursor:pointer;list-style:none;display:flex;justify-content:space-between;gap:12px}
+summary::after{content:"+";font-family:var(--f-display);font-size:1.4rem;line-height:1;color:var(--club)}
+details[open] summary::after{content:"–"}
+details p{color:var(--muted);margin-top:8px;max-width:60ch}
+.contact{display:flex;flex-wrap:wrap;gap:16px 40px;margin-top:28px;padding:18px;background:var(--chip);border-radius:var(--r)}
+.contact b{display:block;font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.contact span{font-weight:600;user-select:all}
+footer{border-top:1px solid var(--line);padding-block:20px;color:var(--muted);font-size:.85rem}
+footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px}
+
+/* ---------- HOJA DE PRODUCTO / MODALES ---------- */
+.sheet-back{position:fixed;inset:0;background:rgba(5,15,10,.55);z-index:40;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);color:var(--ink);width:min(720px,100%);max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom,0px))}
+@media (min-width:760px){.sheet-back{align-items:center}.sheet{border-radius:16px;padding:24px}}
+.sheet-top{display:flex;gap:16px;align-items:flex-start}
+.sheet-top .pic{position:relative;width:120px;flex:none;aspect-ratio:1/1;border-radius:8px;background:color-mix(in srgb,var(--club) 9%,var(--surface));display:grid;place-items:center}
+.sheet-top .pic svg{width:80%;height:auto}
+.sheet-top .pic .tag{font-size:.62rem;left:4px;top:4px;padding:2px 5px}
+.sheet h3{font-size:1.9rem;font-weight:800}
+.close{margin-left:auto;border:0;background:var(--chip);border-radius:50%;width:40px;height:40px;font-size:1.3rem;cursor:pointer;flex:none}
+.block{margin-top:18px}
+.block>.lbl{font-family:var(--f-display);font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:1rem;margin-bottom:8px;display:flex;justify-content:space-between;gap:8px}
+.block>.lbl span{font-family:var(--f-body);text-transform:none;letter-spacing:0;font-weight:500;font-size:.85rem;color:var(--muted)}
+.sizes{display:flex;flex-direction:column;gap:8px}
+.sizes .g{font-size:.75rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{min-width:48px;min-height:44px;border:1.5px solid var(--line);background:var(--paper);border-radius:8px;font-weight:700;cursor:pointer;font-variant-numeric:tabular-nums}
+.chips button[aria-pressed="true"]{background:var(--club);color:var(--on-club);border-color:var(--club)}
+.qty{display:inline-flex;align-items:center;border:1.5px solid var(--line);border-radius:8px;overflow:hidden}
+.qty button{width:46px;height:46px;border:0;background:var(--chip);font-size:1.3rem;cursor:pointer}
+.qty output{min-width:48px;text-align:center;font-weight:700}
+.review-unit{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:8px}
+.review-unit b{font-family:var(--f-display);text-transform:uppercase;font-size:1.1rem}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:.92rem;margin-top:4px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;font-weight:600}
+.done-code{font-family:var(--f-mono);font-size:1.6rem;letter-spacing:.08em;background:var(--chip);padding:8px 14px;border-radius:8px;display:inline-block;margin-top:8px}
+.bank{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;background:var(--chip);border-radius:8px;padding:12px;margin-top:10px;font-size:.95rem}
+.bank dt{color:var(--muted)}
+.bank dd{margin:0;font-weight:600;font-family:var(--f-mono);word-break:break-all}
+
+/* ---------- BARRA INFERIOR ---------- */
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--ink);color:var(--paper);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px))}
+.bar .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-inline:0}
+.bar .t{font-size:.85rem;opacity:.8}
+.bar b{font-family:var(--f-display);font-size:1.4rem;letter-spacing:.02em}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--club);color:var(--on-club);padding:10px 16px;border-radius:8px;font-weight:600;z-index:50;max-width:calc(100% - 32px)}
+
+@media (max-width:900px){
+  .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .order,.measure{grid-template-columns:1fr}
+  .steps{grid-template-columns:1fr;border-top:0;border-left:3px solid var(--club);gap:18px;padding-left:18px}
+  .steps li{padding:0}
+  .steps li::before{top:3px;left:-28px}
+}
+@media (max-width:640px){
+  .hero-inner{grid-template-columns:1fr;padding-block:20px 28px}
+  .hero-art{min-height:220px;order:-1}
+  .hero-art svg{width:min(210px,62%)}
+  .faq{grid-template-columns:1fr}
+  .row2{grid-template-columns:1fr}
+  .card h3{font-size:1.2rem}
+  .price b{font-size:1.35rem}
+  .card .desc{display:none}
+}
+@media (prefers-reduced-motion:no-preference){
+  .hero-art svg{animation:rise .7s ease-out both}
+  @keyframes rise{from{transform:translateY(14px)}to{transform:none}}
+}
+</style>
+
+<div class="sample">Muestra de diseño: club ficticio, ningún dato es real y no se procesan pagos.</div>
+
+<header class="hero">
+  <div class="hoops" aria-hidden="true"></div>
+  <div class="wrap hero-inner">
+    <div>
+      <div class="clubbar">
+        <svg class="crest" viewBox="0 0 52 60" aria-hidden="true"><path d="M2 4h48v26c0 15-11 23-24 28C13 53 2 45 2 30Z" fill="var(--gold)"/><path d="M7 9h38v21c0 11.5-8.4 18.3-19 22.4C15.4 48.3 7 41.5 7 30Z" fill="var(--club-deep)"/><text x="26" y="36" text-anchor="middle" font-family="Barlow Condensed,Arial Narrow,sans-serif" font-weight="800" font-size="20" fill="var(--gold)">LÑ</text></svg>
+        <div class="clubname">Los Ñandúes Rugby Club<small>Sede Benavídez · Tigre, Buenos Aires</small></div>
+      </div>
+      <div class="status"><i></i>Preventa abierta hasta el viernes 31 de octubre, 23:59</div>
+      <h1>Colección<br>oficial <span>2026</span></h1>
+      <p class="lead">Indumentaria del club fabricada a pedido. Reservás con una seña del 50 %, la fábrica produce solo lo vendido y retirás en la sede cuando completás el saldo.</p>
+      <div class="facts">
+        <div class="fact"><b>31 OCT</b><span>Cierre de la preventa</span></div>
+        <div class="fact"><b>30 a 40 días</b><span>Entrega desde el cierre</span></div>
+        <div class="fact"><b>50 %</b><span>Seña para reservar</span></div>
+      </div>
+    </div>
+    <div class="hero-art">
+      <div class="big" aria-hidden="true">26</div>
+      <span class="tag">Diseño</span>
+      <div id="heroJersey"></div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="wrap" aria-labelledby="como">
+    <div class="sec-head"><div><div class="eyebrow">Cómo funciona</div><h2 id="como">De la reserva al retiro</h2></div></div>
+    <ol class="steps">
+      <li class="paid"><div class="n">PASO 1</div><h3>Elegís</h3><p>Prendas, talles y el jugador de cada una. Podés comprar para varios hijos en un solo pedido.</p></li>
+      <li class="paid"><div class="n">PASO 2</div><h3>Reservás</h3><p>Pagás el 50 % con Mercado Pago o transferencia. Tu pedido queda confirmado al acreditarse.</p></li>
+      <li><div class="n">PASO 3</div><h3>Fabricamos</h3><p>Al cierre se consolida la orden y se produce solo lo que se pidió.</p></li>
+      <li><div class="n">PASO 4</div><h3>Completás</h3><p>Te avisamos cuando las prendas llegan al club y pagás el saldo.</p></li>
+      <li><div class="n">PASO 5</div><h3>Retirás</h3><p>En la sede, con tu código de retiro, en los horarios publicados.</p></li>
+    </ol>
+  </section>
+
+  <section class="wrap" aria-labelledby="coleccion" style="padding-top:8px">
+    <div class="sec-head">
+      <div><div class="eyebrow">Precios de preventa</div><h2 id="coleccion">La colección</h2></div>
+      <p class="note" style="margin:0;max-width:40ch">Las imágenes marcadas “Diseño” son renders del modelo final. Las fotos reales se publican al recibir la muestra.</p>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section class="wrap" aria-labelledby="medidas">
+    <div class="measure">
+      <div class="how">
+        <div class="eyebrow">Tabla de medidas</div>
+        <h2 id="medidas" style="font-size:clamp(2rem,5vw,2.8rem);font-weight:800">Cómo elegir el talle</h2>
+        <p>Las medidas son de la prenda extendida, no del cuerpo. Tomá una remera que te quede bien, apoyala sobre una mesa y medí el ancho de pecho de costura a costura, 2 cm debajo de la sisa, y el largo desde el hombro hasta el ruedo.</p>
+        <p>Los talles 1, 2 y 3 son una curva propia del club: no equivalen a S, M o L. Si quedás entre dos talles, elegí el mayor.</p>
+        <svg viewBox="0 0 280 200" role="img" aria-label="Esquema de medición: ancho de pecho y largo">
+          <path d="M84 20 L118 10 Q140 24 162 10 L196 20 L254 52 L236 96 L208 84 L208 188 L72 188 L72 84 L44 96 L26 52 Z" fill="var(--chip)" stroke="var(--muted)" stroke-width="2"/>
+          <line x1="72" y1="100" x2="208" y2="100" stroke="var(--gold)" stroke-width="3"/>
+          <path d="M72 100 l8 -5 v10 Z M208 100 l-8 -5 v10 Z" fill="var(--gold)"/>
+          <text x="140" y="94" text-anchor="middle" font-family="Barlow,sans-serif" font-weight="700" font-size="13" fill="var(--ink)">A · Ancho de pecho</text>
+          <line x1="226" y1="22" x2="226" y2="188" stroke="var(--club)" stroke-width="3" stroke-dasharray="6 4"/>
+          <text x="246" y="130" font-family="Barlow,sans-serif" font-weight="700" font-size="13" fill="var(--ink)" transform="rotate(90 246 130)" text-anchor="middle">B · Largo</text>
+        </svg>
+      </div>
+      <div>
+        <div class="seg" id="chartSeg" role="group" aria-label="Prenda"></div>
+        <div class="tablebox"><table><thead id="chartHead"></thead><tbody id="chartBody"></tbody></table></div>
+        <p class="note">Tolerancia de fabricación ± 1 cm.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap" aria-labelledby="pedido" id="pedido-sec">
+    <div class="sec-head"><div><div class="eyebrow">Tu pedido</div><h2 id="pedido">Carrito por jugador</h2></div></div>
+    <div class="order">
+      <div class="panel">
+        <h3>Prendas</h3>
+        <div id="cart"></div>
+      </div>
+      <form class="panel" id="checkout" novalidate>
+        <h3>Datos y pago</h3>
+        <div class="field"><label for="bName">Nombre y apellido</label><input id="bName" autocomplete="name" required></div>
+        <div class="row2">
+          <div class="field"><label for="bEmail">Correo</label><input id="bEmail" type="email" autocomplete="email" required></div>
+          <div class="field"><label for="bPhone">Celular</label><input id="bPhone" type="tel" autocomplete="tel" placeholder="11 5555 5555" required></div>
+        </div>
+        <div class="field"><label for="bMember">N.º de socio <small>(opcional, declarativo)</small></label><input id="bMember" inputmode="numeric"></div>
+        <div class="field"><span style="font-weight:600;font-size:.92rem">Entrega</span>
+          <label class="radio"><input type="radio" name="dl" value="pickup" id="dlPickup" checked><span><b>Retiro en sede</b> · sin costo<br><small style="color:var(--muted)">Av. Los Ñandúes 1450, Benavídez. Martes y jueves de 18 a 21, sábados de 9 a 13.</small></span></label>
+          <label class="radio"><input type="radio" name="dl" value="ship" id="dlShip"><span><b>Envío a domicilio</b> · $ 9.500<br><small style="color:var(--muted)">Se cobra junto con el saldo.</small></span></label>
+        </div>
+        <div class="field" id="addrField" hidden><label for="bAddr">Dirección de envío</label><input id="bAddr" autocomplete="street-address"></div>
+        <div class="sum num" id="sum"></div>
+        <label class="check"><input type="checkbox" id="terms"><span>Acepto las condiciones de la preventa: la seña confirma la fabricación, el saldo se paga antes del retiro y los cambios de talle se aceptan hasta el cierre.</span></label>
+        <div class="err" id="formErr" hidden></div>
+        <button class="btn btn-club btn-block" type="submit" id="goReview">Revisar pedido</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="wrap" aria-labelledby="faq">
+    <div class="sec-head"><div><div class="eyebrow">Preguntas frecuentes</div><h2 id="faq">Antes de comprar</h2></div></div>
+    <div class="faq">
+      <details><summary>¿Qué pasa si no se llega al mínimo de producción?</summary><p>El club y la fábrica deciden entre extender la preventa, cancelarla o producir igual, y lo informan por correo. Si se cancela, la devolución de la seña se coordina con cada comprador.</p></details>
+      <details><summary>¿Puedo comprar para dos hijos en el mismo pedido?</summary><p>Sí. Cada prenda queda asociada a su jugador, con su categoría, para que la entrega en el club sea ordenada.</p></details>
+      <details><summary>¿Cuándo se confirma mi pedido?</summary><p>Cuando se acredita la seña. Con transferencia, al aprobarse el comprobante; un comprobante cargado queda en revisión hasta entonces.</p></details>
+      <details><summary>¿Puedo cambiar el talle?</summary><p>Hasta el cierre de la preventa, escribiendo al club. Después la orden ya está en fábrica.</p></details>
+      <details><summary>¿Cómo pago el saldo?</summary><p>Con el mismo enlace privado de tu pedido, por Mercado Pago o transferencia, cuando te avisemos que las prendas llegaron.</p></details>
+      <details><summary>¿Qué cubre la garantía?</summary><p>Fallas de costura o estampado con uso normal. Lavar con agua fría, del revés, sin suavizante y sin planchar sobre el estampado.</p></details>
+    </div>
+    <div class="contact">
+      <div><b>WhatsApp del club</b><span>11 4000-1450</span></div>
+      <div><b>Correo</b><span>tienda@losnandues.example</span></div>
+      <div><b>Instagram</b><span>@losnandues.rc</span></div>
+    </div>
+  </section>
+</main>
+
+<footer><div class="wrap"><span>Tienda oficial de Los Ñandúes Rugby Club</span><span>Fabricación y gestión: Camada · Preventa de indumentaria para clubes</span></div></footer>
+
+<div class="bar" id="bar"><div class="wrap">
+  <div><div class="t" id="barT">Tu pedido está vacío</div><b class="num" id="barTotal">$ 0</b></div>
+  <a class="btn btn-gold" href="#pedido-sec" id="barBtn">Ver pedido</a>
+</div></div>
+
+<div id="modalRoot"></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+  const ARS = n => "$ " + n.toLocaleString("es-AR");
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+  /* ---------- Ilustraciones (diseño) ---------- */
+  const JERSEY = "M60 22 L86 13 Q100 26 114 13 L140 22 L184 48 L170 86 L150 76 L150 206 L50 206 L50 76 L30 86 L16 48 Z";
+  let uid = 0;
+  function jersey({base, hoop, hoops = 0, stripe, collar = "var(--gold)"}) {
+    const id = "j" + (++uid);
+    let bands = "";
+    for (let i = 0; i < hoops; i++) bands += `<rect x="0" y="${70 + i * 34}" width="200" height="15" fill="${hoop}"/>`;
+    if (stripe) bands += `<rect x="0" y="96" width="200" height="22" fill="${stripe}"/>`;
+    return `<svg viewBox="0 0 200 220" aria-hidden="true"><defs><clipPath id="${id}"><path d="${JERSEY}"/></clipPath></defs>
+      <path d="${JERSEY}" fill="${base}"/><g clip-path="url(#${id})">${bands}</g>
+      <path d="M86 13 Q100 26 114 13 L110 30 Q100 36 90 30 Z" fill="${collar}"/>
+      <path d="${JERSEY}" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="2"/></svg>`;
+  }
+  function hoodie() {
+    const P = "M62 22 L88 14 Q100 22 112 14 L138 22 L170 50 L192 186 L166 192 L150 92 L150 206 L50 206 L50 92 L34 192 L8 186 L30 50 Z";
+    return `<svg viewBox="0 0 200 220" aria-hidden="true"><path d="${P}" fill="#14473A"/>
+      <rect x="50" y="190" width="100" height="16" fill="#0E3A2E"/><path d="M100 18 V96" stroke="#D9A520" stroke-width="4"/>
+      <circle cx="100" cy="98" r="5" fill="#D9A520"/><path d="M88 14 Q100 30 112 14 L114 34 Q100 40 86 34 Z" fill="#0E3A2E"/>
+      <rect x="112" y="64" width="18" height="18" rx="3" fill="#D9A520" opacity=".9"/>
+      <path d="${P}" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="2"/></svg>`;
+  }
+  function set() {
+    const S = "M20 20 H110 L116 120 L74 124 L66 66 L58 124 L14 120 Z";
+    return `<svg viewBox="0 0 320 220" aria-hidden="true"><g transform="translate(0,0) scale(.95)">${jersey({base:"#0F4D3A",hoop:"#D9A520",hoops:4}).replace(/^<svg[^>]*>|<\/svg>$/g,"")}</g>
+      <g transform="translate(196,48)"><path d="${S}" fill="#F3F1EA"/><rect x="20" y="20" width="90" height="10" fill="#0F4D3A"/><path d="${S}" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="2"/></g></svg>`;
+  }
+  $("#heroJersey").innerHTML = jersey({base:"#0F4D3A",hoop:"#D9A520",hoops:4});
+
+  /* ---------- Catálogo ---------- */
+  const KIDS = ["4","6","8","10","12","14","16"], NUM = ["1","2","3"], ALPHA = ["S","M","L","XL","2XL","3XL","4XL","5XL"];
+  const CHART_TOP = {"4":[34,46],"6":[36,49],"8":[38,52],"10":[41,55],"12":[44,58],"14":[47,62],"16":[49,65],"1":[50,68],"2":[53,70],"3":[56,72],"S":[50,70],"M":[53,72],"L":[56,74],"XL":[59,76],"2XL":[62,78],"3XL":[65,80],"4XL":[68,82],"5XL":[71,84]};
+  const CHART_HOOD = {"4":[36,44],"6":[38,47],"8":[40,50],"10":[43,53],"12":[46,56],"14":[49,60],"16":[51,63],"S":[54,68],"M":[57,70],"L":[60,72],"XL":[63,74],"2XL":[66,76],"3XL":[69,78]};
+  const CHART_SHORT = {"4":[25,28],"6":[26,30],"8":[28,32],"10":[30,34],"12":[32,36],"14":[34,38],"16":[36,40],"S":[38,42],"M":[41,44],"L":[44,46],"XL":[47,48],"2XL":[50,50],"3XL":[53,52]};
+  const GARMENTS = {
+    camiseta: {name:"Camiseta de juego", groups:[["Infantiles",KIDS],["Curva del club",NUM],["Adultos",ALPHA]], chart:CHART_TOP, cols:["Ancho de pecho","Largo"]},
+    buzo:     {name:"Buzo medio cierre", groups:[["Infantiles",KIDS],["Adultos",ALPHA.slice(0,6)]], chart:CHART_HOOD, cols:["Ancho de pecho","Largo"]},
+    short:    {name:"Short de juego", groups:[["Infantiles",KIDS],["Adultos",ALPHA.slice(0,6)]], chart:CHART_SHORT, cols:["Medio contorno de cintura","Largo"]},
+    entreno:  {name:"Camiseta de entrenamiento", groups:[["Infantiles",KIDS],["Adultos",ALPHA.slice(0,6)]], chart:CHART_TOP, cols:["Ancho de pecho","Largo"]}
+  };
+  const PRODUCTS = [
+    {id:"tit", code:"CAM-TIT-26", name:"Camiseta titular 2026", desc:"Aros verde y oro. Tela de juego de alta resistencia con cuello reforzado.", price:48000, list:56000, comps:[["Camiseta","camiseta"]], pers:true, art:() => jersey({base:"#0F4D3A",hoop:"#D9A520",hoops:4}), tag:"Diseño"},
+    {id:"cnj", code:"CNJ-JUE-26", name:"Conjunto de juego", desc:"Camiseta titular y short. Elegís el talle de cada prenda por separado.", price:72000, list:84000, comps:[["Camiseta","camiseta"],["Short","short"]], pers:true, art:set, tag:"Diseño"},
+    {id:"buz", code:"BUZ-MC-26", name:"Buzo medio cierre", desc:"Frisa liviana, cierre metálico y escudo bordado.", price:62000, list:72000, comps:[["Buzo","buzo"]], pers:false, art:hoodie, tag:"Diseño"},
+    {id:"ent", code:"CAM-ENT-26", name:"Camiseta de entrenamiento", desc:"Blanca con franja verde. Secado rápido para la semana.", price:34000, list:39000, comps:[["Camiseta","entreno"]], pers:false, art:() => jersey({base:"#F3F1EA",stripe:"#0F4D3A",collar:"#0F4D3A"}), tag:"Referencia"}
+  ];
+  const PERS = {namePrice:6000, numberPrice:4000, nameMax:12, numMin:1, numMax:99};
+  const CATS = ["M8","M10","M12","M14","M15","M16","M17","M19","Plantel superior","Femenino"];
+  const SHIP = 9500, DEPOSIT = .5;
+
+  $("#grid").innerHTML = PRODUCTS.map(p => `
+    <article class="card">
+      <div class="pic">${p.art()}<span class="tag">${p.tag}</span></div>
+      <div class="body">
+        <div class="code">${p.code}</div>
+        <h3>${p.name}</h3>
+        <p class="desc">${p.desc}</p>
+        <div class="price num"><b>${ARS(p.price)}</b><s>${ARS(p.list)}</s></div>
+        <button class="btn btn-club btn-block" data-add="${p.id}">Elegir talle</button>
+      </div>
+    </article>`).join("");
+
+  /* ---------- Tabla de medidas ---------- */
+  let chartKey = "camiseta";
+  function renderChart() {
+    $("#chartSeg").innerHTML = Object.entries(GARMENTS).map(([k,g]) => `<button type="button" aria-pressed="${k===chartKey}" data-chart="${k}">${g.name}</button>`).join("");
+    const g = GARMENTS[chartKey];
+    $("#chartHead").innerHTML = `<tr><th>Talle</th><th>A · ${g.cols[0]} (cm)</th><th>B · ${g.cols[1]} (cm)</th></tr>`;
+    $("#chartBody").innerHTML = g.groups.map(([gn, list]) => `<tr class="grp"><td colspan="3">${gn}</td></tr>` +
+      list.map(s => `<tr><td><b>${s}</b></td><td>${g.chart[s][0]}</td><td>${g.chart[s][1]}</td></tr>`).join("")).join("");
+  }
+  $("#chartSeg").addEventListener("click", e => { const b = e.target.closest("[data-chart]"); if (b) { chartKey = b.dataset.chart; renderChart(); } });
+  renderChart();
+
+  /* ---------- Estado ---------- */
+  const players = [{id:"p1", name:"Joaquín Ferreyra", sport:"Rugby", cat:"M12", team:""}];
+  const units = [];   // cada fila = 1 producto vendido
+  let pid = 1;
+
+  // Pedido de ejemplo para que la página abra en un estado realista
+  units.push({pid:"tit", player:"p1", sizes:{Camiseta:"10"}, name:"JOAQO", number:"9"});
+  units.push({pid:"buz", player:"p1", sizes:{Buzo:"12"}, name:"", number:""});
+  players.push({id:"p2", name:"Martina Ferreyra", sport:"Rugby", cat:"Femenino", team:""}); pid = 2;
+  units.push({pid:"cnj", player:"p2", sizes:{Camiseta:"S", Short:"M"}, name:"MARTU", number:"14"});
+  units.push({pid:"ent", player:null, sizes:{Camiseta:"XL"}, name:"", number:""});
+
+  const prod = id => PRODUCTS.find(p => p.id === id);
+  const unitPrice = u => prod(u.pid).price + (u.name ? PERS.namePrice : 0) + (u.number ? PERS.numberPrice : 0);
+  function totals() {
+    const items = units.reduce((a,u) => a + prod(u.pid).price, 0);
+    const pers = units.reduce((a,u) => a + (u.name ? PERS.namePrice : 0) + (u.number ? PERS.numberPrice : 0), 0);
+    const ship = $("#dlShip").checked && units.length ? SHIP : 0;
+    const deposit = Math.round((items + pers) * DEPOSIT);
+    const total = items + pers + ship;
+    return {items, pers, ship, total, deposit, balance: total - deposit};
+  }
+
+  function renderCart() {
+    if (!units.length) { $("#cart").innerHTML = `<p class="empty">Todavía no agregaste prendas. Elegí un producto de la colección.</p>`; }
+    else {
+      const groups = [...players.map(p => ({p, list: units.filter(u => u.player === p.id)})), {p:null, list: units.filter(u => !u.player)}].filter(g => g.list.length);
+      $("#cart").innerHTML = groups.map(g => `
+        <div class="player">
+          <div class="player-h"><b>${g.p ? esc(g.p.name) : "Sin jugador asociado"}</b><span>${g.p ? esc(g.p.sport + " · " + g.p.cat + (g.p.team ? " · " + g.p.team : "")) : "Socio o hincha"}</span></div>
+          ${g.list.map(u => { const p = prod(u.pid), i = units.indexOf(u);
+            return `<div class="unit"><div><div><b>${p.name}</b></div>
+              <div class="meta">${Object.entries(u.sizes).map(([c,s]) => `${p.comps.length > 1 ? c + " " : "Talle "}<b>${s}</b>`).join(" · ")}</div>
+              ${u.name || u.number ? `<span class="pz">${esc(u.name || "—")} · ${esc(u.number || "s/n")}</span>` : ""}</div>
+              <div class="amt num">${ARS(unitPrice(u))}</div>
+              <button class="x" type="button" aria-label="Quitar ${p.name}" data-rm="${i}">×</button></div>`; }).join("")}
+        </div>`).join("");
+    }
+    const t = totals();
+    $("#sum").innerHTML = units.length ? `
+      <div><span>Prendas (${units.length})</span><span>${ARS(t.items)}</span></div>
+      <div><span>Personalización</span><span>${ARS(t.pers)}</span></div>
+      <div><span>Envío</span><span>${t.ship ? ARS(t.ship) : "Retiro sin costo"}</span></div>
+      <div class="tot"><span>Total</span><span>${ARS(t.total)}</span></div>
+      <div class="now"><span>Seña a pagar ahora (50 %)</span><span>${ARS(t.deposit)}</span></div>
+      <div class="later"><span>Saldo al retirar${t.ship ? " (incluye envío)" : ""}</span><span>${ARS(t.balance)}</span></div>` : "";
+    $("#barT").textContent = units.length ? `${units.length} ${units.length === 1 ? "prenda" : "prendas"} · seña ${ARS(t.deposit)}` : "Tu pedido está vacío";
+    $("#barTotal").textContent = ARS(t.total);
+  }
+  $("#cart").addEventListener("click", e => { const b = e.target.closest("[data-rm]"); if (b) { units.splice(+b.dataset.rm, 1); renderCart(); } });
+  document.querySelectorAll('input[name="dl"]').forEach(r => r.addEventListener("change", () => { $("#addrField").hidden = !$("#dlShip").checked; renderCart(); }));
+
+  /* ---------- Modal ---------- */
+  function openModal(html, onMount) {
+    $("#modalRoot").innerHTML = `<div class="sheet-back" id="back"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
+    document.body.style.overflow = "hidden";
+    const back = $("#back");
+    back.addEventListener("click", e => { if (e.target === back || e.target.closest("[data-close]")) closeModal(); });
+    onMount && onMount(back);
+    const f = back.querySelector("button, input, select"); f && f.focus();
+  }
+  function closeModal() { $("#modalRoot").innerHTML = ""; document.body.style.overflow = ""; }
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && $("#back")) closeModal(); });
+  function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2200); }
+
+  /* ---------- Hoja de producto ---------- */
+  $("#grid").addEventListener("click", e => { const b = e.target.closest("[data-add]"); if (b) productSheet(prod(b.dataset.add)); });
+
+  function productSheet(p) {
+    const sel = {}; let qty = 1;
+    const sizeBlocks = p.comps.map(([label, gk]) => { const g = GARMENTS[gk];
+      return `<div class="block"><div class="lbl">Talle ${p.comps.length > 1 ? "· " + label : ""}<span>${g.name}</span></div><div class="sizes">
+        ${g.groups.map(([gn, list]) => `<div class="g">${gn}</div><div class="chips" data-comp="${label}">${list.map(s => `<button type="button" aria-pressed="false" data-size="${s}">${s}</button>`).join("")}</div>`).join("")}
+      </div></div>`; }).join("");
+    openModal(`
+      <div class="sheet-top"><div class="pic">${p.art()}<span class="tag">${p.tag}</span></div>
+        <div style="min-width:0"><div class="code">${p.code}</div><h3>${p.name}</h3><p style="color:var(--muted);margin-top:6px">${p.desc}</p>
+        <div class="price num" style="padding-top:6px"><b>${ARS(p.price)}</b></div></div>
+        <button class="close" type="button" data-close aria-label="Cerrar">×</button></div>
+      ${sizeBlocks}
+      <div class="block"><div class="lbl">Jugador<span>¿Para quién es?</span></div>
+        <div class="field" style="margin:0"><select id="selPlayer">${players.map(pl => `<option value="${pl.id}">${esc(pl.name)} · ${esc(pl.cat)}</option>`).join("")}<option value="">Sin jugador (socio o hincha)</option><option value="__new">+ Agregar otro jugador</option></select></div>
+        <div id="newPlayer" hidden style="margin-top:10px">
+          <div class="field"><label for="npName">Nombre del jugador</label><input id="npName"></div>
+          <div class="row2"><div class="field"><label for="npSport">Deporte</label><select id="npSport"><option>Rugby</option><option>Hockey</option></select></div>
+          <div class="field"><label for="npCat">Categoría</label><select id="npCat">${CATS.map(c => `<option>${c}</option>`).join("")}</select></div></div>
+          <div class="field"><label for="npTeam">Equipo <small>(opcional)</small></label><input id="npTeam" placeholder="Ej.: B"></div>
+        </div></div>
+      ${p.pers ? `<div class="block"><div class="lbl">Personalización<span>Opcional · por unidad</span></div>
+        <div class="row2"><div class="field"><label for="pzName">Nombre estampado <small>+ ${ARS(PERS.namePrice)} · hasta ${PERS.nameMax} letras</small></label><input id="pzName" maxlength="${PERS.nameMax}" autocapitalize="characters"></div>
+        <div class="field"><label for="pzNum">Número <small>+ ${ARS(PERS.numberPrice)} · ${PERS.numMin} a ${PERS.numMax}</small></label><input id="pzNum" inputmode="numeric" maxlength="2"></div></div></div>` : ""}
+      <div class="block" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div><div class="lbl" style="margin:0">Cantidad</div>${p.pers ? `<small style="color:var(--muted)">Con personalización se agrega de a una unidad.</small>` : ""}</div>
+        <div class="qty"><button type="button" id="qm" aria-label="Restar">−</button><output id="qv">1</output><button type="button" id="qp" aria-label="Sumar">+</button></div>
+      </div>
+      <div class="err" id="pErr" hidden></div>
+      <div class="block"><button class="btn btn-club btn-block" type="button" id="addBtn">Agregar al pedido</button></div>`, root => {
+        root.querySelectorAll("[data-comp]").forEach(row => row.addEventListener("click", e => {
+          const b = e.target.closest("[data-size]"); if (!b) return;
+          const comp = row.dataset.comp; sel[comp] = b.dataset.size;
+          root.querySelectorAll(`[data-comp="${comp}"] [data-size]`).forEach(x => x.setAttribute("aria-pressed", x === b && "true" || "false"));
+        }));
+        const sp = root.querySelector("#selPlayer");
+        sp.addEventListener("change", () => root.querySelector("#newPlayer").hidden = sp.value !== "__new");
+        const hasPz = () => p.pers && (root.querySelector("#pzName").value.trim() || root.querySelector("#pzNum").value.trim());
+        const setQ = n => { qty = Math.max(1, Math.min(10, n)); if (hasPz()) qty = 1; root.querySelector("#qv").textContent = qty; };
+        root.querySelector("#qm").onclick = () => setQ(qty - 1);
+        root.querySelector("#qp").onclick = () => setQ(qty + 1);
+        if (p.pers) ["#pzName","#pzNum"].forEach(s => root.querySelector(s).addEventListener("input", () => setQ(qty)));
+        root.querySelector("#addBtn").onclick = () => {
+          const err = root.querySelector("#pErr"); const fail = m => { err.textContent = m; err.hidden = false; };
+          const miss = p.comps.map(c => c[0]).filter(c => !sel[c]);
+          if (miss.length) return fail(`Elegí el talle de: ${miss.join(" y ").toLowerCase()}.`);
+          let player = sp.value;
+          if (player === "__new") {
+            const n = root.querySelector("#npName").value.trim();
+            if (n.length < 2) return fail("Escribí el nombre del jugador.");
+            player = "p" + (++pid);
+            players.push({id:player, name:n, sport:root.querySelector("#npSport").value, cat:root.querySelector("#npCat").value, team:root.querySelector("#npTeam").value.trim()});
+          }
+          let name = "", number = "";
+          if (p.pers) {
+            name = root.querySelector("#pzName").value.trim().toUpperCase();
+            number = root.querySelector("#pzNum").value.trim();
+            if (name && !/^[A-ZÁÉÍÓÚÑÜ .'-]+$/.test(name)) return fail("El nombre solo admite letras, espacios, punto, guion y apóstrofo.");
+            if (number && (!/^\d+$/.test(number) || +number < PERS.numMin || +number > PERS.numMax)) return fail(`El número debe estar entre ${PERS.numMin} y ${PERS.numMax}.`);
+          }
+          for (let i = 0; i < qty; i++) units.push({pid:p.id, player:player || null, sizes:{...sel}, name, number});
+          closeModal(); renderCart(); toast(`${qty > 1 ? qty + " unidades agregadas" : "Agregado al pedido"}: ${p.name}`);
+        };
+      });
+  }
+
+  /* ---------- Revisión y confirmación ---------- */
+  $("#checkout").addEventListener("submit", e => {
+    e.preventDefault();
+    const err = $("#formErr"); const fail = m => { err.textContent = m; err.hidden = false; };
+    err.hidden = true;
+    if (!units.length) return fail("Agregá al menos una prenda.");
+    if ($("#bName").value.trim().length < 3) return fail("Completá tu nombre y apellido.");
+    if (!/^\S+@\S+\.\S+$/.test($("#bEmail").value.trim())) return fail("Revisá el correo: lo usamos para enviarte el enlace del pedido.");
+    if ($("#bPhone").value.replace(/\D/g, "").length < 8) return fail("Completá un celular con código de área.");
+    if ($("#dlShip").checked && $("#bAddr").value.trim().length < 6) return fail("Completá la dirección de envío.");
+    if (!$("#terms").checked) return fail("Para continuar, aceptá las condiciones de la preventa.");
+    const t = totals();
+    const by = [...players.map(p => ({p, list: units.filter(u => u.player === p.id)})), {p:null, list: units.filter(u => !u.player)}].filter(g => g.list.length);
+    openModal(`
+      <div class="sheet-top"><div><div class="eyebrow">Último paso</div><h3>Revisá nombres, números y talles</h3>
+        <p style="color:var(--muted);margin-top:6px">Esto es lo que se envía a fabricar. Después del cierre no se puede cambiar.</p></div>
+        <button class="close" type="button" data-close aria-label="Volver">×</button></div>
+      ${by.map(g => `<div class="block"><div class="lbl">${g.p ? esc(g.p.name) : "Sin jugador"}<span>${g.p ? esc(g.p.cat) : "Socio o hincha"}</span></div>
+        ${g.list.map(u => { const p = prod(u.pid); return `<div class="review-unit"><b>${p.name}</b><dl class="kv">
+          ${Object.entries(u.sizes).map(([c,s]) => `<dt>Talle ${c.toLowerCase()}</dt><dd>${s}</dd>`).join("")}
+          ${p.pers ? `<dt>Nombre</dt><dd>${u.name ? esc(u.name) : "Sin nombre"}</dd><dt>Número</dt><dd>${u.number || "Sin número"}</dd>` : ""}</dl></div>`; }).join("")}</div>`).join("")}
+      <div class="block sum num">
+        <div class="tot"><span>Total</span><span>${ARS(t.total)}</span></div>
+        <div class="now"><span>Seña a pagar ahora</span><span>${ARS(t.deposit)}</span></div>
+        <div class="later"><span>Saldo al retirar</span><span>${ARS(t.balance)}</span></div>
+      </div>
+      <div class="block" style="display:grid;gap:8px">
+        <button class="btn btn-club btn-block" type="button" data-pay="mp">Confirmar y pagar con Mercado Pago</button>
+        <button class="btn btn-ghost btn-block" type="button" data-pay="tr">Confirmar y pagar por transferencia</button>
+        <button class="btn btn-ghost btn-block" type="button" data-close>Volver a editar</button>
+      </div>`, root => root.addEventListener("click", ev => { const b = ev.target.closest("[data-pay]"); if (b) done(b.dataset.pay, t); }));
+  });
+
+  function done(method, t) {
+    const code = "K7Q-4MZ2";
+    openModal(`
+      <div class="sheet-top"><div><div class="eyebrow">Pedido registrado · muestra</div><h3>Reservá tu lugar con la seña</h3></div>
+        <button class="close" type="button" data-close aria-label="Cerrar">×</button></div>
+      <p style="margin-top:12px">Código de pedido</p><div class="done-code">${code}</div>
+      <dl class="kv" style="margin-top:14px">
+        <dt>Estado del pedido</dt><dd>Pendiente de seña</dd>
+        <dt>Pago confirmado</dt><dd>${ARS(0)}</dd>
+        <dt>Seña a pagar</dt><dd>${ARS(t.deposit)}</dd>
+        <dt>Saldo posterior</dt><dd>${ARS(t.balance)}</dd>
+        <dt>Entrega estimada</dt><dd>30 a 40 días desde el 31/10</dd>
+      </dl>
+      ${method === "tr" ? `<div class="block"><div class="lbl">Datos para transferir<span>Destinatario: el club</span></div>
+        <dl class="bank"><dt>Titular</dt><dd>Asoc. Civil Los Ñandúes RC</dd><dt>Banco</dt><dd>Banco de muestra</dd><dt>CBU</dt><dd>0000000000000000000000</dd><dt>Alias</dt><dd>NANDUES.PREVENTA</dd><dt>Importe</dt><dd>${ARS(t.deposit)}</dd></dl>
+        <p class="note">Después de transferir, subí el comprobante y el número de operación desde el enlace de tu pedido. Queda en revisión hasta que el club lo apruebe.</p></div>`
+      : `<p class="note" style="margin-top:14px">En la app real, este botón abre el checkout de Mercado Pago. El pedido se confirma cuando Mercado Pago notifica el pago aprobado, no al volver a esta página.</p>`}
+      <p class="note">Te enviamos un enlace privado para seguir el pedido, pagar el saldo y ver tu código de retiro.</p>
+      <div class="block"><button class="btn btn-club btn-block" type="button" data-close>Listo</button></div>`);
+  }
+
+  renderCart();
+})();
+</script>
