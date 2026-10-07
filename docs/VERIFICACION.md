@@ -1,6 +1,6 @@
 # Verificación automática
 
-Fecha: 2026-10-07T19:49:49.656Z · Resultado: **24/24**
+Fecha: 2026-10-07T22:06:53.552Z · Resultado: **28/28**
 
 Pagos online verificados con el simulador interno (rotulado) y con el código real de Mercado Pago contra un simulador local de su API (`scripts/mock-mercadopago.mjs`). Falta la prueba con credenciales reales de Mercado Pago.
 
@@ -9,8 +9,9 @@ Pagos online verificados con el simulador interno (rotulado) y con el código re
 | Compra con varios jugadores, talles y prendas sin jugador | ✔ | 5 unidades, 2 jugadores, total 254000, seña 127000 |
 | Conjunto y combo con talles independientes por componente | ✔ | camiseta S + short L; camiseta 2 + buzo 14 |
 | Personalización por unidad (mismo talle, distinto nombre y número) | ✔ | nombres en mayúsculas por unidad; se rechazan caracteres inválidos, cantidad > 1 personalizada y productos sin personalización |
+| Edición de una prenda antes de fabricar (talle, nombre, número y jugador) | ✔ | talle 10 → 12, nombre y número, cambio de jugador; quitar nombre resta $ 6.000; historial con antes y después |
 | El servidor ignora importes enviados por el navegador y rechaza talles inexistentes | ✔ | total 34.000 aunque el navegador mande 1; talle 3 rechazado en prenda sin curva numérica |
-| Reenvío idéntico del formulario no duplica el pedido | ✔ | mismo pedido TGF-VA9W |
+| Reenvío idéntico del formulario no duplica el pedido | ✔ | mismo pedido TCD-N2YT |
 | Volver de Mercado Pago no confirma el pago | ✔ | la página de retorno muestra 'Esperando la confirmación' |
 | Seña aprobada por notificación verificada; notificaciones repetidas y concurrentes no duplican | ✔ | 1 pago aprobado tras 6 notificaciones; saldo 127000; firma falsa → 401; beneficio 8 % fijado al confirmar |
 | Pago rechazado y reintento sobre el mismo pedido | ✔ | rechazado → nuevo intento → aprobado; un solo pedido |
@@ -22,14 +23,18 @@ Pagos online verificados con el simulador interno (rotulado) y con el código re
 | Cierre de campaña: bloquea compras y conserva el catálogo | ✔ | 409 al comprar; catálogo visible sin compra; la tarea programada la pasa a Cerrada |
 | Mínimo no alcanzado exige decisión administrativa explícita | ✔ | sin decisión no se consolida; decisión 'continuar' registrada |
 | Consolidación para fabricación sin duplicar componentes | ✔ | CAM-TIT-26: 8 (sueltas + conjunto + combo); sin datos personales; lote aprobado y congelado |
+| Una prenda enviada a fábrica no se puede editar | ✔ | rechazado con indicación de cancelar y volver a cargar |
 | Cambios posteriores como lote de ajuste, sin alterar el lote aprobado | ✔ | ajuste: +1 combo (camiseta XL, buzo L), −1 buzo XL; lote 1 intacto |
 | Snapshot de precios: editar el catálogo no altera pedidos | ✔ | precio, nombre y condiciones aceptadas conservados en el pedido |
 | Producción hasta el club y aviso de saldo | ✔ | lotes avanzan en orden; pedidos listos; avisos de producción, retiro y saldo (uno por pedido) |
 | Entrega bloqueada con saldo; excepción solo autorizada y con motivo | ✔ | encargado de entregas: bloqueado; administrador del club: entrega con motivo registrado |
 | Saldo pagado con el mismo enlace y entrega parcial y total | ✔ | saldo 65000 pagado; 3 entregas (excepción, parcial, resto) con quién retiró y cuándo |
 | Pago en efectivo registrado por el club y entrega con el QR | ✔ | saldo en efectivo registrado; el QR solo abre el pedido con sesión del club |
-| Correos: sin proveedor quedan registrados como no enviados | ✔ | 62 correos registrados como "no enviado: falta proveedor"; 0 marcados como enviados |
+| Recuperar el enlace del pedido por correo, sin revelar si el correo existe | ✔ | correo con sus enlaces; repetición limitada; correo inexistente sin efecto visible |
+| Contraseña: cambio propio y restablecimiento con enlace de un solo uso | ✔ | contraseña actual requerida; cierra otras sesiones; enlace único, con vencimiento y sin revelar cuentas |
+| Correos: sin proveedor quedan registrados como no enviados | ✔ | 64 correos registrados como "no enviado: falta proveedor"; 0 marcados como enviados |
 | Páginas del panel responden para cada rol | ✔ | 8 combinaciones de rol y página |
+
 ## Uso desde celular
 
 Recorrido completo en Chromium sin interfaz con viewport de 390 × 844 (táctil), contra el build de producción (`next build`, servidor standalone):
@@ -43,6 +48,8 @@ Recorrido completo en Chromium sin interfaz con viewport de 390 × 844 (táctil)
 | Revisión de nombres, números y talles | ✔ |
 | Pedido creado desde el celular, pago por transferencia | ✔ redirige al enlace privado con los datos bancarios |
 | Panel: inicio, pedidos, entregas y campaña | ✔ |
+| Recuperar enlace del pedido, recuperar contraseña e ingreso | ✔ |
+| Pedido en el panel con el formulario de edición de una prenda abierto | ✔ |
 
 Capturas en `docs/capturas/`.
 

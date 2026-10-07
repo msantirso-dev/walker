@@ -18,7 +18,9 @@ import sharp from "sharp";
 import { db } from "@/shared/db";
 import { decryptSecret, encryptSecret } from "@/shared/crypto";
 import { submitTransfer, reviewTransfer, startOnlinePayment, registerManualPayment } from "@/modules/payments";
-import { expireReservations, cancelUnit } from "@/modules/orders";
+import { expireReservations, cancelUnit, editUnit, requestOrderLinks } from "@/modules/orders";
+import { changeOwnPassword, requestPasswordReset, resetPassword } from "@/modules/auth/password";
+import bcrypt from "bcryptjs";
 import { generateLot, approveLot, advanceLot, lotReport } from "@/modules/production";
 import { registerDelivery } from "@/modules/deliveries";
 import { closeExpiredCampaigns, decideMinimum } from "@/modules/campaigns";
@@ -197,6 +199,29 @@ async function main() {
     const pay = await db.payment.findFirstOrThrow({ where: { orderId: persOrder.order.id } });
     await simNotify(pay.id, "APPROVED");
     return "nombres en mayúsculas por unidad; se rechazan caracteres inválidos, cantidad > 1 personalizada y productos sin personalización";
+  });
+
+  await step("Edición de una prenda antes de fabricar (talle, nombre, número y jugador)", async () => {
+    const units = await db.orderUnit.findMany({ where: { orderId: persOrder.order.id }, orderBy: { sort: "asc" }, include: { components: true } });
+    const players = await db.player.findMany({ where: { orderId: persOrder.order.id }, orderBy: { sort: "asc" } });
+    const before = await db.order.findUniqueOrThrow({ where: { id: persOrder.order.id } });
+    await editUnit(actor(clubAdmin), units[0].id, { sizes: { Camiseta: "12" }, persName: "Benjamín", persNumber: "8", playerId: players[1].id });
+    const u = await db.orderUnit.findUniqueOrThrow({ where: { id: units[0].id }, include: { components: true } });
+    assert.equal(u.components[0].sizeLabel, "12");
+    assert.equal(u.persName, "BENJAMÍN");
+    assert.equal(u.persNumber, "8");
+    assert.equal(u.playerId, players[1].id);
+    assert.equal((await db.order.findUniqueOrThrow({ where: { id: persOrder.order.id } })).total, before.total, "el total no cambia si se mantiene la personalización");
+    await editUnit(actor(clubAdmin), units[1].id, { sizes: { Camiseta: "10" }, persName: null, persNumber: "11" });
+    const after = await db.order.findUniqueOrThrow({ where: { id: persOrder.order.id } });
+    assert.equal(after.total, before.total - 6000 * 100, "quitar el nombre descuenta su adicional");
+    await assert.rejects(editUnit(actor(clubAdmin), units[0].id, { sizes: { Camiseta: "99" } }), /habilitado/);
+    await assert.rejects(editUnit(actor(clubAdmin), units[0].id, { sizes: { Camiseta: "12" }, persName: "R2D2" }), /letras/);
+    await assert.rejects(editUnit(actor(clubAdmin), units[0].id, { sizes: { Camiseta: "12" } }), /No hay cambios/, "sin nombre ni número informados se conservan");
+    await assert.rejects(editUnit(actor(clubAdmin), units[0].id, { sizes: { Camiseta: "12" }, persName: "BENJAMÍN", persNumber: "8", playerId: players[1].id }), /No hay cambios/);
+    const log = await db.auditLog.findFirstOrThrow({ where: { entityId: persOrder.order.id, action: "order.unit_edited" } });
+    assert.ok(JSON.stringify(log.data).includes("Camiseta 10") && JSON.stringify(log.data).includes("Camiseta 12"), "queda el antes y el después");
+    return "talle 10 → 12, nombre y número, cambio de jugador; quitar nombre resta $ 6.000; historial con antes y después";
   });
 
   await step("El servidor ignora importes enviados por el navegador y rechaza talles inexistentes", async () => {
@@ -417,7 +442,7 @@ async function main() {
     const camTitExpected = comps.filter((c) => c.garmentCode === "CAM-TIT-26").length;
     assert.equal(camTit, camTitExpected);
     assert.ok(r.breakdown.some((b) => b.productCode === "P-CNJ-JUE" && b.garmentCode === "CAM-TIT-26"), "la camiseta del conjunto suma a CAM-TIT-26");
-    assert.ok(r.personalization.some((p) => p.name === "BENJA" && p.number === "7"));
+    assert.ok(r.personalization.some((p) => p.name === "BENJAMÍN" && p.number === "8"), "el lote toma la edición previa al cierre");
     const csv = await api(`/api/admin/lotes/${lot.id}/export?format=csv&part=personalizacion`, { cookie: await session("produccion@camada.test") });
     assert.equal(csv.status, 200);
     for (const pii of [multi.order.buyerEmail, "Ferreyra", "Comprador de prueba", "11 5555"]) assert.ok(!csv.text.includes(pii), `el reporte de fabricación no debe incluir ${pii}`);
@@ -425,6 +450,12 @@ async function main() {
     assert.equal(xlsx.status, 200);
     await approveLot(actor(textil), lot.id);
     return `CAM-TIT-26: ${camTit} (sueltas + conjunto + combo); sin datos personales; lote aprobado y congelado`;
+  });
+
+  await step("Una prenda enviada a fábrica no se puede editar", async () => {
+    const unit = await db.orderUnit.findFirstOrThrow({ where: { orderId: multi.order.id, productCode: "P-CAM-TIT" }, include: { components: true } });
+    await assert.rejects(editUnit(actor(clubAdmin), unit.id, { sizes: { Camiseta: "S" } }), /fábrica/);
+    return "rechazado con indicación de cancelar y volver a cargar";
   });
 
   await step("Cambios posteriores como lote de ajuste, sin alterar el lote aprobado", async () => {
@@ -521,6 +552,60 @@ async function main() {
     const anon = await api(`/admin/entregas/codigo/${o.pickupCode}`);
     assert.ok([307, 308].includes(anon.status), "sin sesión, el QR redirige al ingreso");
     return "saldo en efectivo registrado; el QR solo abre el pedido con sesión del club";
+  });
+
+  await step("Recuperar el enlace del pedido por correo, sin revelar si el correo existe", async () => {
+    const email = multi.order.buyerEmail;
+    await requestOrderLinks(email.toUpperCase());
+    const mails = await db.emailOutbox.findMany({ where: { to: email, template: "ORDER_LINKS" } });
+    assert.equal(mails.length, 1);
+    assert.ok(mails[0].body.includes(`/pedido/${multi.token}`), "incluye el enlace privado del pedido");
+    const others = await db.order.findMany({ where: { buyerEmail: { not: email } }, take: 5 });
+    for (const o of others) assert.ok(!mails[0].body.includes(o.code), "no incluye pedidos de otros compradores");
+    await requestOrderLinks(email);
+    assert.equal(await db.emailOutbox.count({ where: { to: email, template: "ORDER_LINKS" } }), 1, "una solicitud cada 5 minutos");
+    await requestOrderLinks("nadie@example.com");
+    assert.equal(await db.emailOutbox.count({ where: { to: "nadie@example.com" } }), 0);
+    const page = await api("/pedido/recuperar");
+    assert.equal(page.status, 200);
+    assert.ok((await api("/club/los-nandues-rugby")).text.includes("/pedido/recuperar"), "la tienda enlaza la recuperación");
+    return "correo con sus enlaces; repetición limitada; correo inexistente sin efecto visible";
+  });
+
+  await step("Contraseña: cambio propio y restablecimiento con enlace de un solo uso", async () => {
+    const email = "club@nandues.test";
+    const pw = process.env.SEED_PASSWORD ?? "camada-demo-2026";
+    const s1 = await session(email);
+    const s2 = await session(email);
+    const { createHash } = await import("node:crypto");
+    const keep = createHash("sha256").update(s1).digest("hex");
+    await assert.rejects(changeOwnPassword(clubAdmin.id, keep, { current: "incorrecta-1234", next: "NuevaClave-2026!", confirm: "NuevaClave-2026!" }), /actual no es correcta/);
+    await assert.rejects(changeOwnPassword(clubAdmin.id, keep, { current: pw, next: "corta", confirm: "corta" }), /al menos/);
+    await changeOwnPassword(clubAdmin.id, keep, { current: pw, next: "NuevaClave-2026!", confirm: "NuevaClave-2026!" });
+    assert.equal((await api("/admin", { cookie: s1 })).status, 200, "la sesión actual sigue abierta");
+    assert.ok([307, 308].includes((await api("/admin", { cookie: s2 })).status), "las otras sesiones se cierran");
+    // Restablecer
+    await requestPasswordReset("no-existe@camada.test", "127.0.0.1");
+    assert.equal(await db.emailOutbox.count({ where: { to: "no-existe@camada.test" } }), 0);
+    await requestPasswordReset(email, "127.0.0.1");
+    await requestPasswordReset(email, "127.0.0.1");
+    const mails = await db.emailOutbox.findMany({ where: { to: email, template: "PASSWORD_RESET" } });
+    assert.equal(mails.length, 1, "una solicitud cada 2 minutos");
+    const token = mails[0].body.match(/restablecer\/([A-Za-z0-9_-]+)/)![1];
+    const form = await api(`/admin/restablecer/${token}`);
+    assert.ok(form.text.includes("Guardar contraseña"));
+    await assert.rejects(resetPassword(token, "OtraClave-2026!", "Distinta-2026!", null), /no coincide/);
+    await resetPassword(token, "OtraClave-2026!", "OtraClave-2026!", null);
+    const u = await db.user.findUniqueOrThrow({ where: { email } });
+    assert.ok(await bcrypt.compare("OtraClave-2026!", u.passwordHash));
+    assert.ok([307, 308].includes((await api("/admin", { cookie: s1 })).status), "restablecer cierra todas las sesiones");
+    await assert.rejects(resetPassword(token, "Tercera-2026!!", "Tercera-2026!!", null), /venció o ya fue usado/);
+    assert.ok((await api(`/admin/restablecer/${token}`)).text.includes("venció o ya fue usado"));
+    const r2 = await db.passwordReset.create({ data: { userId: u.id, tokenHash: createHash("sha256").update("x".repeat(43)).digest("hex"), expiresAt: new Date(Date.now() - 1000) } });
+    await assert.rejects(resetPassword("x".repeat(43), "Tercera-2026!!", "Tercera-2026!!", null), /venció/);
+    await db.passwordReset.delete({ where: { id: r2.id } });
+    await db.user.update({ where: { id: u.id }, data: { passwordHash: await bcrypt.hash(pw, 10) } });
+    return "contraseña actual requerida; cierra otras sesiones; enlace único, con vencimiento y sin revelar cuentas";
   });
 
   await step("Correos: sin proveedor quedan registrados como no enviados", async () => {

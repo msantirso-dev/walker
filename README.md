@@ -24,6 +24,9 @@ Plataforma para una textil que ofrece a cada club su tienda de preventa: socios 
 | Entregas totales y parciales, QR de retiro, bloqueo por saldo con excepción y motivo | Implementado |
 | Beneficio del club (registro interno) y liquidaciones | Implementado |
 | Reporte comercial (CSV/Excel), enlace y QR de la tienda | Implementado |
+| Recuperar el enlace privado del pedido por correo (respuesta neutra, con límite) | Implementado |
+| Panel: cambio de contraseña propio y "olvidé mi contraseña" con enlace de un solo uso | Implementado (el enlace llega por correo: requiere SMTP) |
+| Edición de talles, nombre, número y jugador por prenda mientras no esté en un lote aprobado | Implementado |
 | Correos (8 avisos) | Plantillas y registro; **envío pendiente de SMTP** (sin SMTP se marcan "no enviado") |
 | Devoluciones vía API de Mercado Pago, facturación electrónica, envíos con operador logístico | Pendiente (las devoluciones se registran manualmente) |
 
@@ -95,7 +98,7 @@ MP_API_BASE=http://127.0.0.1:4010 ORDER_RATE_LIMIT=1000 PAYMENT_SIMULATOR=enable
 MOCK_MP_TOKEN=TEST-0000000000000000000000-mock npm run verify
 ```
 
-24 escenarios: varios jugadores y talles, conjuntos con talles independientes, personalización por unidad, seña y saldo, comprobantes rechazados y reemplazados, eventos de pago duplicados y concurrentes, rechazo y reintento, firma inválida, reembolso, cierre de campaña, mínimo no alcanzado, consolidación sin duplicar componentes, lotes de ajuste, entregas parcial y con excepción, aislamiento entre clubes y roles, cupos concurrentes (40 compras simultáneas, cupo 25). Resultado en `docs/VERIFICACION.md`.
+28 escenarios: varios jugadores y talles, conjuntos con talles independientes, personalización por unidad, seña y saldo, comprobantes rechazados y reemplazados, eventos de pago duplicados y concurrentes, rechazo y reintento, firma inválida, reembolso, cierre de campaña, mínimo no alcanzado, consolidación sin duplicar componentes, lotes de ajuste, entregas parcial y con excepción, aislamiento entre clubes y roles, cupos concurrentes (40 compras simultáneas, cupo 25), edición de prendas antes y después de fabricar, recuperación del enlace del pedido y gestión de contraseñas. Resultado en `docs/VERIFICACION.md`.
 
 ## Decisiones comerciales pendientes
 
