@@ -7,7 +7,7 @@ export function NavLinks({ items }: { items: { href: string; label: string }[] }
   return (
     <nav className="flex gap-1 overflow-x-auto px-2 pb-2 md:block md:px-2" aria-label="Panel">
       {items.map((i) => {
-        const active = i.href === "/admin" ? path === "/admin" : path.startsWith(i.href);
+        const active = i.href === "/admin" ? path === "/admin" : path === i.href || path.startsWith(i.href + "/");
         return (
           <Link
             key={i.href}

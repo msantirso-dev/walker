@@ -32,8 +32,23 @@ model User {
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
   sessions     Session[]
+  passwordResets PasswordReset[]
 
   @@index([clubId])
+}
+
+/// Restablecimiento de contraseña: token de un solo uso (solo se guarda su hash).
+model PasswordReset {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  ip        String?
+
+  @@index([userId])
 }
 
 model Session {

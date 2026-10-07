@@ -26,6 +26,11 @@ export const TEMPLATE_LABELS: Record<Template, string> = {
   ORDER_CANCELLED: "Pedido cancelado",
 };
 
+export const SYSTEM_TEMPLATE_LABELS: Record<string, string> = {
+  ORDER_LINKS: "Reenvío de enlaces de pedido",
+  PASSWORD_RESET: "Restablecer contraseña",
+};
+
 type OrderForMail = {
   id: string;
   code: string;
@@ -99,6 +104,35 @@ export const orderMailSelect = {
   club: { select: { name: true, pickupAddress: true, pickupHours: true, whatsapp: true } },
   campaign: { select: { title: true, pickupInstructions: true } },
 } as const;
+
+/** Reenvía al correo registrado los enlaces privados de sus pedidos (solo a esa dirección). */
+export async function queueOrderLinks(
+  email: string,
+  orders: { id: string; code: string; buyerName: string; accessTokenEnc: string; createdAt: Date; club: { name: string }; campaign: { title: string } }[],
+) {
+  if (!orders.length) return;
+  const name = orders[0].buyerName.split(" ")[0];
+  const lines = orders.map((o) => `• ${o.club.name} · ${o.campaign.title} · pedido ${o.code}\n  ${orderLink(o.accessTokenEnc)}`).join("\n\n");
+  await db.emailOutbox.create({
+    data: {
+      to: email,
+      template: "ORDER_LINKS",
+      subject: orders.length === 1 ? `Tu enlace del pedido ${orders[0].code}` : `Tus enlaces de ${orders.length} pedidos`,
+      body: `Hola ${name}:\n\nPediste que te reenviemos los enlaces privados de tus pedidos. Cada enlace sirve para ver el estado, pagar y retirar. No los compartas.\n\n${lines}\n\nSi no lo pediste vos, ignorá este correo: nadie más puede ver estos enlaces.`,
+    },
+  });
+}
+
+export async function queuePasswordReset(user: { email: string; name: string }, link: string, minutes: number) {
+  await db.emailOutbox.create({
+    data: {
+      to: user.email,
+      template: "PASSWORD_RESET",
+      subject: "Restablecer tu contraseña del panel",
+      body: `Hola ${user.name.split(" ")[0]}:\n\nPara elegir una contraseña nueva, entrá a este enlace (vence en ${minutes} minutos y se usa una sola vez):\n${link}\n\nSi no lo pediste vos, ignorá este correo: tu contraseña actual sigue funcionando.`,
+    },
+  });
+}
 
 let transport: Transporter | null = null;
 

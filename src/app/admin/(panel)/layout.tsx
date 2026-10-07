@@ -25,6 +25,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
     { href: "/admin/cuentas", label: "Cuentas de cobro", show: can(u, "clubs.manage") },
     { href: "/admin/usuarios", label: "Usuarios", show: can(u, "clubs.manage") },
     { href: "/admin/correos", label: "Correos", show: can(u, "clubs.manage") },
+    { href: "/admin/cuenta", label: "Mi cuenta", show: true },
   ].filter((i) => i.show);
 
   return (

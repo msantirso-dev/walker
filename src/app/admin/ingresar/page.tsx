@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser, login } from "@/modules/auth";
 import { ActionForm, SubmitButton } from "@/shared/ui/client";
@@ -12,14 +13,16 @@ async function doLogin(_prev: FormState, fd: FormData): Promise<FormState> {
   redirect("/admin");
 }
 
-export default async function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ restablecida?: string }> }) {
   if (await currentUser()) redirect("/admin");
+  const { restablecida } = await searchParams;
   return (
     <main className="grid min-h-dvh place-items-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="font-display text-2xl font-extrabold uppercase tracking-wider">{process.env.PLATFORM_NAME ?? "Camada"}</div>
         <h1 className="mt-6 text-5xl font-extrabold">Panel</h1>
         <p className="mt-2 text-muted">Textil, clubes, producción y entregas.</p>
+        {restablecida && <p className="notice notice-ok mt-6">Contraseña actualizada. Ingresá con la nueva.</p>}
         <div className="card mt-6 p-5">
           <ActionForm action={doLogin}>
             <div className="field">
@@ -33,6 +36,7 @@ export default async function LoginPage() {
             <SubmitButton className="btn btn-primary w-full" pendingText="Ingresando…">Ingresar</SubmitButton>
           </ActionForm>
         </div>
+        <Link href="/admin/recuperar" className="mt-4 inline-block text-sm underline">¿Olvidaste tu contraseña?</Link>
       </div>
     </main>
   );

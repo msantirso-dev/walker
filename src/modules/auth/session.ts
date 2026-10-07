@@ -97,3 +97,9 @@ export async function requireUser(): Promise<SessionUser> {
 export async function hashPassword(plain: string) {
   return bcrypt.hash(plain, 10);
 }
+
+/** Hash del token de la sesión actual (para cerrar las demás al cambiar la contraseña). */
+export async function currentSessionHash(): Promise<string | null> {
+  const token = (await cookies()).get(COOKIE)?.value;
+  return token ? sha256(token) : null;
+}
