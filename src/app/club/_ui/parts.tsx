@@ -99,6 +99,10 @@ export function Contact({ club, message }: { club: { name: string; whatsapp: str
           <span className="font-semibold">{club.officeHours}</span>
         </div>
       )}
+      <div>
+        <div className="eyebrow">¿Ya compraste?</div>
+        <Link href="/pedido/recuperar" className="font-semibold underline">Recuperar el enlace de mi pedido</Link>
+      </div>
     </div>
   );
 }

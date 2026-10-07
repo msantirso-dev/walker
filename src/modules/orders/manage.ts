@@ -6,7 +6,7 @@ import { depositFor, OrderError } from "./pricing";
 import { lockOrder, recomputeOrder } from "./recompute";
 
 /** Recalcula totales desde las unidades activas (tras cancelar una unidad). */
-async function recalcTotals(tx: Tx, orderId: string) {
+export async function recalcTotals(tx: Tx, orderId: string) {
   const o = await tx.order.findUniqueOrThrow({ where: { id: orderId }, include: { units: { where: { status: "ACTIVE" } }, campaign: true } });
   const itemsTotal = o.units.reduce((a, u) => a + u.unitPrice, 0);
   const persTotal = o.units.reduce((a, u) => a + u.persPrice, 0);

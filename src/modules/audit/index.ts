@@ -50,4 +50,6 @@ export const ACTION_LABELS: Record<string, string> = {
   "payment.refund": "Devolución registrada",
   "delivery.registered": "Entrega registrada",
   "delivery.exception": "Entrega con saldo pendiente (excepción)",
+  "order.links_resent": "Enlace del pedido reenviado al comprador",
+  "order.unit_edited": "Prenda modificada",
 };

@@ -1,16 +1,17 @@
 import Link from "next/link";
+import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import { requireUser, assertCan, can, canReviewPayments } from "@/modules/auth";
 import { orderById, paymentStateLabel, ORDER_STATUS_LABEL, DELIVERY_STATUS_LABEL } from "@/modules/orders";
 import { PAYMENT_KIND_LABEL, PAYMENT_METHOD_LABEL, PAYMENT_STATUS_LABEL } from "@/modules/payments";
 import { LOT_STATUS_LABEL } from "@/modules/production";
 import { ACTION_LABELS, history } from "@/modules/audit";
-import { TEMPLATE_LABELS, type Template } from "@/modules/notifications";
+import { TEMPLATE_LABELS, SYSTEM_TEMPLATE_LABELS, type Template } from "@/modules/notifications";
 import { db } from "@/shared/db";
 import { fmtDateTime, fmtShortTime } from "@/shared/dates";
 import { Badge, Money, PageHeader, Section, type Tone } from "@/shared/ui";
 import { ActionForm, ConfirmAction, SubmitButton } from "@/shared/ui/client";
-import { cancelOrderAction, cancelUnitAction, manualPaymentAction, refundAction, reviewAction } from "../actions";
+import { cancelOrderAction, cancelUnitAction, editUnitAction, manualPaymentAction, refundAction, resendLinkAction, reviewAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 const payTone: Record<string, Tone> = { APPROVED: "ok", IN_REVIEW: "info", PENDING: "warn", REJECTED: "danger", REFUNDED: "info" };
@@ -31,6 +32,12 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
     db.user.findMany({ select: { id: true, name: true } }),
   ]);
   const userName = new Map(users.map((x) => [x.id, x.name]));
+  const catalog = await db.product.findMany({
+    where: { id: { in: [...new Set(o.units.map((x) => x.productId))] } },
+    include: { components: { orderBy: { sort: "asc" }, include: { garment: { include: { sizes: { where: { enabled: true }, orderBy: { sort: "asc" } } } } } } },
+  });
+  const productOf = new Map(catalog.map((p) => [p.id, p]));
+  const lockedByLot = (x: (typeof o.units)[number]) => x.lotUnits.filter((l) => l.lot.status !== "PENDING_APPROVAL").reduce((a, l) => a + l.delta, 0) > 0;
   const balance = Math.max(0, o.total - o.paidAmount);
   const groups = [...o.players.map((p) => ({ p, units: o.units.filter((x) => x.playerId === p.id) })), { p: null, units: o.units.filter((x) => !x.playerId) }].filter((g) => g.units.length);
 
@@ -39,7 +46,14 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
       <PageHeader
         eyebrow={`${o.club.name} · ${o.campaign.title}`}
         title={`Pedido ${o.code}`}
-        actions={can(u, "deliveries.register", o.clubId) && o.status === "CONFIRMED" && <Link href={`/admin/entregas/${o.id}`} className="btn btn-primary">Entrega</Link>}
+        actions={
+          <>
+            <ActionForm action={resendLinkAction.bind(null, o.id)} className="">
+              <SubmitButton className="btn btn-ghost" pendingText="Enviando…">Reenviar enlace al comprador</SubmitButton>
+            </ActionForm>
+            {can(u, "deliveries.register", o.clubId) && o.status === "CONFIRMED" && <Link href={`/admin/entregas/${o.id}`} className="btn btn-primary">Entrega</Link>}
+          </>
+        }
       >
         {fmtDateTime(o.createdAt)}
       </PageHeader>
@@ -93,7 +107,8 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
                   {g.units.map((x) => {
                     const inLot = x.lotUnits.reduce((a, l) => a + l.delta, 0) > 0 ? x.lotUnits.filter((l) => l.delta > 0).at(-1) : null;
                     return (
-                      <tr key={x.id} className={x.status === "CANCELLED" ? "opacity-50" : ""}>
+                      <Fragment key={x.id}>
+                      <tr className={x.status === "CANCELLED" ? "opacity-50" : ""}>
                         <td className="font-mono text-xs">{x.ref}</td>
                         <td>{x.productName}<div className="font-mono text-xs text-muted">{x.productCode}</div></td>
                         <td>{x.components.map((c) => `${c.label} ${c.sizeLabel}`).join(" + ")}</td>
@@ -102,6 +117,7 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
                         <td className="text-sm">{inLot ? `Lote ${inLot.lot.number} · ${LOT_STATUS_LABEL[inLot.lot.status]}` : "—"}</td>
                         <td>{x.status === "CANCELLED" ? <Badge tone="danger">Cancelada</Badge> : x.delivery ? <Badge tone="ok">Entregada</Badge> : <Badge>Activa</Badge>}</td>
                         <td>
+                          {manage && x.status === "ACTIVE" && !x.deliveryId && lockedByLot(x) && <span className="text-xs text-muted">En fábrica: no editable</span>}
                           {manage && x.status === "ACTIVE" && !x.deliveryId && o.status !== "CANCELLED" && (
                             <ConfirmAction label="Cancelar" confirmLabel="Cancelar esta unidad recalcula el total del pedido.">
                               <ActionForm action={cancelUnitAction.bind(null, o.id, x.id)} className="grid gap-2">
@@ -112,6 +128,39 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
                           )}
                         </td>
                       </tr>
+                          {manage && x.status === "ACTIVE" && !x.deliveryId && o.status !== "CANCELLED" && !lockedByLot(x) && productOf.get(x.productId) && (
+                        <tr><td colSpan={8} className="pt-0">
+                            <details>
+                              <summary className="btn btn-ghost btn-sm">Editar talles, nombre o jugador</summary>
+                              <ActionForm action={editUnitAction.bind(null, o.id, x.id)} className="sticky left-0 mt-2 grid w-[min(28rem,calc(100vw-5.5rem))] gap-2">
+                                {x.components.map((c) => {
+                                  const comp = productOf.get(x.productId)!.components.find((pc) => pc.label === c.label);
+                                  return (
+                                    <div key={c.id} className="field">
+                                      <label htmlFor={`sz-${x.id}-${c.label}`}>Talle {c.label.toLowerCase()}</label>
+                                      <select id={`sz-${x.id}-${c.label}`} name={`size_${c.label}`} className="input" defaultValue={c.sizeLabel}>
+                                        {(comp?.garment.sizes ?? []).map((s) => <option key={s.id} value={s.label}>{s.label}</option>)}
+                                        {!comp?.garment.sizes.some((s) => s.label === c.sizeLabel) && <option value={c.sizeLabel}>{c.sizeLabel} (ya no habilitado)</option>}
+                                      </select>
+                                    </div>
+                                  );
+                                })}
+                                {productOf.get(x.productId)!.persNameEnabled && <div className="field"><label htmlFor={`pn-${x.id}`}>Nombre</label><input id={`pn-${x.id}`} name="persName" className="input uppercase" defaultValue={x.persName ?? ""} maxLength={productOf.get(x.productId)!.persNameMaxLen} /></div>}
+                                {productOf.get(x.productId)!.persNumberEnabled && <div className="field"><label htmlFor={`pu-${x.id}`}>Número</label><input id={`pu-${x.id}`} name="persNumber" className="input" inputMode="numeric" defaultValue={x.persNumber ?? ""} maxLength={3} /></div>}
+                                <div className="field">
+                                  <label htmlFor={`pl-${x.id}`}>Jugador</label>
+                                  <select id={`pl-${x.id}`} name="playerId" className="input" defaultValue={x.playerId ?? "__none"}>
+                                    {o.players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    <option value="__none">Sin jugador</option>
+                                  </select>
+                                </div>
+                                <p className="text-xs text-muted">El precio de la prenda no cambia. Agregar o quitar nombre o número recalcula la personalización.</p>
+                                <SubmitButton className="btn btn-primary btn-sm">Guardar cambios</SubmitButton>
+                              </ActionForm>
+                            </details>
+                          </td></tr>
+                          )}
+                      </Fragment>
                     );
                   })}
                 </tbody>
@@ -235,7 +284,7 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
             <ol className="card divide-y divide-line">
               {emails.map((e) => (
                 <li key={e.id} className="flex flex-wrap justify-between gap-2 p-3 text-sm">
-                  <span>{fmtShortTime(e.createdAt)} · {TEMPLATE_LABELS[e.template as Template] ?? e.template}</span>
+                  <span>{fmtShortTime(e.createdAt)} · {TEMPLATE_LABELS[e.template as Template] ?? SYSTEM_TEMPLATE_LABELS[e.template] ?? e.template}</span>
                   <Badge tone={emailTone[e.status]}>{EMAIL_STATUS[e.status]}</Badge>
                 </li>
               ))}

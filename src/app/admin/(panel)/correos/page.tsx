@@ -1,5 +1,5 @@
 import { requireUser, assertCan } from "@/modules/auth";
-import { TEMPLATE_LABELS, type Template } from "@/modules/notifications";
+import { TEMPLATE_LABELS, SYSTEM_TEMPLATE_LABELS, type Template } from "@/modules/notifications";
 import { db } from "@/shared/db";
 import { emailConfigured } from "@/shared/env";
 import { fmtShortTime } from "@/shared/dates";
@@ -28,7 +28,7 @@ export default async function Emails() {
                 <tr key={e.id}>
                   <td className="text-sm">{fmtShortTime(e.createdAt)}</td>
                   <td className="text-sm">{e.to}</td>
-                  <td>{TEMPLATE_LABELS[e.template as Template] ?? e.template}</td>
+                  <td>{TEMPLATE_LABELS[e.template as Template] ?? SYSTEM_TEMPLATE_LABELS[e.template] ?? e.template}</td>
                   <td className="text-sm">{e.subject}</td>
                   <td><Badge tone={e.status === "SENT" ? "ok" : e.status === "FAILED" ? "danger" : "warn"}>{L[e.status]}</Badge>{e.error && <div className="text-xs text-danger">{e.error}</div>}</td>
                 </tr>

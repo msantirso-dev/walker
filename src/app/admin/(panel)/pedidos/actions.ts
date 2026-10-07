@@ -6,7 +6,7 @@ import { UserError } from "@/shared/errors";
 import { parsePesos } from "@/shared/money";
 import { requireUser, assertCan, actorOf, clientIp } from "@/modules/auth";
 import { reviewTransfer, registerManualPayment, registerRefund } from "@/modules/payments";
-import { cancelOrder, cancelUnit } from "@/modules/orders";
+import { cancelOrder, cancelUnit, editUnit, resendOrderLink } from "@/modules/orders";
 import { deliverPending } from "@/modules/notifications";
 import type { PaymentKind } from "@/generated/prisma/client";
 
@@ -81,5 +81,27 @@ export async function cancelUnitAction(orderId: string, unitId: string, _p: Form
     await cancelUnit(actor, unitId, str(fd, "reason"));
     after(orderId);
     return "Unidad cancelada. Si ya estaba en un lote aprobado, el próximo lote de ajuste la descuenta.";
+  });
+}
+
+export async function editUnitAction(orderId: string, unitId: string, _p: FormState, fd: FormData): Promise<FormState> {
+  return run(async () => {
+    const { actor } = await ctx(orderId);
+    const unit = await db.orderUnit.findFirst({ where: { id: unitId, orderId }, include: { components: true } });
+    if (!unit) throw new UserError("Prenda inexistente.");
+    const sizes = Object.fromEntries(unit.components.map((c) => [c.label, str(fd, `size_${c.label}`)]));
+    const player = str(fd, "playerId");
+    const r = await editUnit(actor, unitId, { sizes, persName: str(fd, "persName") || null, persNumber: str(fd, "persNumber") || null, playerId: player === "__none" ? null : player || undefined });
+    after(orderId);
+    return r.persPriceChanged ? "Prenda actualizada. Cambió la personalización: se recalculó el total del pedido." : "Prenda actualizada.";
+  });
+}
+
+export async function resendLinkAction(orderId: string, _p: FormState, _fd: FormData): Promise<FormState> {
+  return run(async () => {
+    const { actor } = await ctx(orderId, "orders.view");
+    await resendOrderLink(actor, orderId);
+    after(orderId);
+    return "Enlace reenviado al correo del comprador.";
   });
 }
