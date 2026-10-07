@@ -1,14 +1,11 @@
 import "server-only";
 import { db, type Tx } from "@/shared/db";
+import { UserError } from "@/shared/errors";
 import { percentOf } from "@/shared/money";
 import type { CartInput } from "./cart-schema";
 import { MAX_UNITS_PER_ORDER } from "./cart-schema";
 
-export class OrderError extends Error {
-  constructor(message: string, public code = "invalid") {
-    super(message);
-  }
-}
+export class OrderError extends UserError {}
 
 export const PERS_NAME_RE = /^[A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ .'-]*$/;
 

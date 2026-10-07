@@ -4,11 +4,12 @@ import path from "node:path";
 import sharp from "sharp";
 import { env } from "@/shared/env";
 import { randomToken } from "@/shared/crypto";
+import { UserError } from "@/shared/errors";
 
 export const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export const RECEIPT_MAX_BYTES = 8 * 1024 * 1024;
 
-export class UploadError extends Error {}
+export class UploadError extends UserError {}
 
 const root = () => path.resolve(env().UPLOAD_DIR);
 

@@ -22,10 +22,9 @@ function holdingWhere(campaignId: string, now: Date, excludeOrderId?: string) {
 
 export async function heldUnits(campaignId: string, tx: Tx = db, excludeOrderId?: string) {
   const now = new Date();
-  const [total, byProduct] = await Promise.all([
-    tx.orderUnit.count({ where: holdingWhere(campaignId, now, excludeOrderId) }),
-    tx.orderUnit.groupBy({ by: ["productId"], where: holdingWhere(campaignId, now, excludeOrderId), _count: { _all: true } }),
-  ]);
+  // Secuencial: dentro de una transacción comparten conexión
+  const total = await tx.orderUnit.count({ where: holdingWhere(campaignId, now, excludeOrderId) });
+  const byProduct = await tx.orderUnit.groupBy({ by: ["productId"], where: holdingWhere(campaignId, now, excludeOrderId), _count: { _all: true } });
   return { total, byProduct: new Map(byProduct.map((r) => [r.productId, r._count._all])) };
 }
 
