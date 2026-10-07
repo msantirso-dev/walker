@@ -1,0 +1,756 @@
+// Camada — modelo de datos
+// Importes en centavos (Int). Fechas en UTC; se muestran en America/Argentina/Buenos_Aires.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────── Usuarios y acceso ─────────────────────────
+
+enum Role {
+  TEXTIL_ADMIN // administra todo
+  CLUB_ADMIN // gestiona su club
+  PRODUCTION // ve lotes y cantidades, sin datos personales
+  DELIVERY // consulta pedidos listos y registra retiros de su club
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         Role
+  clubId       String?
+  club         Club?     @relation(fields: [clubId], references: [id])
+  active       Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  sessions     Session[]
+
+  @@index([clubId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  ip        String?
+
+  @@index([userId])
+}
+
+// ───────────────────────── Club ─────────────────────────
+
+model Sport {
+  id         String      @id @default(cuid())
+  name       String      @unique
+  clubs      ClubSport[]
+  categories Category[]
+  products   Product[]
+}
+
+model Club {
+  id             String    @id @default(cuid())
+  slug           String    @unique
+  name           String
+  shortName      String?
+  description    String?
+  logoUrl        String?
+  coverUrl       String?
+  colorPrimary   String    @default("#0F4D3A")
+  colorSecondary String    @default("#D9A520")
+  city           String?
+  province       String?
+  venue          String? // sede
+  pickupAddress  String?
+  pickupHours    String? // horarios de retiro
+  officeHours    String? // horarios de atención
+  conditions     String? // condiciones particulares del club
+  whatsapp       String?
+  email          String?
+  instagram      String?
+  facebook       String?
+  website        String?
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  sports          ClubSport[]
+  categories      Category[]
+  photos          ClubPhoto[]
+  users           User[]
+  garments        Garment[]
+  products        Product[]
+  campaigns       Campaign[]
+  paymentAccounts PaymentAccount[]
+  buyers          Buyer[]
+  orders          Order[]
+}
+
+model ClubSport {
+  clubId  String
+  sportId String
+  club    Club   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  sport   Sport  @relation(fields: [sportId], references: [id])
+
+  @@id([clubId, sportId])
+}
+
+model Category {
+  id      String  @id @default(cuid())
+  clubId  String
+  club    Club    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  sportId String?
+  sport   Sport?  @relation(fields: [sportId], references: [id])
+  name    String
+  sort    Int     @default(0)
+  active  Boolean @default(true)
+
+  @@unique([clubId, sportId, name])
+  @@index([clubId])
+}
+
+model ClubPhoto {
+  id      String @id @default(cuid())
+  clubId  String
+  club    Club   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  url     String
+  caption String?
+  sort    Int    @default(0)
+}
+
+// ───────────────────────── Cobros ─────────────────────────
+
+enum AccountOwner {
+  TEXTIL
+  CLUB
+}
+
+model PaymentAccount {
+  id            String       @id @default(cuid())
+  owner         AccountOwner
+  clubId        String? // requerido si owner = CLUB
+  club          Club?        @relation(fields: [clubId], references: [id])
+  label         String
+  // Transferencia
+  bankHolder    String?
+  bankName      String?
+  bankCbu       String?
+  bankAlias     String?
+  bankCuit      String?
+  // Mercado Pago (cifrado AES-256-GCM; nunca se envía al navegador)
+  mpAccessTokenEnc   String?
+  mpWebhookSecretEnc String?
+  mpPublicLabel      String? // últimos dígitos para mostrar "configurado"
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  campaigns     Campaign[]
+}
+
+// ───────────────────────── Catálogo ─────────────────────────
+
+enum SizeGroup {
+  KIDS
+  NUMERIC
+  ALPHA
+  OTHER
+}
+
+/// Prenda fabricable. Es lo que consolida la orden de producción.
+model Garment {
+  id          String        @id @default(cuid())
+  clubId      String
+  club        Club          @relation(fields: [clubId], references: [id])
+  code        String
+  name        String
+  variant     String? // titular, suplente, entrenamiento...
+  material    String?
+  care        String?
+  measureA    String        @default("Ancho de pecho")
+  measureB    String        @default("Largo")
+  measureUnit String        @default("cm")
+  measureNote String?
+  active      Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  sizes       GarmentSize[]
+  components  ProductComponent[]
+
+  @@unique([clubId, code])
+}
+
+model GarmentSize {
+  id        String    @id @default(cuid())
+  garmentId String
+  garment   Garment   @relation(fields: [garmentId], references: [id], onDelete: Cascade)
+  label     String
+  group     SizeGroup
+  sort      Int
+  measureA  Decimal?  @db.Decimal(6, 1)
+  measureB  Decimal?  @db.Decimal(6, 1)
+  enabled   Boolean   @default(true)
+
+  @@unique([garmentId, label])
+}
+
+enum ProductKind {
+  SIMPLE
+  SET // conjunto
+  COMBO
+}
+
+/// Lo que se vende. Un producto simple tiene un componente.
+model Product {
+  id                String             @id @default(cuid())
+  clubId            String
+  club              Club               @relation(fields: [clubId], references: [id])
+  code              String
+  name              String
+  description       String?
+  kind              ProductKind        @default(SIMPLE)
+  sportId           String?
+  sport             Sport?             @relation(fields: [sportId], references: [id])
+  audience          String? // categoría o público
+  basePrice         Int // centavos
+  manufacturingTerms String?
+  // Personalización por unidad
+  persNameEnabled   Boolean            @default(false)
+  persNamePrice     Int                @default(0)
+  persNameMaxLen    Int                @default(12)
+  persNumberEnabled Boolean            @default(false)
+  persNumberPrice   Int                @default(0)
+  persNumberMin     Int                @default(0)
+  persNumberMax     Int                @default(99)
+  active            Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  components        ProductComponent[]
+  images            ProductImage[]
+  campaigns         CampaignProduct[]
+
+  @@unique([clubId, code])
+}
+
+model ProductComponent {
+  id          String  @id @default(cuid())
+  productId   String
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  garmentId   String
+  garment     Garment @relation(fields: [garmentId], references: [id])
+  label       String // "Camiseta", "Short"
+  sort        Int     @default(0)
+  printTarget Boolean @default(false) // recibe nombre y número
+
+  @@unique([productId, label])
+}
+
+enum ImageView {
+  FRONT
+  BACK
+  DETAIL
+  OTHER
+}
+
+enum ImageTag {
+  REAL // foto real del producto final
+  DESIGN // render o diseño
+  REFERENCE // foto de referencia (no es el producto final)
+}
+
+model ProductImage {
+  id        String    @id @default(cuid())
+  productId String
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  view      ImageView @default(FRONT)
+  tag       ImageTag  @default(DESIGN)
+  alt       String?
+  sort      Int       @default(0)
+}
+
+// ───────────────────────── Campañas ─────────────────────────
+
+enum CampaignStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  IN_PRODUCTION
+  READY_FOR_PICKUP
+  FINISHED
+  CANCELLED
+}
+
+enum PaymentMode {
+  FULL // pago total obligatorio
+  DEPOSIT // seña obligatoria (puede pagar total)
+}
+
+enum DepositType {
+  PERCENT
+  FIXED // importe fijo por pedido
+}
+
+enum MinDecision {
+  EXTEND
+  CANCEL
+  CONTINUE
+}
+
+enum LotCondition {
+  DEPOSIT_APPROVED
+  FULLY_PAID
+}
+
+model Campaign {
+  id                  String          @id @default(cuid())
+  clubId              String
+  club                Club            @relation(fields: [clubId], references: [id])
+  slug                String
+  title               String
+  description         String?
+  season              String?
+  status              CampaignStatus  @default(DRAFT)
+  opensAt             DateTime
+  closesAt            DateTime
+  deliveryDaysMin     Int             @default(30)
+  deliveryDaysMax     Int             @default(40)
+  showCatalogWhenClosed Boolean       @default(true)
+  // Cobro
+  paymentAccountId    String
+  paymentAccount      PaymentAccount  @relation(fields: [paymentAccountId], references: [id])
+  paymentMode         PaymentMode     @default(DEPOSIT)
+  depositType         DepositType     @default(PERCENT)
+  depositValue        Int             @default(50) // % o centavos
+  balanceDueText      String? // "Antes del retiro, al recibir el aviso"
+  allowMercadoPago    Boolean         @default(true)
+  allowTransfer       Boolean         @default(true)
+  mpReservationMinutes Int            @default(30)
+  transferHoldHours   Int             @default(72)
+  lotCondition        LotCondition    @default(DEPOSIT_APPROVED)
+  // Producción
+  minUnits            Int?
+  maxUnits            Int? // cupo total opcional
+  minDecision         MinDecision?
+  minDecisionNote     String?
+  minDecisionAt       DateTime?
+  minDecisionById     String?
+  // Entrega
+  pickupEnabled       Boolean         @default(true)
+  pickupInstructions  String?
+  shippingEnabled     Boolean         @default(false)
+  shippingPrice       Int             @default(0)
+  shippingNotes       String?
+  // Formulario
+  memberNumberMode    String          @default("OPTIONAL") // HIDDEN | OPTIONAL | REQUIRED
+  // Políticas
+  policyChanges       String?
+  policyCancellation  String?
+  policyRefunds       String?
+  minPolicyText       String? // qué pasa si no se alcanza el mínimo
+  faq                 Json?
+  productionNotice    String? // avance publicado para compradores
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  products            CampaignProduct[]
+  orders              Order[]
+  lots                ProductionLot[]
+  benefitRule         BenefitRule?
+  settlements         BenefitSettlement[]
+
+  @@unique([clubId, slug])
+}
+
+model CampaignProduct {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+  price      Int // precio de preventa (centavos)
+  listPrice  Int? // precio de lista, para mostrar el descuento real
+  maxUnits   Int?
+  sort       Int      @default(0)
+  active     Boolean  @default(true)
+
+  @@unique([campaignId, productId])
+}
+
+// ───────────────────────── Beneficio del club ─────────────────────────
+
+enum BenefitType {
+  FIXED_PER_UNIT
+  PERCENT_OF_GARMENTS // % sobre precio de prendas, sin personalización ni envío
+}
+
+model BenefitRule {
+  id         String      @id @default(cuid())
+  campaignId String      @unique
+  campaign   Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  type       BenefitType
+  value      Int // centavos por unidad o porcentaje en centésimas (1000 = 10,00 %)
+  notes      String?
+  updatedAt  DateTime    @updatedAt
+}
+
+model BenefitSettlement {
+  id          String   @id @default(cuid())
+  campaignId  String
+  campaign    Campaign @relation(fields: [campaignId], references: [id])
+  amount      Int
+  settledAt   DateTime
+  reference   String?
+  notes       String?
+  createdById String
+  createdAt   DateTime @default(now())
+}
+
+// ───────────────────────── Pedidos ─────────────────────────
+
+model Buyer {
+  id        String   @id @default(cuid())
+  clubId    String
+  club      Club     @relation(fields: [clubId], references: [id])
+  email     String
+  name      String
+  phone     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  orders    Order[]
+
+  @@unique([clubId, email])
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT // creado, esperando seña o pago
+  CONFIRMED // seña o pago aprobado
+  CANCELLED
+  EXPIRED // venció la reserva sin pago
+}
+
+enum DeliveryMethod {
+  PICKUP
+  SHIPPING
+}
+
+enum DeliveryStatus {
+  NOT_READY
+  READY
+  PARTIAL
+  DELIVERED
+}
+
+model Order {
+  id               String         @id @default(cuid())
+  code             String         @unique // visible, aleatorio, no da acceso
+  accessTokenHash  String         @unique // hash del enlace privado (búsqueda)
+  accessTokenEnc   String // token cifrado, para reenviar el enlace por correo
+  pickupCode       String         @unique // identificador para QR de retiro
+  idempotencyKey   String
+  clubId           String
+  club             Club           @relation(fields: [clubId], references: [id])
+  campaignId       String
+  campaign         Campaign       @relation(fields: [campaignId], references: [id])
+  buyerId          String
+  buyer            Buyer          @relation(fields: [buyerId], references: [id])
+  buyerName        String
+  buyerEmail       String
+  buyerPhone       String
+  memberNumber     String? // declarado por el comprador, no verificado
+  deliveryMethod   DeliveryMethod @default(PICKUP)
+  shippingAddress  String?
+  notes            String?
+  // Totales (centavos), calculados en el servidor
+  itemsTotal       Int
+  persTotal        Int
+  shippingTotal    Int
+  discountTotal    Int            @default(0)
+  total            Int
+  depositRequired  Int // importe necesario para confirmar
+  // Estado
+  status           OrderStatus    @default(PENDING_PAYMENT)
+  confirmedAt      DateTime?
+  reservedUntil    DateTime?
+  overCapacity     Boolean        @default(false)
+  // Pagos (desnormalizado, se recalcula desde Payment)
+  paidAmount       Int            @default(0)
+  inReviewAmount   Int            @default(0)
+  refundedAmount   Int            @default(0)
+  deliveryStatus   DeliveryStatus @default(NOT_READY)
+  // Snapshot de condiciones aceptadas
+  termsSnapshot    Json
+  termsHash        String
+  termsAcceptedAt  DateTime
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  cancelledAt      DateTime?
+  cancelReason     String?
+
+  players    Player[]
+  units      OrderUnit[]
+  payments   Payment[]
+  deliveries Delivery[]
+
+  @@unique([campaignId, idempotencyKey])
+  @@index([clubId])
+  @@index([campaignId, status])
+}
+
+model Player {
+  id       String      @id @default(cuid())
+  orderId  String
+  order    Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  name     String
+  sport    String?
+  category String?
+  team     String?
+  sort     Int         @default(0)
+  units    OrderUnit[]
+}
+
+enum UnitStatus {
+  ACTIVE
+  CANCELLED
+}
+
+/// Una fila por producto vendido.
+model OrderUnit {
+  id               String       @id @default(cuid())
+  ref              String       @unique // referencia corta para fabricación
+  orderId          String
+  order            Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId        String
+  productCode      String
+  productName      String
+  productDesc      String?
+  unitPrice        Int
+  listPrice        Int?
+  playerId         String?
+  player           Player?      @relation(fields: [playerId], references: [id])
+  persName         String?
+  persNumber       String?
+  persPrice        Int          @default(0)
+  benefitAmount    Int          @default(0) // fijado al confirmar
+  status           UnitStatus   @default(ACTIVE)
+  cancelledAt      DateTime?
+  deliveryId       String?
+  delivery         Delivery?    @relation(fields: [deliveryId], references: [id])
+  sort             Int          @default(0)
+  components       OrderUnitComponent[]
+  lotUnits         ProductionLotUnit[]
+
+  @@index([orderId])
+}
+
+model OrderUnitComponent {
+  id           String    @id @default(cuid())
+  unitId       String
+  unit         OrderUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  garmentId    String
+  garmentCode  String
+  garmentName  String
+  variant      String?
+  label        String // "Camiseta"
+  sizeLabel    String
+  printTarget  Boolean   @default(false)
+}
+
+// ───────────────────────── Pagos ─────────────────────────
+
+enum PaymentKind {
+  DEPOSIT
+  BALANCE
+  FULL
+  REFUND
+}
+
+enum PaymentMethod {
+  TRANSFER
+  MERCADOPAGO
+  CASH // registrado manualmente por usuario autorizado
+}
+
+enum PaymentStatus {
+  CREATED
+  PENDING
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  CANCELLED
+  EXPIRED
+  REFUNDED
+}
+
+model Payment {
+  id                  String        @id @default(cuid())
+  orderId             String
+  order               Order         @relation(fields: [orderId], references: [id])
+  kind                PaymentKind
+  method              PaymentMethod
+  amount              Int
+  status              PaymentStatus @default(CREATED)
+  statusDetail        String?
+  // Transferencia
+  operationRef        String?
+  replacesPaymentId   String?
+  // Mercado Pago
+  providerPreferenceId String?
+  providerPaymentId   String?       @unique
+  initPoint           String?
+  expiresAt           DateTime?
+  simulated           Boolean       @default(false)
+  // Revisión
+  reviewedById        String?
+  reviewedAt          DateTime?
+  reviewNote          String?
+  createdById         String? // usuario del panel, si lo registró un administrador
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  receipts            Receipt[]
+
+  @@index([orderId])
+  @@index([status])
+}
+
+model Receipt {
+  id           String   @id @default(cuid())
+  paymentId    String
+  payment      Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  fileKey      String
+  mime         String
+  size         Int
+  originalName String?
+  uploadedAt   DateTime @default(now())
+}
+
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  provider    String
+  accountId   String?
+  eventKey    String   @unique
+  dataId      String?
+  signatureOk Boolean
+  result      String?
+  payload     Json?
+  receivedAt  DateTime @default(now())
+  count       Int      @default(1)
+}
+
+/// Pagos del simulador (solo pruebas). Hace las veces de "proveedor".
+model SimulatedPayment {
+  id               String   @id @default(cuid())
+  paymentId        String
+  status           String
+  amount           Int
+  createdAt        DateTime @default(now())
+}
+
+// ───────────────────────── Producción ─────────────────────────
+
+enum LotStatus {
+  PENDING_APPROVAL
+  APPROVED
+  IN_PRODUCTION
+  QUALITY_CONTROL
+  READY_TO_SHIP
+  RECEIVED_BY_CLUB
+}
+
+enum LotKind {
+  MAIN
+  ADJUSTMENT
+}
+
+model ProductionLot {
+  id          String              @id @default(cuid())
+  campaignId  String
+  campaign    Campaign            @relation(fields: [campaignId], references: [id])
+  number      Int // 1, 2, 3 dentro de la campaña
+  kind        LotKind             @default(MAIN)
+  status      LotStatus           @default(PENDING_APPROVAL)
+  snapshot    Json? // congelado al aprobar
+  notes       String?
+  createdById String
+  createdAt   DateTime            @default(now())
+  approvedAt  DateTime?
+  approvedById String?
+  updatedAt   DateTime            @updatedAt
+  units       ProductionLotUnit[]
+
+  @@unique([campaignId, number])
+}
+
+model ProductionLotUnit {
+  id     String        @id @default(cuid())
+  lotId  String
+  lot    ProductionLot @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  unitId String
+  unit   OrderUnit     @relation(fields: [unitId], references: [id])
+  delta  Int           @default(1) // +1 alta, −1 baja por ajuste
+
+  @@unique([lotId, unitId])
+  @@index([unitId])
+}
+
+// ───────────────────────── Entregas ─────────────────────────
+
+model Delivery {
+  id               String      @id @default(cuid())
+  orderId          String
+  order            Order       @relation(fields: [orderId], references: [id])
+  deliveredAt      DateTime    @default(now())
+  deliveredById    String
+  receivedByName   String
+  receivedByNote   String? // relación o documento informado
+  balanceException String? // motivo si se entregó con saldo
+  notes            String?
+  units            OrderUnit[]
+}
+
+// ───────────────────────── Correo e historial ─────────────────────────
+
+enum EmailStatus {
+  QUEUED
+  SENT
+  FAILED
+  NOT_SENT_NO_PROVIDER
+}
+
+model EmailOutbox {
+  id        String      @id @default(cuid())
+  orderId   String?
+  to        String
+  template  String
+  subject   String
+  body      String
+  status    EmailStatus @default(QUEUED)
+  error     String?
+  createdAt DateTime    @default(now())
+  sentAt    DateTime?
+
+  @@index([orderId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actorRole String? // rol o "BUYER" / "SYSTEM" / "PROVIDER"
+  clubId    String?
+  entity    String
+  entityId  String
+  action    String
+  data      Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([clubId, createdAt])
+}
