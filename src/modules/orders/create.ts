@@ -132,7 +132,7 @@ export async function createOrder(campaignId: string, raw: unknown): Promise<Cre
         await queueEmail("ORDER_RECEIVED", forMail, undefined, tx);
         return order;
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 15_000 },
+      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, maxWait: 10_000, timeout: 15_000 },
     );
     return { token, orderId: order.id, code: order.code, payMethod: cart.payMethod, payKind: cart.payKind, existing: false };
   } catch (e) {

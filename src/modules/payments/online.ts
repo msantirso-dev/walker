@@ -35,10 +35,11 @@ export async function startOnlinePayment(orderId: string, kind: PaymentKind, act
     const open = await tx.payment.findFirst({
       where: {
         orderId, method: "MERCADOPAGO", kind: due.kind, amount: due.amount, status: { in: ["CREATED", "PENDING"] },
-        initPoint: { not: null }, expiresAt: { gt: new Date(Date.now() + 2 * 60_000) }, simulated: provider.simulated,
+        expiresAt: { gt: new Date(Date.now() + 2 * 60_000) }, simulated: provider.simulated,
       },
       orderBy: { createdAt: "desc" },
     });
+    // Un intento sin init_point todavía se está creando (doble envío): se completa con la misma clave de idempotencia
     if (open) return open;
 
     const expiresAt = due.kind === "BALANCE" || !after.reservedUntil ? new Date(Date.now() + 24 * 3600_000) : after.reservedUntil;
@@ -47,7 +48,7 @@ export async function startOnlinePayment(orderId: string, kind: PaymentKind, act
     });
     await audit(actor, { entity: "Order", entityId: orderId, clubId: order.clubId, action: "payment.created", data: { paymentId: p.id, kind: due.kind, amount: due.amount, simulated: provider.simulated } }, tx);
     return p;
-  });
+  }, { maxWait: 10_000, timeout: 15_000 });
   if (payment.initPoint) return payment.initPoint;
 
   const token = decryptSecret(order.accessTokenEnc);
@@ -134,5 +135,5 @@ export async function processProviderPayment(
     await recomputeOrder(tx, target.orderId, PROVIDER);
     if (next === "APPROVED") await notifyConfirmedPayment(tx, target.orderId, target.amount);
     return "applied" as const;
-  });
+  }, { maxWait: 10_000, timeout: 15_000 });
 }

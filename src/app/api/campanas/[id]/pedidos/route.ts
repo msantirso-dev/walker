@@ -10,7 +10,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const { id } = await ctx.params;
   const origin = req.headers.get("origin");
   if (origin && new URL(env().APP_URL).origin !== origin) return Response.json({ error: "Origen no permitido." }, { status: 403 });
-  if (!allow(`order:${ipOf(req)}`, 20, 60_000)) return Response.json({ error: "Demasiados intentos. Esperá un minuto." }, { status: 429 });
+  if (!allow(`order:${ipOf(req)}`, Number(process.env.ORDER_RATE_LIMIT ?? 20), 60_000)) return Response.json({ error: "Demasiados intentos. Esperá un minuto." }, { status: 429 });
   const len = Number(req.headers.get("content-length") ?? 0);
   if (len > 64_000) return Response.json({ error: "Pedido demasiado grande." }, { status: 413 });
 

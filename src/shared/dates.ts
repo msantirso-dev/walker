@@ -2,10 +2,10 @@
 export const AR_TZ = "America/Argentina/Buenos_Aires";
 const AR_OFFSET = "-03:00";
 
-const dtf = new Intl.DateTimeFormat("es-AR", { timeZone: AR_TZ, dateStyle: "long", timeStyle: "short" });
+const dtf = new Intl.DateTimeFormat("es-AR", { timeZone: AR_TZ, day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const df = new Intl.DateTimeFormat("es-AR", { timeZone: AR_TZ, dateStyle: "long" });
 const dShort = new Intl.DateTimeFormat("es-AR", { timeZone: AR_TZ, day: "2-digit", month: "2-digit", year: "numeric" });
-const dtShort = new Intl.DateTimeFormat("es-AR", { timeZone: AR_TZ, day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+const dtShort = new Intl.DateTimeFormat("es-AR", { timeZone: AR_TZ, day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
 export const fmtDateTime = (d: Date) => dtf.format(d) + " h";
 export const fmtDate = (d: Date) => df.format(d);

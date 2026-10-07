@@ -66,6 +66,10 @@ const pesos = (n: number) => n * 100;
 const days = (n: number) => new Date(Date.now() + n * 86400_000);
 
 async function main() {
+  if ((await db.club.count()) > 0 && process.env.SEED_FORCE !== "1") {
+    console.log("La base ya tiene datos: no se cargan los de demostración. Para reemplazarlos (borra todo) usá SEED_FORCE=1.");
+    return;
+  }
   console.log("Limpiando datos…");
   await db.$executeRawUnsafe(`TRUNCATE "AuditLog","EmailOutbox","WebhookEvent","SimulatedPayment","ProductionLotUnit","ProductionLot","Delivery","Receipt","Payment","OrderUnitComponent","OrderUnit","Player","Order","Buyer","BenefitSettlement","BenefitRule","CampaignProduct","Campaign","ProductImage","ProductComponent","Product","GarmentSize","Garment","PaymentAccount","ClubPhoto","Category","ClubSport","Session","User","Club","Sport" CASCADE`);
 

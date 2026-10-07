@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.env
+.env.*
+!.env.example
+data
+dist
+src/generated
+docs/muestra-landing.html
+*.log
+AGENTS.md

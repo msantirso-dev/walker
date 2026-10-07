@@ -11,7 +11,7 @@ const config: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
   serverExternalPackages: ["sharp", "exceljs"],
-  experimental: { serverActions: { bodySizeLimit: "2mb" } },
+  experimental: { serverActions: { bodySizeLimit: "10mb" } },
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },

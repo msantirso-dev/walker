@@ -119,7 +119,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                       {options.map((op) => (
                         <ActionForm key={op.kind} action={payOnline.bind(null, token, op.kind)} className="grid gap-2">
                           <SubmitButton className="btn btn-club" pendingText="Abriendo Mercado Pago…">
-                            Pagar {op.label.toLowerCase()} · {ars(op.amount)}
+                            {op.kind === "DEPOSIT" ? "Pagar la seña" : op.kind === "BALANCE" ? "Pagar el saldo" : "Pagar el total"} · {ars(op.amount)}
                           </SubmitButton>
                         </ActionForm>
                       ))}

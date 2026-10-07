@@ -394,7 +394,7 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
       )}
 
       {toast && (
-        <div role="status" className="fixed bottom-24 left-1/2 z-50 max-w-[calc(100%-32px)] -translate-x-1/2 rounded-lg bg-club px-4 py-2.5 font-semibold text-on-club">
+        <div role="status" className="fixed bottom-24 left-1/2 z-[35] max-w-[calc(100%-32px)] -translate-x-1/2 rounded-lg bg-club px-4 py-2.5 font-semibold text-on-club">
           {toast}
         </div>
       )}
