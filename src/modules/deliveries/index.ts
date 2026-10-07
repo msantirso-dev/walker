@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/shared/db";
+import { env } from "@/shared/env";
 import { audit, type Actor } from "@/modules/audit";
 import { can, type SessionUser } from "@/modules/auth";
 import { queueEmail, orderMailSelect } from "@/modules/notifications";
@@ -8,12 +9,15 @@ import { OrderError } from "@/modules/orders/pricing";
 
 export function normalizePickupCode(raw: string) {
   const s = raw.trim().toUpperCase();
-  const m = s.match(/RETIRO[:/-]([A-Z0-9]{10})$/) ?? s.match(/^([A-Z0-9]{10})$/);
+  const m = s.match(/(?:RETIRO[:/-]|\/CODIGO\/)([A-Z0-9]{10})$/) ?? s.match(/^([A-Z0-9]{10})$/);
   return m ? m[1] : null;
 }
 
-/** Contenido del QR de retiro: solo el identificador aleatorio, sin datos personales. */
-export const pickupQrPayload = (pickupCode: string) => `RETIRO:${pickupCode}`;
+/**
+ * Contenido del QR de retiro: un enlace al panel con el identificador aleatorio.
+ * No contiene datos personales y solo funciona para usuarios del club autenticados.
+ */
+export const pickupQrPayload = (pickupCode: string) => `${env().APP_URL}/admin/entregas/codigo/${pickupCode}`;
 
 export async function registerDelivery(
   user: SessionUser,
