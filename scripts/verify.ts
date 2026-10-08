@@ -734,7 +734,7 @@ async function main() {
       players: [{ key: "a", name: "Santino Gómez", sport: "Rugby", category: "M15" }, { key: "b", name: "Lola Gómez", sport: "Hockey", category: "Sub-14" }],
       items: [
         { productId: dp["D-REM"].id, playerKey: "a", sizes: { Remera: "M" }, options: { [legendG.id]: rugby, [nameG.id]: "SANTI" }, quantity: 1 },
-        { productId: dp["D-SHO"].id, playerKey: "a", sizes: { Short: "M" }, quantity: 1 },
+        { productId: dp["D-SHO"].id, playerKey: "a", sizes: { Bermuda: "M" }, quantity: 1 },
         { productId: dp["D-BOL"].id, playerKey: "b", sizes: { Bolso: "U" }, quantity: 1 },
       ],
     });
@@ -803,7 +803,7 @@ async function main() {
     assert.ok(!page.text.includes("Envío a domicilio"));
     assert.ok(page.text.includes("DEMOSTRACIÓN"));
     assert.ok(page.text.includes("Podés probarte el muestrario en el club antes de elegir tu talle."));
-    const ship = await api(`/api/campanas/${demoCamp.id}/pedidos`, { body: cart({ items: [{ productId: dp["D-SHO"].id, playerKey: null, sizes: { Short: "M" }, quantity: 1 }], delivery: { method: "SHIPPING", address: "Calle Falsa 123, Virreyes" } }) });
+    const ship = await api(`/api/campanas/${demoCamp.id}/pedidos`, { body: cart({ items: [{ productId: dp["D-SHO"].id, playerKey: null, sizes: { Bermuda: "M" }, quantity: 1 }], delivery: { method: "SHIPPING", address: "Calle Falsa 123, Virreyes" } }) });
     assert.equal(ship.status, 409);
     const home = await api(`/club/${demoClub.slug}`);
     assert.ok(home.text.includes("Pendiente de preventa"), "producto en catálogo sin venta");
@@ -899,8 +899,8 @@ async function main() {
     demoLotId = lot.id;
     const r = await lotReport(lot.id);
     const comps = await db.orderUnitComponent.findMany({ where: { unit: { status: "ACTIVE", order: { campaignId: demoCamp.id, status: "CONFIRMED" } } } });
-    const remTotal = comps.filter((c) => c.garmentCode === "REM-VER-D").length;
-    assert.equal(r.garments.find((g) => g.code === "REM-VER-D")?.total, remTotal, "todas las remeras base juntas, con o sin leyenda");
+    const remTotal = comps.filter((c) => c.garmentCode === "REM-VER").length;
+    assert.equal(r.garments.find((g) => g.code === "REM-VER")?.total, remTotal, "todas las remeras base juntas, con o sin leyenda");
     const job = (kind: string, value: string) => r.persJobs?.find((j) => j.kind === kind && j.value === value)?.quantity ?? 0;
     assert.equal(job("Leyenda", "RUGBY"), 3);
     assert.equal(job("Leyenda", "HOCKEY"), 2);

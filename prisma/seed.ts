@@ -4,7 +4,7 @@
  * Las contraseñas de demostración se imprimen al final. No usar en producción.
  */
 import "dotenv/config";
-import { mkdir, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import bcrypt from "bcryptjs";
 import sharp from "sharp";
@@ -64,12 +64,23 @@ async function asset(rel: string, svg: string, w = 800) {
   return `/files/${rel}`;
 }
 
+/** Copia una foto real (bocetos de la textil) desde prisma/assets al almacenamiento público. */
+async function photo(rel: string, file: string) {
+  const abs = path.join(UPLOAD, "public", rel);
+  await mkdir(path.dirname(abs), { recursive: true });
+  await copyFile(path.resolve(process.cwd(), "prisma/assets/virreyes", file), abs);
+  return `/files/${rel}`;
+}
+
 const KIDS = ["4", "6", "8", "10", "12", "14", "16"];
 const NUM = ["1", "2", "3"];
 const ALPHA = ["S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
 const TOP: Record<string, [number, number]> = { "4": [34, 46], "6": [36, 49], "8": [38, 52], "10": [41, 55], "12": [44, 58], "14": [47, 62], "16": [49, 65], "1": [50, 68], "2": [53, 70], "3": [56, 72], S: [50, 70], M: [53, 72], L: [56, 74], XL: [59, 76], "2XL": [62, 78], "3XL": [65, 80], "4XL": [68, 82], "5XL": [71, 84] };
 const HOOD: Record<string, [number, number]> = { "4": [36, 44], "6": [38, 47], "8": [40, 50], "10": [43, 53], "12": [46, 56], "14": [49, 60], "16": [51, 63], S: [54, 68], M: [57, 70], L: [60, 72], XL: [63, 74], "2XL": [66, 76], "3XL": [69, 78] };
 const SHORT: Record<string, [number, number]> = { "1": [27, 31], "2": [31, 35], "3": [35, 39], "4XL": [56, 54], "5XL": [59, 56], "4": [25, 28], "6": [26, 30], "8": [28, 32], "10": [30, 34], "12": [32, 36], "14": [34, 38], "16": [36, 40], S: [38, 42], M: [41, 44], L: [44, 46], XL: [47, 48], "2XL": [50, 50], "3XL": [53, 52] };
+// Catálogo de talles Walkersport (WKR26): [ancho, largo] en cm
+const RUN_TOP: Record<string, [number, number]> = { "1": [38, 54], "2": [42, 61], "3": [43.5, 61], S: [46, 71], M: [48, 73], L: [51, 75], XL: [57, 77.5], "2XL": [59, 80], "3XL": [61, 83] };
+const BERMUDA: Record<string, [number, number]> = { "1": [50, 34], "2": [54, 38], "3": [55, 40], S: [58, 44], M: [62, 47], L: [64, 49], XL: [66, 51], "2XL": [69, 53], "3XL": [72, 58], "4XL": [76, 60], "5XL": [78, 63] };
 
 function sizes(groups: [SizeGroup, string[]][], chart: Record<string, [number, number]>) {
   let sort = 0;
@@ -117,7 +128,7 @@ async function main() {
 
   // ───────── Textil ─────────
   const textilAccount = await db.paymentAccount.create({
-    data: { owner: "TEXTIL", label: "Camada Textil (cuenta de muestra)", bankHolder: "Camada Textil S.R.L. (muestra)", bankName: "Banco de muestra", bankCbu: "0000000000000000000001", bankAlias: "CAMADA.TEXTIL.DEMO", bankCuit: "30-00000000-0" },
+    data: { owner: "TEXTIL", label: "Walkersport (cuenta de muestra)", bankHolder: "Walkersport (titular de muestra)", bankName: "Banco de muestra", bankCbu: "0000000000000000000001", bankAlias: "WALKER.TEXTIL.DEMO", bankCuit: "30-00000000-0" },
   });
   await db.user.create({ data: { email: "textil@camada.test", name: "Lucía Paredes (textil)", passwordHash: hash, role: "TEXTIL_ADMIN" } });
   await db.user.create({ data: { email: "produccion@camada.test", name: "Ramiro Sosa (producción)", passwordHash: hash, role: "PRODUCTION" } });
@@ -275,7 +286,7 @@ async function main() {
   // Acuerdo privado próximo a vencer (para ver la alerta en el panel de la textil)
   await db.clubAgreement.create({
     data: {
-      clubId: club.id, status: "ACTIVE", startsAt: days(-320), endsAt: days(45), exclusive: true, brandLine: `LNRC by ${process.env.TEXTIL_BRAND ?? "Marca Textil"}`,
+      clubId: club.id, status: "ACTIVE", startsAt: days(-320), endsAt: days(45), exclusive: true, brandLine: `LNRC by ${process.env.TEXTIL_BRAND ?? "Walkersport"}`,
       samplesCommitted: "Curva superior e inferior completa en la sede.", catalogAgreed: "Indumentaria de juego, entrenamiento y outfit.",
       activationConditions: "Cada campaña la solicita el club y la autoriza la textil.", pricingRules: "Precio textil por producto; el club define el precio al socio.",
       createdById: textilUser.id,
@@ -314,18 +325,18 @@ async function main() {
   });
 
 
-  // ───────── Piloto demostrativo: rugby de Virreyes (DEMO) ─────────
-  // Club de demostración: escudo genérico, colores provisorios, productos de verano y precios de ejemplo.
-  // No usa logos, marcas ni respaldo reales del club. Se identifica como demo en toda la tienda.
-  const VA = "#1D3557", VB = "#A8DADC";
+  // ───────── Piloto demostrativo: Virreyes Rugby Club (DEMO) ─────────
+  // Bocetos reales de Walkersport para la colección de verano del club (catálogo "Outfit verano WKR27").
+  // Precios, stock y condiciones son de ejemplo: la tienda se identifica como demostración y nada se vende.
+  const VA = "#17573C", VB = "#E8742B";
   const demo = await db.club.create({
     data: {
-      slug: "demo-virreyes-rugby", name: "Rugby de Virreyes (demo)", shortName: "Virreyes demo", isDemo: true, managementPanel: true,
-      description: "Demostración del modelo de preventa para el club. Escudo, colores y precios son de ejemplo y no representan al club.",
+      slug: "demo-virreyes-rugby", name: "Virreyes Rugby Club (demo)", shortName: "Virreyes demo", isDemo: true, managementPanel: true,
+      description: "Demostración del modelo de preventa con los bocetos de verano que Walkersport preparó para el club. Precios de ejemplo, sujetos a aprobación del club.",
       colorPrimary: VA, colorSecondary: VB, city: "Virreyes", province: "Buenos Aires", venue: "Sede (dato de ejemplo)",
       pickupAddress: "Dirección de retiro a confirmar con el club", pickupHours: "Horarios a confirmar con el club", officeHours: "A confirmar",
       conditions: "Demostración: no se realizan ventas reales.",
-      logoUrl: await asset("demo/virreyes-demo-escudo.webp", crestSvg(VA, VB, "V"), 520),
+      logoUrl: await photo("demo/virreyes-escudo.webp", "escudo.webp"),
       coverUrl: await asset("demo/virreyes-demo-portada.webp", coverSvg(VA, VB), 1600),
       sports: { create: [{ sportId: sports.Rugby.id }, { sportId: sports.Hockey.id }] },
     },
@@ -339,50 +350,64 @@ async function main() {
   await db.user.create({ data: { email: "club@virreyes-demo.test", name: "Usuario demo (club)", passwordHash: hash, role: "CLUB_ADMIN", clubId: demo.id } });
   // Curva estándar de la textil: 1 (6-8), 2 (10-12), 3 (14-16), S a 5XL. Menos stock de muestrario y prendas que duran más.
   const STD_CURVE: [SizeGroup, string[]][] = [["NUMERIC", NUM], ["ALPHA", ALPHA]];
-  const vg = (code: string, name: string, sz: ReturnType<typeof sizes>, material: string, measureA = "Ancho de pecho") =>
-    db.garment.create({ data: { clubId: demo.id, code, name, variant: "Verano (demo)", material, care: "Lavar con agua fría, del revés.", measureA, measureB: "Largo", measureNote: "Medidas de ejemplo.", sizes: { create: sz } } });
-  const gRem = await vg("REM-VER-D", "Remera uso diario", sizes(STD_CURVE, TOP), "Algodón peinado 24/1 (dato de ejemplo)");
-  const gSho = await vg("SHO-VER-D", "Short de verano", sizes(STD_CURVE, SHORT), "Microfibra liviana (dato de ejemplo)", "Medio contorno de cintura");
-  const gMus = await vg("MUS-VER-D", "Musculosa", sizes(STD_CURVE, TOP), "Poliéster con microperforado (dato de ejemplo)");
-  const gBol = await db.garment.create({ data: { clubId: demo.id, code: "BOL-D", name: "Bolso", variant: "Único", material: "Lona impermeable (dato de ejemplo)", measureA: "Ancho", measureB: "Alto", sizes: { create: [{ label: "U", group: "OTHER", sort: 0 }] } } });
-  const vbg = "#E8EEF3";
-  const vImg = {
-    rem: await asset("demo/virreyes-remera.webp", teeSvg(VA, VB, vbg)),
-    remLeg: await asset("demo/virreyes-remera-leyenda.webp", teeSvg(VA, VB, vbg, "RUGBY")),
-    sho: await asset("demo/virreyes-short.webp", shortSvg(vbg)),
-    mus: await asset("demo/virreyes-musculosa.webp", tankSvg(VB, VA, vbg)),
-    bol: await asset("demo/virreyes-bolso.webp", bagSvg(VA, VB, vbg)),
-  };
+  const GUIDE = "Medidas en cm del catálogo de talles Walkersport.";
+  const vg = (code: string, name: string, sz: ReturnType<typeof sizes>, material: string, measureA: string, measureB: string, measureNote: string) =>
+    db.garment.create({ data: { clubId: demo.id, code, name, variant: "Verano WKR27", material, care: "Lavar con agua fría, del revés.", measureA, measureB, measureNote, sizes: { create: sz } } });
+  const one = (code: string, name: string, material: string, note?: string) =>
+    db.garment.create({ data: { clubId: demo.id, code, name, variant: "Único", material, measureA: "Largo", measureB: "Ancho", measureNote: note, sizes: { create: [{ label: "U", group: "OTHER", sort: 0 }] } } });
+  const gRem = await vg("REM-VER", "Remera algodón", sizes(STD_CURVE, RUN_TOP), "Algodón (dato de ejemplo)", "Ancho (sisa)", "Largo", `${GUIDE} Referencia: Remera Run.`);
+  const gSho = await vg("BER-VER", "Bermuda", sizes(STD_CURVE, BERMUDA), "Microfibra liviana (dato de ejemplo)", "Ancho", "Largo", GUIDE);
+  const gMus = await vg("MUS-VER", "Musculosa run", sizes(STD_CURVE, RUN_TOP), "Poliéster liviano (dato de ejemplo)", "Ancho (sisa)", "Largo", `${GUIDE} Referencia: Remera Run.`);
+  const gBol = await one("BOL", "Bolso", "Lona (dato de ejemplo)", "Bolso grande: 75 × 35 × 32 cm (catálogo de talles Walkersport).");
+  const gGor = await one("GOR", "Gorra", "Frente sublimado y red trasera (dato de ejemplo)");
+  const gPil = await one("PIL", "Piluso", "Gabardina (dato de ejemplo)");
+  const gToa = await one("TOA", "Toallón", "Microfibra (dato de ejemplo)");
+  const gNec = await one("NEC", "Neceser", "Neoprene (dato de ejemplo)");
+  const gPon = await one("PON", "Poncho", "Toalla de algodón con capucha (dato de ejemplo)");
+  const sketch = (file: string, alt: string) => photo(`demo/virreyes-${file}`, file).then((url) => ({ create: [{ url, view: "FRONT" as const, tag: "DESIGN" as const, alt: `Boceto Walkersport · ${alt}` }] }));
+  const outfit = { clubId: demo.id, kind: "SIMPLE" as const, technique: "PENDING" as const, catalogStatus: "PRESALE" as const };
   const dRem = await prod({
-    clubId: demo.id, code: "D-REM", name: "Remera uso diario", kind: "SIMPLE", family: "OUTFIT", technique: "PENDING", catalogStatus: "PRESALE",
-    description: "Remera de algodón para uso diario, con leyenda de disciplina y nombre opcionales. Producto y precio de ejemplo.", basePrice: pesos(13000),
+    ...outfit, code: "D-REM", name: "Remera algodón", family: "OUTFIT",
+    description: "Remera de algodón verde con franja del club. Admite leyenda de disciplina y nombre. Precio de ejemplo.", basePrice: pesos(13000),
     components: { create: [{ garmentId: gRem.id, label: "Remera", printTarget: true }] },
-    images: { create: [{ url: vImg.rem, view: "FRONT", tag: "DESIGN", alt: "Remera (diseño de ejemplo)" }, { url: vImg.remLeg, view: "DETAIL", tag: "DESIGN", alt: "Remera con leyenda de disciplina (ejemplo)", sort: 1 }] },
+    images: await sketch("remera.webp", "remera algodón, frente y espalda"),
   });
   const dSho = await prod({
-    clubId: demo.id, code: "D-SHO", name: "Short de verano", kind: "SIMPLE", family: "OUTFIT", technique: "PENDING", catalogStatus: "PRESALE",
-    description: "Short liviano para entrenar o usar en verano. Producto y precio de ejemplo.", basePrice: pesos(15000),
-    components: { create: [{ garmentId: gSho.id, label: "Short", printTarget: true }] },
-    images: { create: [{ url: vImg.sho, view: "FRONT", tag: "DESIGN", alt: "Short (diseño de ejemplo)" }] },
+    ...outfit, code: "D-SHO", name: "Bermuda", family: "OUTFIT",
+    description: "Bermuda verde con escudo y logo WKR. Precio de ejemplo.", basePrice: pesos(15000),
+    components: { create: [{ garmentId: gSho.id, label: "Bermuda", printTarget: true }] },
+    images: await sketch("bermuda.webp", "bermuda, frente y espalda"),
   });
   const dMus = await prod({
-    clubId: demo.id, code: "D-MUS", name: "Musculosa", kind: "SIMPLE", family: "OUTFIT", technique: "PENDING", catalogStatus: "PRESALE",
-    description: "Musculosa de entrenamiento. Precio de ejemplo igual al precio textil: sin saldo al club.", basePrice: pesos(9000),
+    ...outfit, code: "D-MUS", name: "Musculosa run", family: "OUTFIT",
+    description: "Musculosa para correr con franja naranja. Precio de ejemplo igual al precio textil: sin saldo al club.", basePrice: pesos(9000),
     components: { create: [{ garmentId: gMus.id, label: "Musculosa" }] },
-    images: { create: [{ url: vImg.mus, view: "FRONT", tag: "DESIGN", alt: "Musculosa (diseño de ejemplo)" }] },
+    images: await sketch("musculosa.webp", "musculosa run, frente y espalda"),
   });
   const dBol = await prod({
-    clubId: demo.id, code: "D-BOL", name: "Bolso", kind: "SIMPLE", family: "ACCESSORY", technique: "PENDING", catalogStatus: "PRESALE",
-    description: "Bolso de viaje con bolsillo para botines. Precio de ejemplo con recargo del 30 % sobre el precio textil.", basePrice: pesos(19500),
+    ...outfit, code: "D-BOL", name: "Bolso", family: "ACCESSORY",
+    description: "Bolso grande negro y verde con escudo; número opcional en el lateral. Precio de ejemplo con recargo del 30 % sobre el precio textil.", basePrice: pesos(19500),
     components: { create: [{ garmentId: gBol.id, label: "Bolso" }] },
-    images: { create: [{ url: vImg.bol, view: "FRONT", tag: "DESIGN", alt: "Bolso (diseño de ejemplo)" }] },
+    images: await sketch("bolso.webp", "bolso con número"),
   });
-  // Producto que la textil todavía prepara: visible en el catálogo como "próximamente", sin venta
+  const accessory = async (code: string, name: string, garmentId: string, label: string, file: string, description: string, price: number) =>
+    prod({ ...outfit, code, name, family: "ACCESSORY", description, basePrice: pesos(price), components: { create: [{ garmentId, label }] }, images: await sketch(file, name.toLowerCase()) });
+  const dGor = await accessory("D-GOR", "Gorra", gGor.id, "Gorra", "gorra.webp", "Gorra trucker con parche del club. Precio de ejemplo.", 10400);
+  const dPil = await accessory("D-PIL", "Piluso", gPil.id, "Piluso", "piluso.webp", "Piluso negro con escudo bordado. Precio de ejemplo.", 9100);
+  const dToa = await accessory("D-TOA", "Toallón", gToa.id, "Toallón", "toallon.webp", "Toallón con los colores y el escudo del club. Precio de ejemplo.", 14300);
+  const dNec = await accessory("D-NEC", "Neceser", gNec.id, "Neceser", "neceser.webp", "Neceser con franjas del club. Precio de ejemplo.", 10400);
+  const dPon = await prod({
+    ...outfit, code: "D-PON", name: "Poncho", family: "OUTFIT",
+    description: "Poncho toalla negro con capucha y bolsillo. Precio de ejemplo.", basePrice: pesos(28600),
+    components: { create: [{ garmentId: gPon.id, label: "Poncho" }] },
+    images: await sketch("poncho.webp", "poncho con capucha"),
+  });
+  // Producto que la textil todavía prepara: visible en el catálogo como "pendiente de preventa", sin venta
   await prod({
-    clubId: demo.id, code: "D-CAM", name: "Camiseta de juego (próximamente)", kind: "SIMPLE", family: "GAME_KIT", technique: "SUBLIMATED", catalogStatus: "CATALOG",
-    description: "Se habilitará por categoría completa.", basePrice: pesos(20000),
+    clubId: demo.id, code: "D-CAM", name: "Camiseta de juego", kind: "SIMPLE", family: "GAME_KIT", technique: "SUBLIMATED", catalogStatus: "CATALOG",
+    description: "Se habilitará por categoría completa. Diseño a definir con el club.", basePrice: pesos(20000),
     components: { create: [{ garmentId: gRem.id, label: "Camiseta" }] },
-    images: { create: [{ url: await asset("demo/virreyes-camiseta.webp", jerseySvg({ base: VA, hoop: VB, hoops: 3, collar: VB, bg: vbg })), view: "FRONT", tag: "DESIGN", alt: "Camiseta (diseño de ejemplo)" }] },
+    images: { create: [{ url: await asset("demo/virreyes-camiseta.webp", jerseySvg({ base: VA, hoop: VB, hoops: 3, collar: VB, bg: "#E8EEF3" })), view: "FRONT", tag: "DESIGN", alt: "Camiseta (diseño provisorio)" }] },
   });
 
   // Cada artículo admite la leyenda de disciplina (mismo artículo, distinta inscripción). Los adicionales son de la textil.
@@ -395,7 +420,13 @@ async function main() {
       include: { values: true },
     });
   const legend = await legendFor(dRem.id);
-  for (const p of [dSho, dMus, dBol]) await legendFor(p.id);
+  for (const p of [dSho, dMus, dBol, dGor, dPil, dToa, dNec, dPon]) await legendFor(p.id);
+  await db.productOptionGroup.create({
+    data: {
+      productId: dBol.id, name: "Número en el lateral", type: "NUMBER", role: "NUMBER", required: false, sort: 2, numberMin: 0, numberMax: 99, priceTextil: pesos(1500), priceClub: 0,
+      help: "Opcional, como en el boceto.",
+    },
+  });
   await db.productOptionGroup.create({
     data: {
       productId: dRem.id, name: "Nombre en la espalda", type: "TEXT", role: "NAME", required: false, sort: 2, maxLength: 12, priceTextil: pesos(2000), priceClub: 0,
@@ -408,7 +439,7 @@ async function main() {
   const initial = await db.clubPurchase.create({
     data: {
       clubId: demo.id, purposes: ["SAMPLE"], committedQty: CURVE.length * 2, paidQty: CURVE.length * 2, sizeStatus: "DEFINED", approvedAt: days(-6), approvedById: textilUser.id,
-      notes: "Ejemplo: curva superior (remera) e inferior (short) para probarse en el club.", createdById: textilUser.id,
+      notes: "Ejemplo: curva superior (remera) e inferior (bermuda) para probarse en el club.", createdById: textilUser.id,
       items: { create: CURVE.map((l) => ({ sizeLabel: l, quantity: 2 })) },
     },
   });
@@ -433,13 +464,13 @@ async function main() {
   });
   await db.clubAgreement.create({
     data: {
-      clubId: demo.id, status: "DRAFT", startsAt: days(0), endsAt: days(365), exclusive: true, brandLine: `Virreyes by ${process.env.TEXTIL_BRAND ?? "Marca Textil"}`,
+      clubId: demo.id, status: "DRAFT", startsAt: days(0), endsAt: days(365), exclusive: true, brandLine: `Virreyes by ${process.env.TEXTIL_BRAND ?? "Walkersport"}`,
       notes: "Borrador de ejemplo para la demostración. Sin valor contractual.", createdById: textilUser.id,
     },
   });
   const demoCampaign = await db.campaign.create({
     data: {
-      clubId: demo.id, slug: "verano-demo", title: "Verano · demostración", season: "Demo", status: "PUBLISHED", pricingModel: "TEXTIL_ADVANCE",
+      clubId: demo.id, slug: "verano-demo", title: "Outfit verano WKR27 · demostración", season: "Verano 2027", status: "PUBLISHED", pricingModel: "TEXTIL_ADVANCE",
       description: "Así se vería una preventa del club: precio textil como anticipo por Mercado Pago, saldo al club y entrega en la sede. Precios de ejemplo.",
       opensAt: days(-1), closesAt: days(30), deliveryDaysMin: 30, deliveryDaysMax: 45, paymentAccountId: textilAccount.id, allowTransfer: false, shippingEnabled: false,
       activationRequestedAt: days(-2), activationApprovedAt: days(-2), activationApprovedById: textilUser.id,
@@ -452,6 +483,11 @@ async function main() {
           { productId: dSho.id, textilPrice: pesos(12000), price: pesos(15000), sort: 1 },
           { productId: dMus.id, textilPrice: pesos(9000), price: pesos(9000), sort: 2 },
           { productId: dBol.id, textilPrice: pesos(15000), price: pesos(19500), markupBp: 3000, sort: 3 },
+          { productId: dGor.id, textilPrice: pesos(8000), price: pesos(10400), markupBp: 3000, sort: 4 },
+          { productId: dPil.id, textilPrice: pesos(7000), price: pesos(9100), markupBp: 3000, sort: 5 },
+          { productId: dToa.id, textilPrice: pesos(11000), price: pesos(14300), markupBp: 3000, sort: 6 },
+          { productId: dNec.id, textilPrice: pesos(8000), price: pesos(10400), markupBp: 3000, sort: 7 },
+          { productId: dPon.id, textilPrice: pesos(22000), price: pesos(28600), markupBp: 3000, sort: 8 },
         ],
       },
     },
