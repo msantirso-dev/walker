@@ -77,14 +77,14 @@ export async function commercialSheets(campaignId: string): Promise<Sheet[]> {
   });
   const pedidos: Sheet = {
     name: "Pedidos",
-    header: ["Pedido", "Fecha", "Estado", "Pago", "Comprador", "Correo", "Celular", "N.º socio (declarado)", "Jugadores", "Prendas", "Total", "Cobrado", "En revisión", "Saldo", "Devuelto", "Entrega", "Estado de entrega", "Dirección", "Modelo", "Anticipo requerido", "Anticipo cobrado (textil)", "Saldo club requerido", "Saldo club cobrado", "Política de cambios aceptada"],
-    money: [10, 11, 12, 13, 14, 19, 20, 21, 22],
+    header: ["Pedido", "Fecha", "Estado", "Pago", "Comprador", "Correo", "Celular", "N.º socio (declarado)", "Jugadores", "Prendas", "Total", "Cobrado", "En revisión", "Saldo", "Devuelto", "Entrega", "Estado de entrega", "Dirección", "Modelo", "Anticipo requerido", "Anticipo cobrado (textil)", "Saldo club", "Cobertura impositiva (%)", "Política de cambios aceptada"],
+    money: [10, 11, 12, 13, 14, 19, 20, 21],
     rows: orders.map((o) => [
       o.code, fmtShortTime(o.createdAt), ORDER_STATUS_LABEL[o.status], paymentStateLabel(o), o.buyerName, o.buyerEmail, o.buyerPhone, o.memberNumber ?? "",
       o.players.map((p) => `${p.name} (${[p.sport, p.category, p.team].filter(Boolean).join(" ")})`).join(" | "),
       o.units.length, o.total / 100, o.paidAmount / 100, o.inReviewAmount / 100, Math.max(0, o.total - o.paidAmount) / 100, o.refundedAmount / 100,
       o.deliveryMethod === "PICKUP" ? "Retiro" : "Envío", DELIVERY_STATUS_LABEL[o.deliveryStatus], o.shippingAddress ?? "",
-      o.pricingModel === "TEXTIL_ADVANCE" ? "Anticipo textil" : "Seña", o.advanceRequired / 100, o.advancePaid / 100, o.clubBalanceRequired / 100, o.clubPaid / 100, o.policyVersion ?? "",
+      o.pricingModel === "TEXTIL_ADVANCE" ? "Anticipo textil" : "Seña", o.advanceRequired / 100, o.advancePaid / 100, o.clubBalanceRequired / 100, o.clubTaxBp != null ? o.clubTaxBp / 100 : "", o.policyVersion ?? "",
     ]),
   };
   const prendas: Sheet = {

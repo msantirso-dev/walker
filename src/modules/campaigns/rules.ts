@@ -16,12 +16,16 @@ import type { CampaignAudience, ProductionRuleType } from "@/generated/prisma/cl
 export const RULE_LABEL: Record<ProductionRuleType, string> = {
   NONE: "Sin regla",
   FULL_CATEGORY: "Categoría completa",
-  INITIAL_PURCHASE: "Compra inicial del club",
+  INITIAL_PURCHASE: "Mínimo con compra de la diferencia (club)",
 };
 export const AUDIENCE_LABEL: Record<CampaignAudience, string> = { ALL: "Todo el club", SPORTS: "Disciplinas", CATEGORIES: "Categorías" };
 
-/** Compra inicial sugerida para outfits. Estimada, editable por producto y campaña (ver docs/REQUISITOS.md). */
-export const OUTFIT_INITIAL_PURCHASE_DEFAULT = 15;
+/**
+ * Outfit: mínimo de producción por producto (20, editable). Al cerrar, el club compra la diferencia entre lo vendido
+ * y el mínimo; si la preventa llega al mínimo, se le sugiere un respaldo (5) para cambios o venta posterior.
+ */
+export const OUTFIT_INITIAL_PURCHASE_DEFAULT = 20;
+export const OUTFIT_BACKUP_SUGGESTION = 5;
 
 const EDITABLE = ["DRAFT", "ACTIVATION_REQUESTED", "ACTIVATION_APPROVED"] as const;
 const isEditable = (s: string) => (EDITABLE as readonly string[]).includes(s);
@@ -53,7 +57,7 @@ export async function confirmedUnits(campaignId: string, productId: string, cate
 
 type RuleCp = {
   ruleType: ProductionRuleType; ruleCategoryId: string | null; expectedQty: number | null; initialPurchaseMin: number | null;
-  initialPurchaseWaived: boolean; ruleApprovedAt: Date | null;
+  initialPurchaseWaived: boolean; ruleApprovedAt: Date | null; clubCommitAt?: Date | null;
   clubPurchase: { committedQty: number; paidQty: number; sizeStatus: string; approvedAt: Date | null } | null;
 };
 
@@ -66,23 +70,41 @@ export function ruleOpenProblems(cp: RuleCp, name: string): string[] {
     if (!cp.ruleApprovedAt) out.push(`${name}: falta la aprobación de la textil para la campaña de categoría completa.`);
   }
   if (cp.ruleType === "INITIAL_PURCHASE") {
-    const min = cp.initialPurchaseMin ?? 0;
     if (cp.initialPurchaseWaived) {
-      if (!cp.ruleApprovedAt) out.push(`${name}: la excepción a la compra inicial necesita aprobación de la textil.`);
+      if (!cp.ruleApprovedAt) out.push(`${name}: la excepción al mínimo necesita aprobación de la textil.`);
     } else {
-      const p = cp.clubPurchase;
-      if (!min) out.push(`${name}: indicá la compra inicial mínima.`);
-      else if (!p) out.push(`${name}: falta vincular la compra inicial del club (mínimo ${min}).`);
-      else {
-        if (p.committedQty < min) out.push(`${name}: la compra inicial comprometida (${p.committedQty}) no alcanza el mínimo (${min}).`);
-        if (p.paidQty < min) out.push(`${name}: la compra inicial pagada (${p.paidQty}) no alcanza el mínimo (${min}).`);
-        if (p.sizeStatus !== "DEFINED") out.push(`${name}: falta la distribución de talles de la compra inicial.`);
-        if (!p.approvedAt) out.push(`${name}: la compra inicial no está aprobada por la textil.`);
-      }
-      if (!cp.initialPurchaseWaived && !cp.ruleApprovedAt) out.push(`${name}: falta la aprobación de la textil para abrir con compra inicial.`);
+      const min = cp.initialPurchaseMin ?? 0;
+      if (!min) out.push(`${name}: indicá el mínimo de producción.`);
+      else if (!cp.clubCommitAt) out.push(`${name}: falta el compromiso del club de comprar la diferencia hasta ${min} unidades.`);
+      if (!cp.ruleApprovedAt) out.push(`${name}: falta la aprobación de la textil para abrir.`);
     }
   }
   return out;
+}
+
+/**
+ * Sugerencia de talles para la compra del club, proporcional a lo vendido (resto mayor). Es solo una sugerencia:
+ * la carga y aprobación son manuales.
+ */
+export function suggestSizes(sold: { size: string; qty: number }[], qty: number) {
+  const total = sold.reduce((a, s) => a + s.qty, 0);
+  if (!qty || !total) return [];
+  const raw = sold.map((s) => ({ size: s.size, exact: (s.qty * qty) / total }));
+  const out = raw.map((r) => ({ size: r.size, qty: Math.floor(r.exact), rest: r.exact - Math.floor(r.exact) }));
+  let left = qty - out.reduce((a, r) => a + r.qty, 0);
+  for (const r of [...out].sort((a, b) => b.rest - a.rest)) {
+    if (left <= 0) break;
+    r.qty++;
+    left--;
+  }
+  return out.filter((r) => r.qty > 0).map(({ size, qty: q }) => ({ size, qty: q }));
+}
+
+async function soldSizes(campaignId: string, productId: string) {
+  const comps = await db.orderUnitComponent.groupBy({
+    by: ["sizeLabel"], where: { unit: { productId, status: "ACTIVE", order: { campaignId, status: "CONFIRMED" } } }, _count: { _all: true },
+  });
+  return comps.map((c) => ({ size: c.sizeLabel, qty: c._count._all }));
 }
 
 /** Todo lo que impide autorizar o publicar una campaña con modelo de anticipo textil. */
@@ -217,7 +239,7 @@ export async function setProductRule(user: SessionUser, actor: Actor, campaignPr
     if (!r.expectedQty || r.expectedQty < 1 || r.expectedQty > 500) throw new OrderError("Indicá la cantidad esperada de la categoría.");
   }
   if (r.ruleType === "INITIAL_PURCHASE" && !r.initialPurchaseWaived && (!r.initialPurchaseMin || r.initialPurchaseMin < 1))
-    throw new OrderError("Indicá la compra inicial mínima.");
+    throw new OrderError("Indicá el mínimo de producción.");
   if (r.clubPurchaseId) {
     const p = await db.clubPurchase.findFirst({ where: { id: r.clubPurchaseId, clubId: cp.campaign.clubId } });
     if (!p) throw new OrderError("La compra no es de este club.");
@@ -235,7 +257,7 @@ export async function setProductRule(user: SessionUser, actor: Actor, campaignPr
   const changed = (["ruleType", "ruleCategoryId", "expectedQty", "initialPurchaseMin", "initialPurchaseWaived", "clubPurchaseId"] as const).some(
     (k) => (cp as Record<string, unknown>)[k] !== data[k],
   );
-  await db.campaignProduct.update({ where: { id: cp.id }, data: { ...data, ...(changed ? { ruleApprovedAt: null, ruleApprovedById: null, productionApprovedAt: null } : {}) } });
+  await db.campaignProduct.update({ where: { id: cp.id }, data: { ...data, ...(changed ? { ruleApprovedAt: null, ruleApprovedById: null, productionApprovedAt: null, clubCommitAt: null, clubCommitById: null } : {}) } });
   await audit(actor, { entity: "Campaign", entityId: cp.campaignId, clubId: cp.campaign.clubId, action: "campaign.rule", data: { product: cp.productId, ...data } });
 }
 
@@ -245,7 +267,6 @@ export async function approveProductRule(user: SessionUser, actor: Actor, campai
   const cp = await db.campaignProduct.findUniqueOrThrow({ where: { id: campaignProductId }, include: { campaign: true, product: true, ruleCategory: true } });
   if (cp.ruleType === "NONE") throw new OrderError("El producto no tiene regla de producción.");
   if (what === "production") {
-    if (cp.ruleType !== "FULL_CATEGORY") throw new OrderError("La aprobación de producción aplica a campañas de categoría completa.");
     if (note.trim().length < 5) throw new OrderError("Explicá la excepción: queda registrada.");
     await db.campaignProduct.update({ where: { id: cp.id }, data: { productionApprovedAt: new Date(), ruleNote: note.trim() } });
   } else {
@@ -265,18 +286,64 @@ export async function productionRuleStatus(campaignId: string) {
     cps.map(async (cp) => {
       const confirmed = await confirmedUnits(campaignId, cp.productId, cp.ruleType === "FULL_CATEGORY" ? cp.ruleCategory?.name : null);
       const open = ruleOpenProblems(cp, cp.product.name);
+      // Outfit: diferencia que compra el club para llegar al mínimo; si se llegó, respaldo sugerido
+      const min = cp.initialPurchaseMin ?? 0;
+      const shortfall = cp.ruleType === "INITIAL_PURCHASE" && !cp.initialPurchaseWaived ? Math.max(0, min - confirmed) : 0;
+      const backup = cp.ruleType === "INITIAL_PURCHASE" && !cp.initialPurchaseWaived && shortfall === 0 ? cp.backupSuggestQty : 0;
+      const p = cp.clubPurchase;
+      const shortfallCovered = shortfall === 0 || Boolean(p && p.approvedAt && p.sizeStatus === "DEFINED" && p.committedQty >= shortfall);
       const canProduce =
         cp.ruleType === "FULL_CATEGORY"
           ? Boolean(cp.ruleApprovedAt) && (confirmed >= (cp.expectedQty ?? Infinity) || Boolean(cp.productionApprovedAt))
-          : open.length === 0;
+          : cp.initialPurchaseWaived
+            ? open.length === 0
+            : Boolean(cp.ruleApprovedAt) && (shortfallCovered || Boolean(cp.productionApprovedAt));
+      const suggestQty = shortfall || backup;
       return {
         id: cp.id, productId: cp.productId, product: cp.product.name, ruleType: cp.ruleType, category: cp.ruleCategory?.name ?? null,
         expectedQty: cp.expectedQty, confirmed, initialPurchaseMin: cp.initialPurchaseMin, initialPurchaseEstimated: cp.initialPurchaseEstimated,
         waived: cp.initialPurchaseWaived, purchase: cp.clubPurchase, ruleApprovedAt: cp.ruleApprovedAt, productionApprovedAt: cp.productionApprovedAt,
+        clubCommitAt: cp.clubCommitAt, shortfall, backup, shortfallCovered,
+        suggestion: suggestQty ? suggestSizes(await soldSizes(campaignId, cp.productId), suggestQty) : [],
         note: cp.ruleNote, openProblems: open, canProduce,
       };
     }),
   );
+}
+
+/** El club se compromete a comprar la diferencia entre lo vendido y el mínimo (se registra quién y cuándo). */
+export async function commitShortfall(user: SessionUser, actor: Actor, campaignProductId: string) {
+  const cp = await db.campaignProduct.findUniqueOrThrow({ where: { id: campaignProductId }, include: { campaign: true } });
+  assertClubOrTextil(user, cp.campaign.clubId);
+  if (cp.ruleType !== "INITIAL_PURCHASE") throw new OrderError("El producto no tiene mínimo de producción.");
+  if (!isEditable(cp.campaign.status)) throw new OrderError("El compromiso se registra antes de publicar.");
+  await db.campaignProduct.update({ where: { id: cp.id }, data: { clubCommitAt: new Date(), clubCommitById: user.id } });
+  await audit(actor, { entity: "Campaign", entityId: cp.campaignId, clubId: cp.campaign.clubId, action: "campaign.club_commit", data: { product: cp.productId, min: cp.initialPurchaseMin } });
+}
+
+/**
+ * Al cerrar: la textil registra la compra del club por la diferencia (o el respaldo sugerido) con la distribución
+ * de talles sugerida. Queda sin aprobar: se revisa y aprueba en "Muestrario y compras".
+ */
+export async function createShortfallPurchase(user: SessionUser, actor: Actor, campaignProductId: string) {
+  if (user.role !== "TEXTIL_ADMIN") throw new OrderError("La compra del club la registra la textil.");
+  const cp = await db.campaignProduct.findUniqueOrThrow({ where: { id: campaignProductId }, include: { campaign: true } });
+  const st = (await productionRuleStatus(cp.campaignId)).find((r) => r.id === cp.id);
+  if (!st || cp.ruleType !== "INITIAL_PURCHASE") throw new OrderError("El producto no tiene mínimo de producción.");
+  const qty = st.shortfall || st.backup;
+  if (!qty) throw new OrderError("No hay diferencia ni respaldo sugerido.");
+  const items = st.suggestion.length ? st.suggestion : [];
+  const p = await db.clubPurchase.create({
+    data: {
+      clubId: cp.campaign.clubId, campaignId: cp.campaignId, productId: cp.productId, purposes: st.shortfall ? ["INITIAL"] : ["BACKUP"],
+      committedQty: qty, paidQty: 0, sizeStatus: items.reduce((a, i) => a + i.qty, 0) === qty ? "DEFINED" : "PENDING", createdById: user.id,
+      notes: st.shortfall ? `Diferencia hasta el mínimo de ${cp.initialPurchaseMin} (vendidas ${st.confirmed}). Talles sugeridos según la preventa.` : `Respaldo sugerido (la preventa llegó al mínimo). Para cambios de talle o venta posterior.`,
+      items: { create: items.map((i) => ({ sizeLabel: i.size, quantity: i.qty })) },
+    },
+  });
+  await db.campaignProduct.update({ where: { id: cp.id }, data: { clubPurchaseId: p.id } });
+  await audit(actor, { entity: "Campaign", entityId: cp.campaignId, clubId: cp.campaign.clubId, action: "campaign.shortfall_purchase", data: { product: cp.productId, qty, shortfall: st.shortfall } });
+  return p;
 }
 
 /** Alcance de la campaña: todo el club, disciplinas o categorías. */

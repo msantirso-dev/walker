@@ -73,7 +73,7 @@ export async function generateLot(actor: Actor & { id: string }, campaignId: str
       if (pending) await tx.productionLot.delete({ where: { id: pending.id } });
       throw new OrderError(
         held.length
-          ? `No hay unidades para producir. Retenidos por regla: ${held.map((h) => `${h.product} (${h.confirmed}${h.expectedQty ? ` de ${h.expectedQty}` : ""})`).join(", ")}.`
+          ? `No hay unidades para producir. Retenidos por regla: ${held.map((h) => h.ruleType === "INITIAL_PURCHASE" ? `${h.product} (${h.confirmed} de ${h.initialPurchaseMin}: falta registrar la compra del club por ${h.shortfall})` : `${h.product} (${h.confirmed}${h.expectedQty ? ` de ${h.expectedQty}` : ""})`).join(", ")}.`
           : "No hay unidades nuevas ni bajas respecto de los lotes aprobados.",
       );
     }
@@ -220,7 +220,7 @@ export async function advanceLot(actor: Actor, lotId: string, to: LotStatus) {
         if (o.status !== "CONFIRMED") continue;
         if (o.deliveryStatus === "NOT_READY") await tx.order.update({ where: { id }, data: { deliveryStatus: "READY" } });
         await queueEmail("READY_FOR_PICKUP", o, undefined, tx);
-        const due = o.pricingModel === "TEXTIL_ADVANCE" ? o.clubBalanceRequired - o.clubPaid : o.total - o.paidAmount;
+        const due = o.pricingModel === "TEXTIL_ADVANCE" ? o.clubBalanceRequired : o.total - o.paidAmount;
         if (due > 0) await queueEmail("BALANCE_REQUESTED", o, undefined, tx);
       }
       const open = await tx.productionLot.count({ where: { campaignId: lot.campaignId, status: { not: "RECEIVED_BY_CLUB" } } });

@@ -43,15 +43,17 @@ export const PAYMENT_KIND_LABEL: Record<string, string> = { DEPOSIT: "Seña", BA
 export const PAYMENT_METHOD_LABEL: Record<string, string> = { TRANSFER: "Transferencia", MERCADOPAGO: "Mercado Pago", CASH: "Efectivo", OTHER: "Otro medio" };
 export const RECEIVER_LABEL: Record<string, string> = { TEXTIL: "Textil", CLUB: "Club" };
 
-/** Estado de cobro en palabras para el modelo de anticipo textil. Nunca "pagado" con saldo del club pendiente. */
-export function advanceStates(o: { advanceRequired: number; advancePaid: number; clubBalanceRequired: number; clubPaid: number; status: string }) {
+/**
+ * Estado de cobro para el modelo de anticipo textil. El sistema sigue el anticipo; el saldo lo cobra y registra
+ * el club en su propia planilla, por eso nunca se muestra "pagado" mientras haya saldo para el club.
+ */
+export function advanceStates(o: { advanceRequired: number; advancePaid: number; clubBalanceRequired: number; status: string }) {
   const advanceOk = o.advancePaid >= o.advanceRequired && o.advanceRequired > 0;
-  const clubDue = Math.max(0, o.clubBalanceRequired - o.clubPaid);
   return {
     advance: advanceOk ? "Anticipo aprobado" : "Anticipo pendiente",
-    club: o.clubBalanceRequired === 0 ? "Sin saldo al club" : clubDue > 0 ? "Saldo al club pendiente" : "Saldo al club cobrado",
+    club: o.clubBalanceRequired === 0 ? "Sin saldo al club" : "Saldo a pagar al club",
     advanceOk,
-    clubDue,
-    fullyPaid: advanceOk && clubDue === 0,
+    clubDue: o.clubBalanceRequired,
+    fullyPaid: advanceOk && o.clubBalanceRequired === 0,
   };
 }

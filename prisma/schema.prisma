@@ -97,6 +97,8 @@ model Club {
   facebook       String?
   website        String?
   active         Boolean   @default(true)
+  /// Servicio adicional: planilla de gestión propia del club (no afecta los datos del sistema)
+  managementPanel Boolean @default(false)
   /// Club de demostración: la tienda muestra un aviso y solo admite pagos simulados.
   isDemo         Boolean   @default(false)
   createdAt      DateTime  @default(now())
@@ -116,6 +118,7 @@ model Club {
   sampleSets      SizeSampleSet[]
   purchases       ClubPurchase[]
   shipments       ClubShipment[]
+  orderSheets     ClubOrderSheet[]
 }
 
 model ClubSport {
@@ -453,6 +456,8 @@ model Campaign {
   audience            CampaignAudience @default(ALL)
   audienceSports      Sport[]         @relation("CampaignSports")
   audienceCategories  Category[]      @relation("CampaignCategories")
+  /// Cobertura impositiva que se suma al anticipo: % de la diferencia del club (2400 = 21 % + 3 %)
+  clubTaxBp           Int             @default(2400)
   activationRequestedAt DateTime?
   activationRequestedById String?
   activationApprovedAt DateTime?
@@ -540,6 +545,9 @@ model CampaignProduct {
   ruleNote   String?
   clubPurchaseId String?
   clubPurchase ClubPurchase? @relation(fields: [clubPurchaseId], references: [id])
+  clubCommitAt   DateTime? // el club se compromete a comprar la diferencia hasta el mínimo
+  clubCommitById String?
+  backupSuggestQty Int     @default(5) // respaldo sugerido si la preventa alcanza el mínimo
 
   @@unique([campaignId, productId])
 }
@@ -640,6 +648,8 @@ model Order {
   clubBalanceRequired Int         @default(0) // saldo a cobrar por el club
   advancePaid      Int            @default(0)
   clubPaid         Int            @default(0)
+  /// Cobertura impositiva sobre la diferencia del club, en centésimas de % (2400 = 21 % + 3 %), vigente al comprar
+  clubTaxBp        Int?
   // Estado
   status           OrderStatus    @default(PENDING_PAYMENT)
   confirmedAt      DateTime?
@@ -668,6 +678,7 @@ model Order {
   @@unique([campaignId, idempotencyKey])
   @@index([clubId])
   @@index([campaignId, status])
+  clubSheet        ClubOrderSheet?
 }
 
 model Player {
@@ -709,6 +720,7 @@ model OrderUnit {
   optionsClub      Int          @default(0) // parte club de los adicionales
   legend           String?      // leyenda de disciplina elegida, si aplica
   noSizeChange     Boolean      @default(false) // personalizada: sin cambio de talle voluntario
+  advanceAmount    Int          @default(0) // anticipo de la unidad (textil + cobertura impositiva), modelo v2
   benefitAmount    Int          @default(0) // fijado al confirmar
   status           UnitStatus   @default(ACTIVE)
   cancelledAt      DateTime?
@@ -1105,6 +1117,7 @@ enum ShipmentStatus {
 }
 
 enum CostBearer {
+  BUYER // a cargo del comprador (no lo paga la textil)
   PENDING // a definir
   TEXTIL
   CLUB
@@ -1125,7 +1138,7 @@ model ClubShipment {
   carrier       String? // transporte o modalidad (ej. Via Cargo)
   trackingRef   String?
   cost          Int? // centavos, si se conoce
-  costBearer    CostBearer     @default(PENDING)
+  costBearer    CostBearer     @default(BUYER)
   dispatchedAt  DateTime?
   receivedAt    DateTime?
   receivedBy    String?
@@ -1135,4 +1148,35 @@ model ClubShipment {
   lots          ProductionLot[]
 
   @@unique([campaignId, number])
+}
+
+// ───────────────────────── Planilla de gestión del club ─────────────────────────
+
+enum ClubSheetStatus {
+  PENDING // por retirar
+  BALANCE_PAID // saldo cobrado, falta retirar
+  DELIVERED
+  CANCELLED
+  OTHER
+}
+
+/// Planilla propia del club (servicio adicional). Es data entry del club: no modifica pedidos, pagos ni estados del sistema.
+model ClubOrderSheet {
+  id           String          @id @default(cuid())
+  orderId      String          @unique
+  order        Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  clubId       String
+  club         Club            @relation(fields: [clubId], references: [id])
+  status       ClubSheetStatus @default(PENDING)
+  balancePaid  Int             @default(0)
+  paidAt       DateTime?
+  method       String?
+  reference    String?
+  deliveredAt  DateTime?
+  deliveredTo  String?
+  notes        String?
+  updatedById  String?
+  updatedAt    DateTime        @updatedAt
+
+  @@index([clubId])
 }

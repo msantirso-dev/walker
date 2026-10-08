@@ -74,4 +74,8 @@ export const ACTION_LABELS: Record<string, string> = {
   "purchase.updated": "Compra del club modificada",
   "purchase.approved": "Compra del club aprobada",
   "report.distribution": "Descarga de lista de distribución",
+  "clubsheet.updated": "Planilla del club actualizada",
+  "club.management_panel": "Planilla de gestión del club (servicio)",
+  "campaign.club_commit": "Compromiso del club por la diferencia del mínimo",
+  "campaign.shortfall_purchase": "Compra de la diferencia o respaldo sugerida",
 };

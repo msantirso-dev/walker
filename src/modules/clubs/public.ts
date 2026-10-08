@@ -30,22 +30,31 @@ export async function getClubStore(slug: string) {
     include: {
       sports: { include: { sport: true } },
       photos: { orderBy: { sort: "asc" } },
-      campaigns: { where: { status: { notIn: ["DRAFT", "ACTIVATION_REQUESTED", "ACTIVATION_APPROVED"] } }, orderBy: { opensAt: "desc" }, select: { id: true, slug: true, title: true, season: true, status: true, opensAt: true, closesAt: true, description: true, showCatalogWhenClosed: true, deliveryDaysMin: true, deliveryDaysMax: true, paymentMode: true, pricingModel: true, depositType: true, depositValue: true, faq: true } },
+      campaigns: { where: { status: { notIn: ["DRAFT", "ACTIVATION_REQUESTED", "ACTIVATION_APPROVED"] } }, orderBy: { opensAt: "desc" }, select: { id: true, slug: true, title: true, season: true, status: true, opensAt: true, closesAt: true, description: true, showCatalogWhenClosed: true, deliveryDaysMin: true, deliveryDaysMax: true, paymentMode: true, pricingModel: true, depositType: true, depositValue: true, faq: true, audience: true, audienceSports: { select: { name: true } }, audienceCategories: { select: { name: true, sport: { select: { name: true } } } }, products: { where: { active: true }, select: { productId: true } } } },
     },
   });
   if (!club || !club.active) return null;
   const now = new Date();
-  const current = club.campaigns.find((c) => c.status === "PUBLISHED" && c.closesAt > now) ?? null;
+  // Todas las preventas abiertas, cada una con su alcance (el socio ve qué puede comprar)
+  const openList = club.campaigns.filter((c) => c.status === "PUBLISHED" && c.closesAt > now && c.opensAt <= now).map((c) => ({ ...c, audienceText: audienceText(c) }));
+  const current = openList.find((c) => c.audience === "ALL") ?? openList[0] ?? null;
   // Catálogo del club: productos visibles sin preventa abierta (catálogo sin venta, preventa cerrada)
   const catalog = await db.product.findMany({
     where: { clubId: club.id, active: true, catalogStatus: { in: ["CATALOG", "PRESALE", "PRESALE_CLOSED"] } },
     orderBy: [{ catalogStatus: "asc" }, { name: "asc" }],
     select: { id: true, code: true, name: true, description: true, catalogStatus: true, images: { orderBy: { sort: "asc" }, take: 1, select: { url: true, alt: true, tag: true } } },
   });
-  return { club, current, history: club.campaigns.filter((c) => c.id !== current?.id), catalog, brandLine: await brandLineFor(club.id) };
+  // Producto en preventa → campaña abierta que lo vende (para enlazar y mostrar el cierre)
+  const saleOf = new Map<string, { slug: string; closesAt: Date; audienceText: string; audience: string }>();
+  for (const c of openList) for (const p of c.products) if (!saleOf.has(p.productId)) saleOf.set(p.productId, { slug: c.slug, closesAt: c.closesAt, audienceText: c.audienceText, audience: c.audience });
+  const openIds = new Set(openList.map((c) => c.id));
+  return {
+    club, current, openList, history: club.campaigns.filter((c) => !openIds.has(c.id)),
+    catalog: catalog.map((p) => ({ ...p, sale: saleOf.get(p.id) ?? null })), brandLine: await brandLineFor(club.id),
+  };
 }
 
-export const CATALOG_PUBLIC_LABEL: Record<string, string> = { CATALOG: "Próximamente", PRESALE: "En preventa", PRESALE_CLOSED: "Preventa cerrada" };
+export const CATALOG_PUBLIC_LABEL: Record<string, string> = { CATALOG: "Pendiente de preventa", PRESALE: "En preventa", PRESALE_CLOSED: "Preventa cerrada" };
 
 export type StoreSize = { label: string; group: string; a: number | null; b: number | null };
 export type StoreComponent = { label: string; garmentCode: string; garmentName: string; variant: string | null; material: string | null; care: string | null; measureA: string; measureB: string; unit: string; note: string | null; printTarget: boolean; sizes: StoreSize[] };
@@ -54,6 +63,8 @@ export type StoreProduct = {
   price: number; listPrice: number | null; remaining: number | null;
   /** Anticipo por prenda (precio textil). Null en campañas con seña heredada. */
   textilPrice: number | null;
+  /** Cobertura impositiva del anticipo (v2); el comprador no ve el desglose */
+  clubTaxBp: number | null;
   family: string;
   optionGroups: OptionGroupT[];
   /** Curvas del muestrario aprobadas y disponibles en el club */
@@ -108,6 +119,7 @@ export async function getCampaignStore(clubSlug: string, campaignSlug: string) {
       id: p.id, code: p.code, name: p.name, kind: p.kind, description: p.description, audience: p.audience, sport: p.sport?.name ?? null, manufacturingTerms: p.manufacturingTerms,
       price: cp.price, listPrice: cp.listPrice && cp.listPrice > cp.price ? cp.listPrice : null, remaining,
       textilPrice: c.pricingModel === "TEXTIL_ADVANCE" ? cp.textilPrice : null,
+      clubTaxBp: c.pricingModel === "TEXTIL_ADVANCE" ? c.clubTaxBp : null,
       family: p.family,
       optionGroups: p.optionGroups.map((g) => ({
         id: g.id, name: g.name, type: g.type, role: g.role, required: g.required, sort: g.sort, help: g.help, dependsOnGroupId: g.dependsOnGroupId,

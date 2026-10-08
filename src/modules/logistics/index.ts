@@ -13,7 +13,7 @@ import type { CostBearer, ShipmentStatus } from "@/generated/prisma/client";
  */
 
 export const SHIPMENT_STATUS_LABEL: Record<ShipmentStatus, string> = { PREPARING: "En preparación", DISPATCHED: "Despachado", RECEIVED: "Recibido por el club" };
-export const COST_BEARER_LABEL: Record<CostBearer, string> = { PENDING: "A definir", TEXTIL: "Textil", CLUB: "Club" };
+export const COST_BEARER_LABEL: Record<CostBearer, string> = { BUYER: "A cargo del comprador", PENDING: "A definir", TEXTIL: "Textil", CLUB: "Club" };
 
 export type ShipmentInput = {
   address: string; receiverName: string; receiverPhone?: string | null; carrier?: string | null; trackingRef?: string | null;
@@ -118,6 +118,7 @@ export async function distributionList(campaignId: string) {
     include: {
       units: { where: { status: "ACTIVE" }, orderBy: { sort: "asc" }, include: { player: true, components: true, delivery: true } },
       deliveries: { orderBy: { deliveredAt: "asc" } },
+      clubSheet: true,
     },
   });
   const ready = await db.productionLotUnit.groupBy({
@@ -125,16 +126,21 @@ export async function distributionList(campaignId: string) {
   });
   const inClub = new Set(ready.filter((r) => (r._sum.delta ?? 0) > 0).map((r) => r.unitId));
   return orders.map((o) => {
-    const clubDue = o.pricingModel === "TEXTIL_ADVANCE" ? Math.max(0, o.clubBalanceRequired - o.clubPaid) : Math.max(0, o.total - o.paidAmount);
+    // v2: el saldo y el retiro los gestiona el club (planilla propia); acá se informan, no se controlan
+    const v2 = o.pricingModel === "TEXTIL_ADVANCE";
+    const clubDue = v2 ? o.clubBalanceRequired : Math.max(0, o.total - o.paidAmount);
+    const sheetDelivered = v2 && o.clubSheet?.status === "DELIVERED";
     return {
       id: o.id, code: o.code, buyer: o.buyerName, phone: o.buyerPhone, memberNumber: o.memberNumber, clubDue, deliveryStatus: o.deliveryStatus,
       units: o.units.map((u) => ({
         ref: u.ref, product: u.productName, player: u.player?.name ?? null, category: u.player?.category ?? null,
         sizes: u.components.map((c) => `${c.label} ${c.sizeLabel}`).join(" · "),
         pers: [u.persName, u.persNumber && `N° ${u.persNumber}`, u.legend].filter(Boolean).join(" · "),
-        inClub: inClub.has(u.id), delivered: Boolean(u.deliveryId), deliveredTo: u.delivery?.receivedByName ?? null, deliveredAt: u.delivery?.deliveredAt ?? null,
+        inClub: inClub.has(u.id), delivered: Boolean(u.deliveryId) || sheetDelivered,
+        deliveredTo: u.delivery?.receivedByName ?? (sheetDelivered ? o.clubSheet!.deliveredTo : null), deliveredAt: u.delivery?.deliveredAt ?? (sheetDelivered ? o.clubSheet!.deliveredAt : null),
       })),
       deliveries: o.deliveries.map((d) => ({ at: d.deliveredAt, to: d.receivedByName, exception: d.balanceException })),
+      v2, sheetStatus: o.clubSheet?.status ?? null,
     };
   });
 }

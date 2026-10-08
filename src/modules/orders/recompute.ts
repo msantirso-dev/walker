@@ -67,8 +67,10 @@ export async function recomputeOrder(tx: Tx, orderId: string, actor: Actor = SYS
     // Fijar el beneficio del club con la regla vigente al confirmar
     for (const u of order.units) {
       await tx.orderUnit.update({ where: { id: u.id }, data: {
-          // Anticipo textil: el ingreso del club es su saldo (precio al socio − precio textil + parte club de adicionales)
-          benefitAmount: order.pricingModel === "TEXTIL_ADVANCE" ? u.unitPrice - (u.textilPrice ?? u.unitPrice) + u.optionsClub : benefitFor(order.campaign.benefitRule, u.unitPrice),
+          // Anticipo textil: el ingreso del club es su saldo (precio al socio con adicionales − anticipo de la unidad)
+          benefitAmount: order.pricingModel === "TEXTIL_ADVANCE"
+            ? u.advanceAmount ? u.unitPrice + u.persPrice - u.advanceAmount : u.unitPrice - (u.textilPrice ?? u.unitPrice) + u.optionsClub
+            : benefitFor(order.campaign.benefitRule, u.unitPrice),
         } });
     }
     await audit(actor, { entity: "Order", entityId: order.id, clubId: order.clubId, action: "order.confirmed", data: { paidAmount } }, tx);

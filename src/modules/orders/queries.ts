@@ -67,7 +67,7 @@ export function orderWhere(base: Prisma.OrderWhereInput, f: OrderFilters): Prism
       and.push({ inReviewAmount: { gt: 0 } });
       break;
     case "club":
-      and.push({ pricingModel: "TEXTIL_ADVANCE", status: "CONFIRMED", NOT: { clubPaid: { gte: db.order.fields.clubBalanceRequired } } });
+      and.push({ pricingModel: "TEXTIL_ADVANCE", status: "CONFIRMED", clubBalanceRequired: { gt: 0 } });
       break;
     case "refund":
       and.push({ status: "CANCELLED", paidAmount: { gt: 0 } });
@@ -97,12 +97,10 @@ export function paymentStateLabel(o: {
 }) {
   if (o.status === "CANCELLED") return o.paidAmount > 0 ? "Devolución pendiente" : "Sin cobros";
   if (o.pricingModel === "TEXTIL_ADVANCE") {
-    // Nunca "pagado" mientras quede saldo con el club
+    // Nunca "pagado" mientras haya saldo: ese cobro lo gestiona el club, fuera del sistema
     const advOk = (o.advancePaid ?? 0) >= (o.advanceRequired ?? 0) && (o.advanceRequired ?? 0) > 0;
-    const clubDue = (o.clubBalanceRequired ?? 0) - (o.clubPaid ?? 0);
     if (!advOk) return o.inReviewAmount > 0 ? "Comprobante en revisión" : (o.advancePaid ?? 0) > 0 ? "Anticipo parcial" : "Anticipo pendiente";
-    if ((o.clubBalanceRequired ?? 0) === 0) return "Pagado (sin saldo al club)";
-    return clubDue > 0 ? "Anticipo aprobado · saldo al club pendiente" : "Pagado (anticipo y saldo al club)";
+    return (o.clubBalanceRequired ?? 0) === 0 ? "Pagado (sin saldo al club)" : "Anticipo aprobado · saldo lo cobra el club";
   }
   if (o.paidAmount >= o.total && o.total > 0) return "Pagado";
   if (o.paidAmount > 0) return o.paidAmount >= o.depositRequired ? "Seña aprobada" : "Pago parcial";

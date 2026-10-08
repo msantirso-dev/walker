@@ -3,7 +3,7 @@ import { db } from "@/shared/db";
 import { audit, BUYER, type Actor } from "@/modules/audit";
 import { canReviewPayments, type SessionUser } from "@/modules/auth";
 import { lockOrder, recomputeOrder, renewReservation, notifyConfirmedPayment } from "@/modules/orders/recompute";
-import { OrderError } from "@/modules/orders/pricing";
+import { OrderError, assertTextilManages } from "@/modules/orders/pricing";
 import { queueEmail, orderMailSelect } from "@/modules/notifications";
 import { saveReceipt } from "@/modules/storage";
 import { amountFor } from "./due";
@@ -54,6 +54,7 @@ export async function reviewTransfer(
   const p = await db.payment.findUnique({ where: { id: paymentId }, include: { order: { include: { campaign: { include: { paymentAccount: true } } } } } });
   if (!p || p.method !== "TRANSFER") throw new OrderError("Pago inexistente.");
   if (!canReviewPayments(user, p.order.clubId, p.order.campaign.paymentAccount.owner)) throw new OrderError("No tenés permiso para revisar pagos de esta campaña.");
+  assertTextilManages(p.order, user);
   if (!decision.approve && decision.reason.trim().length < 5) throw new OrderError("Escribí el motivo del rechazo para informarlo al comprador.");
 
   await db.$transaction(async (tx) => {
@@ -90,6 +91,7 @@ export async function registerManualPayment(
 ) {
   const order = await db.order.findUniqueOrThrow({ where: { id: orderId }, include: { campaign: { include: { paymentAccount: true } } } });
   if (!canReviewPayments(user, order.clubId, order.campaign.paymentAccount.owner)) throw new OrderError("No tenés permiso para registrar pagos de esta campaña.");
+  assertTextilManages(order, user);
   if (!Number.isInteger(input.amount) || input.amount <= 0) throw new OrderError("Importe inválido.");
   if (input.kind === "REFUND") throw new OrderError("Usá el registro de devoluciones.");
   if (input.amount > order.total - order.paidAmount) throw new OrderError("El importe supera el saldo del pedido.");
@@ -112,6 +114,7 @@ export async function registerManualPayment(
 export async function registerRefund(user: SessionUser, actor: Actor, orderId: string, input: { amount: number; reference: string; note?: string; receiver?: "TEXTIL" | "CLUB" }) {
   const order = await db.order.findUniqueOrThrow({ where: { id: orderId }, include: { campaign: { include: { paymentAccount: true } } } });
   if (!canReviewPayments(user, order.clubId, order.campaign.paymentAccount.owner)) throw new OrderError("No tenés permiso para registrar devoluciones de esta campaña.");
+  assertTextilManages(order, user);
   if (!Number.isInteger(input.amount) || input.amount <= 0) throw new OrderError("Importe inválido.");
   if (input.amount > order.paidAmount) throw new OrderError("La devolución supera lo cobrado.");
   if (input.reference.trim().length < 3) throw new OrderError("Indicá la referencia de la devolución (operación, comprobante).");
@@ -126,35 +129,3 @@ export async function registerRefund(user: SessionUser, actor: Actor, orderId: s
 }
 
 
-/**
- * Saldo cobrado por el club (modelo de anticipo textil). Lo registra el club o la textil,
- * con fecha, medio y referencia. No pasa por Mercado Pago ni por la cuenta de la textil.
- */
-export async function registerClubBalance(
-  user: SessionUser,
-  actor: Actor,
-  orderId: string,
-  input: { amount: number; method: "CASH" | "TRANSFER" | "OTHER"; paidAt: Date; reference: string; note?: string },
-) {
-  const order = await db.order.findUniqueOrThrow({ where: { id: orderId } });
-  const allowed = user.role === "TEXTIL_ADMIN" || (user.role === "CLUB_ADMIN" && user.clubId === order.clubId);
-  if (!allowed) throw new OrderError("No tenés permiso para registrar el saldo de este club.");
-  if (order.pricingModel !== "TEXTIL_ADVANCE") throw new OrderError("Este pedido usa el modelo de seña anterior: registrá el pago desde \"Registrar pago manual\".");
-  if (order.status === "CANCELLED") throw new OrderError("El pedido está cancelado.");
-  if (!Number.isInteger(input.amount) || input.amount <= 0) throw new OrderError("Importe inválido.");
-  const due = order.clubBalanceRequired - order.clubPaid;
-  if (input.amount > due) throw new OrderError(due <= 0 ? "El saldo del club ya está cobrado." : "El importe supera el saldo pendiente con el club.");
-  if (input.reference.trim().length < 2) throw new OrderError("Indicá una referencia (recibo, operación o nota).");
-  if (input.paidAt > new Date(Date.now() + 86400_000)) throw new OrderError("La fecha del cobro no puede ser futura.");
-  await db.$transaction(async (tx) => {
-    await lockOrder(tx, orderId);
-    const p = await tx.payment.create({
-      data: {
-        orderId, kind: "CLUB_BALANCE", method: input.method, receiver: "CLUB", amount: input.amount, status: "APPROVED", paidAt: input.paidAt,
-        operationRef: input.reference.trim(), reviewNote: input.note || null, reviewedById: user.id, reviewedAt: new Date(), createdById: user.id,
-      },
-    });
-    await audit(actor, { entity: "Order", entityId: orderId, clubId: order.clubId, action: "payment.club_balance", data: { paymentId: p.id, amount: input.amount, method: input.method, paidAt: input.paidAt.toISOString(), reference: input.reference.trim() } }, tx);
-    await recomputeOrder(tx, orderId, actor);
-  });
-}

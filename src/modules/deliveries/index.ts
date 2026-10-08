@@ -27,6 +27,8 @@ export async function registerDelivery(
 ) {
   const order = await db.order.findUnique({ where: { id: orderId } });
   if (!order || !can(user, "deliveries.register", order.clubId)) throw new OrderError("Pedido inexistente.");
+  // Modelo v2: el seguimiento del sistema termina con la producción en el club; el retiro lo registra el club en su planilla
+  if (order.pricingModel === "TEXTIL_ADVANCE") throw new OrderError("El retiro de este pedido lo gestiona el club en su planilla de gestión.");
   if (input.receivedByName.trim().length < 3) throw new OrderError("Indicá el nombre de quien retira.");
   if (!input.unitIds.length) throw new OrderError("Seleccioná al menos una prenda para entregar.");
 

@@ -57,7 +57,8 @@ function compose(t: Template, o: OrderForMail, extra: { amount?: number; reason?
   const link = orderLink(o.accessTokenEnc);
   const adv = o.pricingModel === "TEXTIL_ADVANCE";
   // Con anticipo textil, el saldo pendiente es el del club: se paga en el club, no por la plataforma.
-  const balance = adv ? Math.max(0, (o.clubBalanceRequired ?? 0) - (o.clubPaid ?? 0)) : Math.max(0, o.total - o.paidAmount);
+  // v2: el saldo lo cobra el club fuera del sistema; se informa el importe a pagar al club
+  const balance = adv ? Math.max(0, o.clubBalanceRequired ?? 0) : Math.max(0, o.total - o.paidAmount);
   const hi = `Hola ${o.buyerName.split(" ")[0]}:`;
   const foot = `\n\nSeguí tu pedido ${o.code} en este enlace privado (no lo compartas):\n${link}\n\n${o.club.name} · ${o.campaign.title}`;
   const pickup = [o.club.pickupAddress && `Dirección: ${o.club.pickupAddress}`, o.club.pickupHours && `Horarios: ${o.club.pickupHours}`, o.campaign.pickupInstructions]

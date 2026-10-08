@@ -104,7 +104,7 @@ export async function campaignMetrics(campaignId: string) {
   const [orders, units, components, players, inLots, settlements, cancelledUnits] = await Promise.all([
     db.order.findMany({
       where: { campaignId },
-      select: { status: true, total: true, paidAmount: true, inReviewAmount: true, depositRequired: true, deliveryStatus: true, refundedAmount: true, pricingModel: true, advanceRequired: true, advancePaid: true, clubBalanceRequired: true, clubPaid: true },
+      select: { status: true, total: true, paidAmount: true, inReviewAmount: true, depositRequired: true, deliveryStatus: true, refundedAmount: true, pricingModel: true, advanceRequired: true, advancePaid: true, clubBalanceRequired: true },
     }),
     db.orderUnit.findMany({
       where: { status: "ACTIVE", order: { campaignId, status: { in: ["CONFIRMED", "PENDING_PAYMENT"] } } },
@@ -162,9 +162,9 @@ export async function campaignMetrics(campaignId: string) {
     balanceDue: confirmed.reduce((a, o) => a + Math.max(0, o.total - o.paidAmount), 0),
     salesConfirmed: confirmed.reduce((a, o) => a + o.total, 0),
     advanceCollected: orders.reduce((a, o) => a + o.advancePaid, 0),
-    clubCollected: orders.reduce((a, o) => a + o.clubPaid, 0),
-    clubBalanceDue: confirmed.filter((o) => o.pricingModel === "TEXTIL_ADVANCE").reduce((a, o) => a + Math.max(0, o.clubBalanceRequired - o.clubPaid), 0),
-    ordersClubPending: confirmed.filter((o) => o.pricingModel === "TEXTIL_ADVANCE" && o.clubPaid < o.clubBalanceRequired).length,
+    // Saldo que corresponde al club (lo cobra el club fuera del sistema)
+    clubBalanceDue: confirmed.filter((o) => o.pricingModel === "TEXTIL_ADVANCE").reduce((a, o) => a + o.clubBalanceRequired, 0),
+    ordersClubPending: confirmed.filter((o) => o.pricingModel === "TEXTIL_ADVANCE" && o.clubBalanceRequired > 0).length,
     refundPending: orders.filter((o) => o.status === "CANCELLED").reduce((a, o) => a + o.paidAmount, 0),
     byProduct: [...byProduct.values()].sort((a, b) => b.confirmed - a.confirmed),
     bySize: [...bySize.values()].sort((a, b) => a.code.localeCompare(b.code) || a.sort - b.sort),

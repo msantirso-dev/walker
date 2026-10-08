@@ -1,4 +1,5 @@
 import "server-only";
+import { advanceUnit, DEFAULT_CLUB_TAX_BP } from "@/shared/advance";
 import { db, type Tx } from "@/shared/db";
 import { UserError } from "@/shared/errors";
 import { percentOf } from "@/shared/money";
@@ -7,6 +8,15 @@ import { MAX_UNITS_PER_ORDER } from "./cart-schema";
 import { NAME_RE, OptionError, optionsSummary, resolveOptions, type OptionGroupT, type ResolvedOption } from "@/modules/catalog/options";
 
 export class OrderError extends UserError {}
+
+/**
+ * Pedidos del modelo v2: los datos del sistema (prendas, cobros, cancelaciones) los gestiona solo la textil.
+ * El club lleva su propia planilla, que no modifica el pedido.
+ */
+export function assertTextilManages(order: { pricingModel: string }, actor: { role: string }) {
+  if (order.pricingModel === "TEXTIL_ADVANCE" && actor.role !== "TEXTIL_ADMIN" && actor.role !== "SYSTEM")
+    throw new OrderError("Este pedido lo gestiona la textil. El club registra cobros y retiros en su planilla de gestión, sin modificar el pedido.");
+}
 
 export const PERS_NAME_RE = NAME_RE;
 
@@ -56,6 +66,7 @@ export type PricedUnit = {
   persPrice: number;
   optionsTextil: number;
   optionsClub: number;
+  advanceAmount: number;
   legend: string | null;
   noSizeChange: boolean;
   options: ResolvedOption[];
@@ -145,6 +156,10 @@ export function priceCart(c: SaleCampaign, cart: Pick<CartInput, "items" | "play
         throw new OrderError(`Esta preventa es para ${audienceText(c)}. Revisá la categoría de ${pl.name}.`);
     }
 
+    // Modelo v2: adicionales de la textil, recargo del club también sobre ellos, anticipo con cobertura impositiva
+    const v2 = c.pricingModel === "TEXTIL_ADVANCE" && cp.textilPrice != null
+      ? advanceUnit({ textil: cp.textilPrice, price: cp.price, extrasTextil: sum.textil, taxBp: c.clubTaxBp ?? DEFAULT_CLUB_TAX_BP })
+      : null;
     for (let i = 0; i < item.quantity; i++) {
       units.push({
         productId: p.id,
@@ -157,9 +172,10 @@ export function priceCart(c: SaleCampaign, cart: Pick<CartInput, "items" | "play
         textilPrice: cp.textilPrice,
         persName: sum.name,
         persNumber: sum.number,
-        persPrice: sum.textil + sum.club,
+        persPrice: v2 ? v2.extrasFinal : sum.textil + sum.club,
         optionsTextil: sum.textil,
-        optionsClub: sum.club,
+        optionsClub: v2 ? v2.extrasFinal - sum.textil : sum.club,
+        advanceAmount: v2 ? v2.advance : 0,
         legend: sum.legend,
         noSizeChange: sum.noSizeChange,
         options,
@@ -179,8 +195,8 @@ export function priceCart(c: SaleCampaign, cart: Pick<CartInput, "items" | "play
   const shippingTotal = cart.delivery.method === "SHIPPING" ? c.shippingPrice : 0;
   const total = itemsTotal + persTotal + shippingTotal;
   if (c.pricingModel === "TEXTIL_ADVANCE") {
-    // Anticipo = precio textil + parte textil de los adicionales; el resto es saldo del club
-    const advanceRequired = units.reduce((a, u) => a + (u.textilPrice ?? 0) + u.optionsTextil, 0);
+    // Anticipo = total textil (producto + adicionales) + cobertura impositiva sobre la diferencia del club
+    const advanceRequired = units.reduce((a, u) => a + u.advanceAmount, 0);
     return { units, itemsTotal, persTotal, shippingTotal, total, depositRequired: advanceRequired, advanceRequired, clubBalanceRequired: total - advanceRequired };
   }
   const dep = depositFor(c, itemsTotal + persTotal, total);

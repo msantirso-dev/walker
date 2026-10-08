@@ -1,7 +1,8 @@
 import "server-only";
+import { advanceUnit } from "@/shared/advance";
 import { db } from "@/shared/db";
 import { audit, type Actor } from "@/modules/audit";
-import { OrderError, PERS_NAME_RE } from "./pricing";
+import { assertTextilManages, OrderError, PERS_NAME_RE } from "./pricing";
 import { lockOrder, recomputeOrder } from "./recompute";
 import { recalcTotals } from "./manage";
 
@@ -40,6 +41,7 @@ export async function editUnit(actor: Actor, unitId: string, input: UnitEdit) {
   const reason: EditReason = input.reason ?? "DATA_ERROR";
   const unit = await db.orderUnit.findUnique({ where: { id: unitId }, include: { components: true, options: true, order: true } });
   if (!unit) throw new OrderError("Prenda inexistente.");
+  assertTextilManages(unit.order, actor);
   if (unit.order.status === "CANCELLED" || unit.status !== "ACTIVE") throw new OrderError("La prenda está cancelada.");
   if (unit.deliveryId) throw new OrderError("La prenda ya fue entregada.");
   if (await unitLockedByLot(unitId)) throw new OrderError("La prenda ya está en un lote enviado a fábrica. El cambio debe hacerse cancelándola y cargando un pedido nuevo.");
@@ -88,7 +90,7 @@ export async function editUnit(actor: Actor, unitId: string, input: UnitEdit) {
   // Adicionales: se conservan los precios guardados de lo que ya tenía; lo nuevo toma el precio vigente
   type Opt = { groupId: string | null; groupName: string; role: "NAME" | "NUMBER" | "LEGEND" | "OTHER"; value: string; priceTextil: number; priceClub: number; sort: number };
   let options: Opt[] | null = null;
-  let persPrice = unit.persPrice, optionsTextil = unit.optionsTextil, optionsClub = unit.optionsClub;
+  let persPrice = unit.persPrice, optionsTextil = unit.optionsTextil, optionsClub = unit.optionsClub, advanceAmount = unit.advanceAmount;
   if (unit.options.length || (!unit.persName && !unit.persNumber)) {
     const keep: Opt[] = unit.options.filter((o) => o.role !== "NAME" && o.role !== "NUMBER").map((o) => ({ ...o }));
     const prevName = unit.options.find((o) => o.role === "NAME");
@@ -111,6 +113,13 @@ export async function editUnit(actor: Actor, unitId: string, input: UnitEdit) {
     optionsTextil = options.reduce((a, o) => a + o.priceTextil, 0);
     optionsClub = options.reduce((a, o) => a + o.priceClub, 0);
     persPrice = optionsTextil + optionsClub;
+    if (unit.order.pricingModel === "TEXTIL_ADVANCE" && unit.textilPrice != null) {
+      // v2: adicionales de la textil con el recargo del club; anticipo con la cobertura vigente al comprar
+      const v2 = advanceUnit({ textil: unit.textilPrice, price: unit.unitPrice, extrasTextil: optionsTextil, taxBp: unit.order.clubTaxBp ?? 0 });
+      persPrice = v2.extrasFinal;
+      optionsClub = v2.extrasFinal - optionsTextil;
+      advanceAmount = v2.advance;
+    }
   } else if (Boolean(unit.persName) !== Boolean(name) || Boolean(unit.persNumber) !== Boolean(normNumber)) {
     // Prenda vendida antes del configurador: se recalcula solo si cambia la presencia de nombre o número
     persPrice = (name ? nameGroup?.priceTextil ?? product.persNamePrice : 0) + (normNumber ? numberGroup?.priceTextil ?? product.persNumberPrice : 0);
@@ -143,8 +152,8 @@ export async function editUnit(actor: Actor, unitId: string, input: UnitEdit) {
       await tx.orderUnitOption.deleteMany({ where: { unitId } });
       if (options.length) await tx.orderUnitOption.createMany({ data: options.map(({ groupId, groupName, role, value, priceTextil, priceClub, sort }) => ({ unitId, groupId, groupName, role, value, priceTextil, priceClub, sort })) });
     }
-    await tx.orderUnit.update({ where: { id: unitId }, data: { persName: name, persNumber: normNumber, persPrice, optionsTextil, optionsClub, noSizeChange, playerId } });
-    if (persPrice !== unit.persPrice) await recalcTotals(tx, unit.orderId);
+    await tx.orderUnit.update({ where: { id: unitId }, data: { persName: name, persNumber: normNumber, persPrice, optionsTextil, optionsClub, advanceAmount, noSizeChange, playerId } });
+    if (persPrice !== unit.persPrice || advanceAmount !== unit.advanceAmount) await recalcTotals(tx, unit.orderId);
     await audit(actor, {
       entity: "Order", entityId: unit.orderId, clubId: unit.order.clubId, action: "order.unit_edited",
       data: { unit: unit.ref, reason, reasonLabel: EDIT_REASON_LABEL[reason], note: input.note?.trim() || null, before, after },

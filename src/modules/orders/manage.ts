@@ -2,7 +2,7 @@ import "server-only";
 import { db, type Tx } from "@/shared/db";
 import { audit, type Actor } from "@/modules/audit";
 import { queueEmail, orderMailSelect } from "@/modules/notifications";
-import { depositFor, OrderError } from "./pricing";
+import { assertTextilManages, depositFor, OrderError } from "./pricing";
 import { lockOrder, recomputeOrder } from "./recompute";
 
 /** Recalcula totales desde las unidades activas (tras cancelar una unidad). */
@@ -13,8 +13,8 @@ export async function recalcTotals(tx: Tx, orderId: string) {
   const shippingTotal = o.units.length ? o.shippingTotal : 0;
   const total = itemsTotal + persTotal + shippingTotal;
   if (o.pricingModel === "TEXTIL_ADVANCE") {
-    // Con los precios guardados en cada unidad: anticipo = textil + parte textil de adicionales
-    const advanceRequired = o.units.reduce((a, u) => a + (u.textilPrice ?? 0) + u.optionsTextil, 0);
+    // Con los importes guardados en cada unidad (pedidos anteriores sin cobertura: textil + adicionales)
+    const advanceRequired = o.units.reduce((a, u) => a + (u.advanceAmount || (u.textilPrice ?? 0) + u.optionsTextil), 0);
     await tx.order.update({
       where: { id: orderId },
       data: { itemsTotal, persTotal, shippingTotal, total, advanceRequired, depositRequired: advanceRequired, clubBalanceRequired: total - advanceRequired },
@@ -31,6 +31,7 @@ export async function cancelOrder(actor: Actor, orderId: string, reason: string)
   await db.$transaction(async (tx) => {
     await lockOrder(tx, orderId);
     const o = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
+    assertTextilManages(o, actor);
     if (o.status === "CANCELLED") throw new OrderError("El pedido ya está cancelado.");
     if (o.deliveryStatus === "DELIVERED") throw new OrderError("No se puede cancelar un pedido entregado.");
     await tx.orderUnit.updateMany({ where: { orderId, status: "ACTIVE", deliveryId: null }, data: { status: "CANCELLED", cancelledAt: new Date() } });
@@ -45,6 +46,7 @@ export async function cancelUnit(actor: Actor, unitId: string, reason: string) {
   if (reason.trim().length < 5) throw new OrderError("Indicá el motivo.");
   const u = await db.orderUnit.findUnique({ where: { id: unitId }, include: { order: true } });
   if (!u) throw new OrderError("Unidad inexistente.");
+  assertTextilManages(u.order, actor);
   await db.$transaction(async (tx) => {
     await lockOrder(tx, u.orderId);
     const cur = await tx.orderUnit.findUniqueOrThrow({ where: { id: unitId } });
