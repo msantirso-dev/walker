@@ -43,6 +43,20 @@ function coverSvg(a: string, b: string) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 700" width="1600" height="700"><rect width="1600" height="700" fill="${a}"/>${hoops}<path d="M0 520 Q400 470 800 520 T1600 520 V700 H0Z" fill="#000" opacity=".18"/><g stroke="#fff" stroke-opacity=".35" stroke-width="4"><line x1="300" y1="0" x2="300" y2="700"/><line x1="1300" y1="0" x2="1300" y2="700"/><line x1="800" y1="0" x2="800" y2="700" stroke-dasharray="20 18"/></g></svg>`;
 }
 
+function tankSvg(base: string, trim: string, bg: string) {
+  const T = "M70 14 Q100 40 130 14 L146 18 Q144 60 160 74 L160 206 L40 206 L40 74 Q56 60 54 18 Z";
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-20 -10 240 240" width="800" height="800"><rect x="-20" y="-10" width="240" height="240" fill="${bg}"/><path d="${T}" fill="${base}"/><path d="M70 14 Q100 40 130 14" fill="none" stroke="${trim}" stroke-width="5"/><path d="${T}" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="2"/></svg>`;
+}
+function bagSvg(base: string, trim: string, bg: string) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 200" width="800" height="667"><rect width="240" height="200" fill="${bg}"/><path d="M80 60 Q80 30 120 30 Q160 30 160 60" fill="none" stroke="${trim}" stroke-width="8"/><rect x="30" y="60" width="180" height="110" rx="26" fill="${base}"/><rect x="30" y="104" width="180" height="12" fill="${trim}"/><rect x="30" y="60" width="180" height="110" rx="26" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="2"/></svg>`;
+}
+/** Leyenda opcional sobre la remera: muestra el lugar donde va el texto, sin marcas reales. */
+function teeSvg(base: string, trim: string, bg: string, legend?: string) {
+  const P = "M60 22 L86 13 Q100 22 114 13 L140 22 L176 46 L162 74 L148 66 L150 206 L50 206 L52 66 L38 74 L24 46 Z";
+  const txt = legend ? `<text x="100" y="118" text-anchor="middle" font-family="Arial Narrow, Arial" font-weight="800" font-size="20" fill="${trim}">${legend}</text>` : "";
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-20 -10 240 240" width="800" height="800"><rect x="-20" y="-10" width="240" height="240" fill="${bg}"/><path d="${P}" fill="${base}"/><path d="M86 13 Q100 26 114 13" fill="none" stroke="${trim}" stroke-width="5"/>${txt}<path d="${P}" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="2"/></svg>`;
+}
+
 async function asset(rel: string, svg: string, w = 800) {
   const abs = path.join(UPLOAD, "public", rel);
   await mkdir(path.dirname(abs), { recursive: true });
@@ -65,13 +79,36 @@ function sizes(groups: [SizeGroup, string[]][], chart: Record<string, [number, n
 const pesos = (n: number) => n * 100;
 const days = (n: number) => new Date(Date.now() + n * 86400_000);
 
+/**
+ * Personalización guiada: un grupo de elección y, si se elige "Nombre y número", los campos condicionales.
+ * Los adicionales van a la textil por defecto; el reparto queda "a definir" (splitConfirmed = false).
+ */
+async function persGroups(productId: string, o: { name: number; number: number; sort?: number }) {
+  const g = await db.productOptionGroup.create({
+    data: {
+      productId, name: "Personalización", type: "CHOICE", role: "OTHER", required: false, sort: o.sort ?? 1,
+      help: "Las prendas con nombre o número no admiten cambio de talle.",
+      values: { create: [{ label: "Nombre y número", sort: 0 }, { label: "Solo número", sort: 1 }] },
+    },
+    include: { values: true },
+  });
+  const both = g.values.find((v) => v.label === "Nombre y número")!.id;
+  const num = g.values.find((v) => v.label === "Solo número")!.id;
+  await db.productOptionGroup.create({
+    data: { productId, name: "Nombre estampado", type: "TEXT", role: "NAME", required: true, sort: (o.sort ?? 1) + 1, maxLength: 12, priceTextil: o.name, priceClub: 0, blocksSizeChange: true, dependsOnGroupId: g.id, dependsOnValueIds: [both] },
+  });
+  await db.productOptionGroup.create({
+    data: { productId, name: "Número", type: "NUMBER", role: "NUMBER", required: true, sort: (o.sort ?? 1) + 2, numberMin: 1, numberMax: 99, priceTextil: o.number, priceClub: 0, blocksSizeChange: true, dependsOnGroupId: g.id, dependsOnValueIds: [both, num] },
+  });
+}
+
 async function main() {
   if ((await db.club.count()) > 0 && process.env.SEED_FORCE !== "1") {
     console.log("La base ya tiene datos: no se cargan los de demostración. Para reemplazarlos (borra todo) usá SEED_FORCE=1.");
     return;
   }
   console.log("Limpiando datos…");
-  await db.$executeRawUnsafe(`TRUNCATE "AuditLog","EmailOutbox","WebhookEvent","SimulatedPayment","ProductionLotUnit","ProductionLot","Delivery","Receipt","Payment","OrderUnitComponent","OrderUnit","Player","Order","Buyer","BenefitSettlement","BenefitRule","CampaignProduct","Campaign","ProductImage","ProductComponent","Product","GarmentSize","Garment","PaymentAccount","ClubPhoto","Category","ClubSport","Session","User","Club","Sport" CASCADE`);
+  await db.$executeRawUnsafe(`TRUNCATE "ClubShipment","ClubPurchaseItem","ClubPurchase","ProductSampleLink","SizeSampleItem","SizeSampleSet","ClubAgreement","OrderUnitOption","ProductOptionValue","ProductOptionGroup","PasswordReset","AuditLog","EmailOutbox","WebhookEvent","SimulatedPayment","ProductionLotUnit","ProductionLot","Delivery","Receipt","Payment","OrderUnitComponent","OrderUnit","Player","Order","Buyer","BenefitSettlement","BenefitRule","CampaignProduct","Campaign","ProductImage","ProductComponent","Product","GarmentSize","Garment","PaymentAccount","ClubPhoto","Category","ClubSport","Session","User","Club","Sport" CASCADE`);
 
   const sports = Object.fromEntries(
     await Promise.all(["Rugby", "Hockey", "Fútbol", "Básquet", "Vóley"].map(async (name) => [name, await db.sport.create({ data: { name } })])),
@@ -139,65 +176,69 @@ async function main() {
     clubId: club.id, code: "P-CAM-TIT", name: "Camiseta titular 2026", kind: "SIMPLE", sportId: sports.Rugby.id, audience: "Infantiles, juveniles y adultos",
     description: "Aros verde y oro. Tela de juego de alta resistencia, cuello reforzado y escudo sublimado.", basePrice: pesos(56000),
     manufacturingTerms: "Se fabrica a pedido al cierre de la preventa. Entrega estimada de 30 a 40 días.",
-    persNameEnabled: true, persNamePrice: pesos(6000), persNameMaxLen: 12, persNumberEnabled: true, persNumberPrice: pesos(4000), persNumberMin: 1, persNumberMax: 99,
+    family: "GAME_KIT", technique: "SUBLIMATED", catalogStatus: "PRESALE",
     components: { create: [{ garmentId: camTit.id, label: "Camiseta", printTarget: true }] },
     images: { create: [{ url: imgTitF, view: "FRONT", tag: "DESIGN", alt: "Camiseta titular, frente" }, { url: imgTitB, view: "BACK", tag: "DESIGN", alt: "Camiseta titular, espalda con nombre y número", sort: 1 }] },
   });
   const pSet = await prod({
     clubId: club.id, code: "P-CNJ-JUE", name: "Conjunto de juego", kind: "SET", sportId: sports.Rugby.id, audience: "Jugadores",
     description: "Camiseta titular y short de juego. Elegís el talle de cada prenda por separado.", basePrice: pesos(84000),
-    persNameEnabled: true, persNamePrice: pesos(6000), persNameMaxLen: 12, persNumberEnabled: true, persNumberPrice: pesos(4000), persNumberMin: 1, persNumberMax: 99,
+    family: "GAME_KIT", technique: "SUBLIMATED", catalogStatus: "PRESALE",
     components: { create: [{ garmentId: camTit.id, label: "Camiseta", printTarget: true, sort: 0 }, { garmentId: short.id, label: "Short", sort: 1 }] },
     images: { create: [{ url: imgTitF, view: "FRONT", tag: "DESIGN", alt: "Camiseta del conjunto" }, { url: imgShort, view: "DETAIL", tag: "DESIGN", alt: "Short del conjunto", sort: 1 }] },
   });
   const pBuzo = await prod({
     clubId: club.id, code: "P-BUZ-MC", name: "Buzo medio cierre", kind: "SIMPLE", audience: "Toda la familia",
-    description: "Frisa liviana, cierre metálico y escudo bordado.", basePrice: pesos(72000),
+    description: "Frisa liviana, cierre metálico y escudo bordado.", basePrice: pesos(72000), family: "OUTFIT", technique: "EMBROIDERED", catalogStatus: "PRESALE",
     components: { create: [{ garmentId: buzo.id, label: "Buzo" }] },
     images: { create: [{ url: imgBuzo, view: "FRONT", tag: "DESIGN", alt: "Buzo medio cierre" }] },
   });
   const pEnt = await prod({
     clubId: club.id, code: "P-CAM-ENT", name: "Camiseta de entrenamiento", kind: "SIMPLE", audience: "Jugadores",
-    description: "Blanca con franja verde. Secado rápido para la semana.", basePrice: pesos(39000),
+    description: "Blanca con franja verde. Secado rápido para la semana.", basePrice: pesos(39000), family: "OUTFIT", technique: "SUBLIMATED", catalogStatus: "PRESALE",
     components: { create: [{ garmentId: camEnt.id, label: "Camiseta" }] },
     images: { create: [{ url: imgEnt, view: "FRONT", tag: "REFERENCE", alt: "Camiseta de entrenamiento (referencia de la temporada anterior)" }] },
   });
   const pCombo = await prod({
     clubId: club.id, code: "P-CMB-TB", name: "Combo camiseta + buzo", kind: "COMBO", audience: "Toda la familia",
     description: "Camiseta titular y buzo medio cierre con precio de combo. Talles independientes.", basePrice: pesos(128000),
-    persNameEnabled: true, persNamePrice: pesos(6000), persNameMaxLen: 12, persNumberEnabled: true, persNumberPrice: pesos(4000), persNumberMin: 1, persNumberMax: 99,
+    family: "GAME_KIT", technique: "SUBLIMATED", catalogStatus: "PRESALE",
     components: { create: [{ garmentId: camTit.id, label: "Camiseta", printTarget: true, sort: 0 }, { garmentId: buzo.id, label: "Buzo", sort: 1 }] },
     images: { create: [{ url: imgTitF, view: "FRONT", tag: "DESIGN", alt: "Camiseta del combo" }, { url: imgBuzo, view: "DETAIL", tag: "DESIGN", alt: "Buzo del combo", sort: 1 }] },
   });
 
+  for (const p of [pTit, pSet, pCombo]) await persGroups(p.id, { name: pesos(6000), number: pesos(4000) });
+
   const faq = [
     { q: "¿Qué pasa si no se llega al mínimo de producción?", a: "El club y la fábrica deciden entre extender la preventa, cancelarla o producir igual, y lo informan por correo. Si se cancela, la devolución de lo pagado se coordina con cada comprador." },
     { q: "¿Puedo comprar para varios hijos en el mismo pedido?", a: "Sí. Cada prenda queda asociada a su jugador, con su deporte y categoría, para ordenar la entrega en el club." },
-    { q: "¿Cuándo se confirma mi pedido?", a: "Cuando se acredita la seña. Con transferencia, al aprobarse el comprobante; un comprobante cargado queda en revisión hasta entonces." },
-    { q: "¿Cómo pago el saldo?", a: "Con el mismo enlace privado de tu pedido, cuando te avisemos que las prendas llegaron al club." },
+    { q: "¿Cuándo se confirma mi pedido?", a: "Cuando se acredita el anticipo que pagás con Mercado Pago." },
+    { q: "¿Cómo pago el saldo?", a: "El saldo (la diferencia entre el precio al socio y el anticipo) se paga directamente al club, antes de retirar. El club lo registra en el sistema." },
+    { q: "¿Hay envío a domicilio?", a: "No. La producción completa se entrega en el club y la retirás en la sede con tu código." },
   ];
   const campaign = await db.campaign.create({
     data: {
       clubId: club.id, slug: "coleccion-2026", title: "Colección oficial 2026", season: "2026",
-      description: "Indumentaria oficial del club, fabricada a pedido. Reservás con una seña del 50 %, la fábrica produce solo lo vendido y retirás en la sede cuando completás el saldo.",
-      status: "PUBLISHED", opensAt: days(-3), closesAt: days(24), deliveryDaysMin: 30, deliveryDaysMax: 40,
-      paymentAccountId: clubAccount.id, paymentMode: "DEPOSIT", depositType: "PERCENT", depositValue: 50,
-      balanceDueText: "Antes del retiro, cuando avisemos que las prendas llegaron al club.",
+      description: "Indumentaria oficial del club, fabricada a pedido. Pagás el anticipo con Mercado Pago, la fábrica produce solo lo vendido y retirás en la sede; si hay saldo, se paga al club.",
+      status: "PUBLISHED", pricingModel: "TEXTIL_ADVANCE", opensAt: days(-3), closesAt: days(24), deliveryDaysMin: 30, deliveryDaysMax: 40,
+      paymentAccountId: textilAccount.id, allowTransfer: false,
+      activationRequestedAt: days(-5), activationApprovedAt: days(-4),
+      balanceDueText: "Saldo al club, antes del retiro.",
       minUnits: 60, maxUnits: null, minPolicyText: "Si al cierre hay menos de 60 prendas confirmadas, el club y la fábrica deciden extender la preventa, cancelarla o producir igual. La decisión se informa por correo.",
       pickupEnabled: true, pickupInstructions: "Presentá el código QR de retiro. Puede retirar otra persona con el código.",
-      shippingEnabled: true, shippingPrice: pesos(9500), shippingNotes: "Envío a domicilio por correo privado; se cobra con el saldo.",
+      shippingEnabled: false,
       memberNumberMode: "OPTIONAL",
       policyChanges: "Cambios de talle hasta el cierre de la preventa, escribiendo al club.",
-      policyCancellation: "Podés cancelar sin cargo hasta el cierre. Después, la seña cubre la fabricación iniciada.",
+      policyCancellation: "Podés cancelar sin cargo hasta el cierre. Después, el anticipo cubre la fabricación iniciada.",
       policyRefunds: "Las devoluciones se coordinan con el club y se registran en el pedido. No hay devoluciones automáticas.",
       faq,
       products: {
         create: [
-          { productId: pTit.id, price: pesos(48000), listPrice: pesos(56000), sort: 0 },
-          { productId: pSet.id, price: pesos(72000), listPrice: pesos(84000), sort: 1 },
-          { productId: pBuzo.id, price: pesos(62000), listPrice: pesos(72000), sort: 2 },
-          { productId: pCombo.id, price: pesos(104000), listPrice: pesos(128000), sort: 3 },
-          { productId: pEnt.id, price: pesos(34000), listPrice: pesos(39000), sort: 4 },
+          { productId: pTit.id, textilPrice: pesos(40000), price: pesos(48000), listPrice: pesos(56000), sort: 0 },
+          { productId: pSet.id, textilPrice: pesos(60000), price: pesos(72000), listPrice: pesos(84000), sort: 1 },
+          { productId: pBuzo.id, textilPrice: pesos(52000), price: pesos(62000), listPrice: pesos(72000), sort: 2 },
+          { productId: pCombo.id, textilPrice: pesos(88000), price: pesos(104000), listPrice: pesos(128000), sort: 3 },
+          { productId: pEnt.id, textilPrice: pesos(34000), price: pesos(34000), listPrice: pesos(39000), sort: 4 },
         ],
       },
       benefitRule: { create: { type: "PERCENT_OF_GARMENTS", value: 800, notes: "8 % sobre el precio de las prendas confirmadas." } },
@@ -205,10 +246,39 @@ async function main() {
   });
   await db.campaign.create({
     data: {
-      clubId: club.id, slug: "temporada-2025", title: "Temporada 2025", season: "2025", status: "FINISHED",
+      clubId: club.id, slug: "temporada-2025", title: "Temporada 2025", season: "2025", status: "FINISHED", pricingModel: "LEGACY_DEPOSIT",
       description: "Preventa de la temporada anterior.", opensAt: new Date("2025-03-01T03:00:00Z"), closesAt: new Date("2025-03-31T02:59:00Z"),
       paymentAccountId: clubAccount.id, showCatalogWhenClosed: true,
       products: { create: [{ productId: pEnt.id, price: pesos(29000), sort: 0 }] },
+    },
+  });
+
+  // Campaña de categoría completa: camiseta de juego para el plantel M15 (cantidad esperada fijada por la textil, no universal)
+  const m15 = await db.category.findFirstOrThrow({ where: { clubId: club.id, name: "M15" } });
+  const textilUser = await db.user.findFirstOrThrow({ where: { role: "TEXTIL_ADMIN" } });
+  await db.campaign.create({
+    data: {
+      clubId: club.id, slug: "m15-camiseta-de-juego", title: "M15 · camiseta de juego", season: "2026", status: "PUBLISHED", pricingModel: "TEXTIL_ADVANCE",
+      description: "Camiseta de juego para el plantel M15. Se produce con la categoría completa o con aprobación de la textil.",
+      opensAt: days(-2), closesAt: days(10), paymentAccountId: textilAccount.id, allowTransfer: false, shippingEnabled: false,
+      audience: "CATEGORIES", audienceCategories: { connect: [{ id: m15.id }] },
+      activationRequestedAt: days(-3), activationApprovedAt: days(-3), activationApprovedById: textilUser.id,
+      products: {
+        create: [{
+          productId: pTit.id, textilPrice: pesos(40000), price: pesos(46000), sort: 0,
+          ruleType: "FULL_CATEGORY", ruleCategoryId: m15.id, expectedQty: 11, ruleApprovedAt: days(-3), ruleApprovedById: textilUser.id,
+          ruleNote: "Plantel M15: 11 camisetas esperadas.",
+        }],
+      },
+    },
+  });
+  // Acuerdo privado próximo a vencer (para ver la alerta en el panel de la textil)
+  await db.clubAgreement.create({
+    data: {
+      clubId: club.id, status: "ACTIVE", startsAt: days(-320), endsAt: days(45), exclusive: true, brandLine: `LNRC by ${process.env.TEXTIL_BRAND ?? "Marca Textil"}`,
+      samplesCommitted: "Curva superior e inferior completa en la sede.", catalogAgreed: "Indumentaria de juego, entrenamiento y outfit.",
+      activationConditions: "Cada campaña la solicita el club y la autoriza la textil.", pricingRules: "Precio textil por producto; el club define el precio al socio.",
+      createdById: textilUser.id,
     },
   });
 
@@ -229,16 +299,155 @@ async function main() {
   });
   const pPol = await db.product.create({
     data: {
-      clubId: club2.id, code: "P-POL", name: "Pollera de juego", basePrice: pesos(42000), description: "Pollera bordó con short interno.",
+      clubId: club2.id, code: "P-POL", name: "Pollera de juego", basePrice: pesos(42000), description: "Pollera bordó con short interno.", family: "GAME_KIT", catalogStatus: "PRESALE",
       components: { create: [{ garmentId: pollera.id, label: "Pollera" }] },
       images: { create: [{ url: await asset("demo/pollera.webp", shortSvg("#EFE3E7")), tag: "REFERENCE", alt: "Pollera (referencia)" }] },
     },
   });
   await db.campaign.create({
     data: {
-      clubId: club2.id, slug: "hockey-2026", title: "Hockey 2026", season: "2026", status: "PUBLISHED", opensAt: days(-1), closesAt: days(20),
+      // Modelo anterior (seña/pago total): se conserva para clubes con campañas ya en curso
+      clubId: club2.id, slug: "hockey-2026", title: "Hockey 2026", season: "2026", status: "PUBLISHED", pricingModel: "LEGACY_DEPOSIT", opensAt: days(-1), closesAt: days(20),
       paymentAccountId: textilAccount.id, paymentMode: "FULL", maxUnits: 40, allowMercadoPago: true, allowTransfer: true,
       products: { create: [{ productId: pPol.id, price: pesos(38000), maxUnits: 25 }] },
+    },
+  });
+
+
+  // ───────── Piloto demostrativo: rugby de Virreyes (DEMO) ─────────
+  // Club de demostración: escudo genérico, colores provisorios, productos de verano y precios de ejemplo.
+  // No usa logos, marcas ni respaldo reales del club. Se identifica como demo en toda la tienda.
+  const VA = "#1D3557", VB = "#A8DADC";
+  const demo = await db.club.create({
+    data: {
+      slug: "demo-virreyes-rugby", name: "Rugby de Virreyes (demo)", shortName: "Virreyes demo", isDemo: true,
+      description: "Demostración del modelo de preventa para el club. Escudo, colores y precios son de ejemplo y no representan al club.",
+      colorPrimary: VA, colorSecondary: VB, city: "Virreyes", province: "Buenos Aires", venue: "Sede (dato de ejemplo)",
+      pickupAddress: "Dirección de retiro a confirmar con el club", pickupHours: "Horarios a confirmar con el club", officeHours: "A confirmar",
+      conditions: "Demostración: no se realizan ventas reales.",
+      logoUrl: await asset("demo/virreyes-demo-escudo.webp", crestSvg(VA, VB, "V"), 520),
+      coverUrl: await asset("demo/virreyes-demo-portada.webp", coverSvg(VA, VB), 1600),
+      sports: { create: [{ sportId: sports.Rugby.id }, { sportId: sports.Hockey.id }] },
+    },
+  });
+  await db.category.createMany({
+    data: [
+      ...["M13", "M15", "M17", "M19", "Plantel superior"].map((name, i) => ({ name, sportId: sports.Rugby.id, clubId: demo.id, sort: i })),
+      ...["Sub-14", "Primera"].map((name, i) => ({ name, sportId: sports.Hockey.id, clubId: demo.id, sort: 10 + i })),
+    ],
+  });
+  await db.user.create({ data: { email: "club@virreyes-demo.test", name: "Usuario demo (club)", passwordHash: hash, role: "CLUB_ADMIN", clubId: demo.id } });
+  const vg = (code: string, name: string, sz: ReturnType<typeof sizes>, material: string, measureA = "Ancho de pecho") =>
+    db.garment.create({ data: { clubId: demo.id, code, name, variant: "Verano (demo)", material, care: "Lavar con agua fría, del revés.", measureA, measureB: "Largo", measureNote: "Medidas de ejemplo.", sizes: { create: sz } } });
+  const gRem = await vg("REM-VER-D", "Remera uso diario", sizes([["KIDS", KIDS.slice(2)], ["ALPHA", ALPHA.slice(0, 6)]], TOP), "Algodón peinado 24/1 (dato de ejemplo)");
+  const gSho = await vg("SHO-VER-D", "Short de verano", sizes([["KIDS", KIDS.slice(2)], ["ALPHA", ALPHA.slice(0, 6)]], SHORT), "Microfibra liviana (dato de ejemplo)", "Medio contorno de cintura");
+  const gMus = await vg("MUS-VER-D", "Musculosa", sizes([["ALPHA", ALPHA.slice(0, 5)]], TOP), "Poliéster con microperforado (dato de ejemplo)");
+  const gBol = await db.garment.create({ data: { clubId: demo.id, code: "BOL-D", name: "Bolso", variant: "Único", material: "Lona impermeable (dato de ejemplo)", measureA: "Ancho", measureB: "Alto", sizes: { create: [{ label: "U", group: "OTHER", sort: 0 }] } } });
+  const vbg = "#E8EEF3";
+  const vImg = {
+    rem: await asset("demo/virreyes-remera.webp", teeSvg(VA, VB, vbg)),
+    remLeg: await asset("demo/virreyes-remera-leyenda.webp", teeSvg(VA, VB, vbg, "RUGBY")),
+    sho: await asset("demo/virreyes-short.webp", shortSvg(vbg)),
+    mus: await asset("demo/virreyes-musculosa.webp", tankSvg(VB, VA, vbg)),
+    bol: await asset("demo/virreyes-bolso.webp", bagSvg(VA, VB, vbg)),
+  };
+  const dRem = await prod({
+    clubId: demo.id, code: "D-REM", name: "Remera uso diario", kind: "SIMPLE", family: "OUTFIT", technique: "PENDING", catalogStatus: "PRESALE",
+    description: "Remera de algodón para uso diario, con leyenda de disciplina opcional. Producto y precio de ejemplo.", basePrice: pesos(13000),
+    components: { create: [{ garmentId: gRem.id, label: "Remera", printTarget: true }] },
+    images: { create: [{ url: vImg.rem, view: "FRONT", tag: "DESIGN", alt: "Remera (diseño de ejemplo)" }, { url: vImg.remLeg, view: "DETAIL", tag: "DESIGN", alt: "Remera con leyenda de disciplina (ejemplo)", sort: 1 }] },
+  });
+  const dSho = await prod({
+    clubId: demo.id, code: "D-SHO", name: "Short de verano", kind: "SIMPLE", family: "OUTFIT", technique: "PENDING", catalogStatus: "PRESALE",
+    description: "Short liviano para entrenar o usar en verano. Producto y precio de ejemplo.", basePrice: pesos(15000),
+    components: { create: [{ garmentId: gSho.id, label: "Short", printTarget: true }] },
+    images: { create: [{ url: vImg.sho, view: "FRONT", tag: "DESIGN", alt: "Short (diseño de ejemplo)" }] },
+  });
+  const dMus = await prod({
+    clubId: demo.id, code: "D-MUS", name: "Musculosa", kind: "SIMPLE", family: "OUTFIT", technique: "PENDING", catalogStatus: "PRESALE",
+    description: "Musculosa de entrenamiento. Precio de ejemplo igual al precio textil: sin saldo al club.", basePrice: pesos(9000),
+    components: { create: [{ garmentId: gMus.id, label: "Musculosa" }] },
+    images: { create: [{ url: vImg.mus, view: "FRONT", tag: "DESIGN", alt: "Musculosa (diseño de ejemplo)" }] },
+  });
+  const dBol = await prod({
+    clubId: demo.id, code: "D-BOL", name: "Bolso", kind: "SIMPLE", family: "ACCESSORY", technique: "PENDING", catalogStatus: "PRESALE",
+    description: "Bolso de viaje con bolsillo para botines. Precio de ejemplo con recargo del 30 % sobre el precio textil.", basePrice: pesos(19500),
+    components: { create: [{ garmentId: gBol.id, label: "Bolso" }] },
+    images: { create: [{ url: vImg.bol, view: "FRONT", tag: "DESIGN", alt: "Bolso (diseño de ejemplo)" }] },
+  });
+  // Producto que la textil todavía prepara: visible en el catálogo como "próximamente", sin venta
+  await prod({
+    clubId: demo.id, code: "D-CAM", name: "Camiseta de juego (próximamente)", kind: "SIMPLE", family: "GAME_KIT", technique: "SUBLIMATED", catalogStatus: "CATALOG",
+    description: "Se habilitará por categoría completa.", basePrice: pesos(20000),
+    components: { create: [{ garmentId: gRem.id, label: "Camiseta" }] },
+    images: { create: [{ url: await asset("demo/virreyes-camiseta.webp", jerseySvg({ base: VA, hoop: VB, hoops: 3, collar: VB, bg: vbg })), view: "FRONT", tag: "DESIGN", alt: "Camiseta (diseño de ejemplo)" }] },
+  });
+
+  // Leyenda de disciplina (elección) + nombre condicional en la remera; los adicionales separan parte textil y club (reparto a definir)
+  const legend = await db.productOptionGroup.create({
+    data: {
+      productId: dRem.id, name: "Leyenda de disciplina", type: "CHOICE", role: "LEGEND", required: false, sort: 1, help: "Se estampa sobre la remera base.",
+      values: { create: [{ label: "RUGBY", sort: 0, priceTextil: pesos(1500), priceClub: pesos(500) }, { label: "HOCKEY", sort: 1, priceTextil: pesos(1500), priceClub: pesos(500) }] },
+    },
+    include: { values: true },
+  });
+  await db.productOptionGroup.create({
+    data: {
+      productId: dRem.id, name: "Nombre en la espalda", type: "TEXT", role: "NAME", required: false, sort: 2, maxLength: 12, priceTextil: pesos(2000), priceClub: 0,
+      blocksSizeChange: true, dependsOnGroupId: legend.id, dependsOnValueIds: legend.values.map((v) => v.id), help: "Disponible con leyenda. Con nombre, la prenda no admite cambio de talle.",
+    },
+  });
+
+  // Compra inicial del outfit (15 estimadas), pagada, con talles definidos y aprobada; también sirve de muestrario (confirmado)
+  const initial = await db.clubPurchase.create({
+    data: {
+      clubId: demo.id, productId: dRem.id, purposes: ["INITIAL", "SAMPLE"], committedQty: 15, paidQty: 15, sizeStatus: "DEFINED", approvedAt: days(-6), approvedById: textilUser.id,
+      notes: "Ejemplo: 15 remeras compradas por el club. Mínimo estimado, a confirmar.", createdById: textilUser.id,
+      items: { create: [{ sizeLabel: "S", quantity: 3 }, { sizeLabel: "M", quantity: 5 }, { sizeLabel: "L", quantity: 4 }, { sizeLabel: "XL", quantity: 3 }] },
+    },
+  });
+  const top = await db.sizeSampleSet.create({
+    data: {
+      clubId: demo.id, kind: "TOP", name: "Curva superior", referenceGarmentId: gRem.id, availability: "AVAILABLE", deliveredAt: days(-5), location: "Secretaría del club (ejemplo)",
+      purchaseId: initial.id, items: { create: ["S", "M", "L", "XL"].map((l, i) => ({ sizeLabel: l, quantity: 1, sort: i })) },
+    },
+  });
+  const bottom = await db.sizeSampleSet.create({
+    data: {
+      clubId: demo.id, kind: "BOTTOM", name: "Curva inferior", referenceGarmentId: gSho.id, availability: "AVAILABLE", deliveredAt: days(-5), location: "Secretaría del club (ejemplo)",
+      items: { create: ["S", "M", "L", "XL"].map((l, i) => ({ sizeLabel: l, quantity: 1, sort: i })) },
+    },
+  });
+  await db.productSampleLink.createMany({
+    data: [
+      { productId: dRem.id, setId: top.id, approved: true, approvedAt: days(-5), approvedById: textilUser.id },
+      { productId: dMus.id, setId: top.id, approved: true, approvedAt: days(-5), approvedById: textilUser.id, notes: "Calce equivalente a la remera." },
+      { productId: dSho.id, setId: bottom.id, approved: true, approvedAt: days(-5), approvedById: textilUser.id },
+    ],
+  });
+  await db.clubAgreement.create({
+    data: {
+      clubId: demo.id, status: "DRAFT", startsAt: days(0), endsAt: days(365), exclusive: true, brandLine: `Virreyes by ${process.env.TEXTIL_BRAND ?? "Marca Textil"}`,
+      notes: "Borrador de ejemplo para la demostración. Sin valor contractual.", createdById: textilUser.id,
+    },
+  });
+  const demoCampaign = await db.campaign.create({
+    data: {
+      clubId: demo.id, slug: "verano-demo", title: "Verano · demostración", season: "Demo", status: "PUBLISHED", pricingModel: "TEXTIL_ADVANCE",
+      description: "Así se vería una preventa del club: precio textil como anticipo por Mercado Pago, saldo al club y entrega en la sede. Precios de ejemplo.",
+      opensAt: days(-1), closesAt: days(30), deliveryDaysMin: 30, deliveryDaysMax: 45, paymentAccountId: textilAccount.id, allowTransfer: false, shippingEnabled: false,
+      activationRequestedAt: days(-2), activationApprovedAt: days(-2), activationApprovedById: textilUser.id,
+      pickupInstructions: "Retiro en la sede con el código del pedido (ejemplo).",
+      policyCancellation: "Demostración: no se realizan ventas reales.",
+      faq: [{ q: "¿Es una tienda real?", a: "No. Es una demostración con datos de ejemplo. Los pagos son simulados." }],
+      products: {
+        create: [
+          { productId: dRem.id, textilPrice: pesos(10000), price: pesos(13000), sort: 0, ruleType: "INITIAL_PURCHASE", initialPurchaseMin: 15, initialPurchaseEstimated: true, clubPurchaseId: initial.id, ruleApprovedAt: days(-2), ruleApprovedById: textilUser.id },
+          { productId: dSho.id, textilPrice: pesos(12000), price: pesos(15000), sort: 1 },
+          { productId: dMus.id, textilPrice: pesos(9000), price: pesos(9000), sort: 2 },
+          { productId: dBol.id, textilPrice: pesos(15000), price: pesos(19500), markupBp: 3000, sort: 3 },
+        ],
+      },
     },
   });
 
@@ -246,12 +455,14 @@ async function main() {
 Datos de demostración creados.
   Tienda:       /club/${club.slug}  ·  /club/${club.slug}/${campaign.slug}
   Otro club:    /club/${club2.slug}
+  Piloto demo:  /club/${demo.slug}/${demoCampaign.slug}
   Contraseña de todos los usuarios demo: ${PASSWORD}
     textil@camada.test       Administración textil
     produccion@camada.test   Producción
     club@nandues.test        Administración del club (Los Ñandúes)
     entregas@nandues.test    Entregas (Los Ñandúes)
-    club@sauce.test          Administración del club (El Sauce)`);
+    club@sauce.test          Administración del club (El Sauce)
+    club@virreyes-demo.test  Administración del club (piloto demo)`);
 }
 
 main()

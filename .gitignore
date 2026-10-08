@@ -11,3 +11,6 @@ src/generated/
 tsconfig.tsbuildinfo
 next-env.d.ts
 AGENTS.md
+
+# Borrador comercial interno: no se publica (el repositorio es público)
+docs/PROPUESTA-COMERCIAL.md
