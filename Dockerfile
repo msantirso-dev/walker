@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# Camada — imagen de producción (Next.js standalone + Prisma migrate deploy al iniciar)
+# Walkersport (plataforma de preventa) — imagen de producción (Next.js standalone + Prisma migrate deploy al iniciar)
 
 FROM node:22-bookworm-slim AS base
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
@@ -35,9 +35,11 @@ FROM base AS runner
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 UPLOAD_DIR=/data/uploads
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
+COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=builder --chown=node:node /app/prisma/schema.prisma /app/prisma/docker.config.mjs ./prisma/
 COPY --from=builder --chown=node:node /app/prisma/migrations ./prisma/migrations
 COPY --from=builder --chown=node:node /app/dist/seed.mjs ./prisma/seed.mjs
+COPY --from=builder --chown=node:node /app/prisma/assets ./prisma/assets
 COPY --from=migrator --chown=node:node /opt/prisma /opt/prisma
 COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN mkdir -p /data/uploads && chown -R node:node /data

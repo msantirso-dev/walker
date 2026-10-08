@@ -3,6 +3,7 @@ import { requireUser, assertCan, can } from "@/modules/auth";
 import { COST_BEARER_LABEL, SHIPMENT_STATUS_LABEL, shipmentRemito } from "@/modules/logistics";
 import { env } from "@/shared/env";
 import { fmtDate, fmtDateTime } from "@/shared/dates";
+import { BrandMark } from "@/shared/ui/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export default async function Remito({ params }: { params: Promise<{ id: string;
     <article className="card mx-auto max-w-3xl p-6 print:shadow-none">
       <header className="flex flex-wrap items-start justify-between gap-4 border-b-2 border-ink pb-4">
         <div>
+          <BrandMark className="mb-2 h-8" />
           <div className="eyebrow">{env().TEXTIL_BRAND} · Remito consolidado</div>
           <h1 className="text-3xl font-extrabold">Envío {s.number} · {s.club.name}</h1>
           <p className="text-sm text-muted">{s.campaign.title} · lotes {r.lots.join(", ")}</p>

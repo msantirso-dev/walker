@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
-/* Diseño: tinta verde-pizarra sobre papel frío, acento oro de vestuario.
+/* Diseño Walkersport: grafito del logo WKR sobre papel neutro, acento oro de vestuario.
    Las tiendas reemplazan --club / --on-club / --accent con los colores del club. */
 :root {
-  --paper: #f1f4ee;
+  --paper: #f2f2f0;
   --surface: #ffffff;
-  --surface-2: #e7ece7;
-  --ink: #10231c;
-  --muted: #56665e;
-  --line: #d3dcd5;
-  --brand: #0f4d3a;
-  --brand-ink: #f6f3e4;
+  --surface-2: #e8e8e6;
+  --ink: #1b1a1b;
+  --muted: #5d5e62;
+  --line: #d6d6d3;
+  --brand: #231f20;
+  --brand-ink: #f5f5f3;
   --accent: #d9a520;
   --accent-ink: #3b2c05;
   --ok: #1f7a4d;
@@ -28,15 +28,15 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper: #0b1712; --surface: #12221b; --surface-2: #1a2d24; --ink: #e6ede8; --muted: #97a89f; --line: #26392f;
-    --brand: #1e7a5c; --brand-ink: #f6f3e4; --accent: #e6b84a; --accent-ink: #2a1f03;
+    --paper: #111113; --surface: #19191c; --surface-2: #232327; --ink: #ececec; --muted: #a0a0a6; --line: #2f2f34;
+    --brand: #2c2a2b; --brand-ink: #f5f5f3; --accent: #e6b84a; --accent-ink: #2a1f03;
     --ok: #4fbf85; --ok-bg: #12301f; --warn: #e0a53a; --warn-bg: #33270d; --danger: #f07167; --danger-bg: #3a1714; --info: #8ab4f0; --info-bg: #142640;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --paper: #0b1712; --surface: #12221b; --surface-2: #1a2d24; --ink: #e6ede8; --muted: #97a89f; --line: #26392f;
-  --brand: #1e7a5c; --brand-ink: #f6f3e4; --accent: #e6b84a; --accent-ink: #2a1f03;
+  --paper: #111113; --surface: #19191c; --surface-2: #232327; --ink: #ececec; --muted: #a0a0a6; --line: #2f2f34;
+  --brand: #2c2a2b; --brand-ink: #f5f5f3; --accent: #e6b84a; --accent-ink: #2a1f03;
   --ok: #4fbf85; --ok-bg: #12301f; --warn: #e0a53a; --warn-bg: #33270d; --danger: #f07167; --danger-bg: #3a1714; --info: #8ab4f0; --info-bg: #142640;
   color-scheme: dark;
 }

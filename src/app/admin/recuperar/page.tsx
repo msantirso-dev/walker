@@ -4,6 +4,7 @@ import { requestPasswordReset } from "@/modules/auth";
 import { ActionForm, SubmitButton } from "@/shared/ui/client";
 import { allow } from "@/shared/rate-limit";
 import type { FormState } from "@/shared/actions-types";
+import { BrandMark } from "@/shared/ui/brand";
 
 export const metadata = { title: "Recuperar contraseña", robots: { index: false } };
 const NEUTRAL = "Si el correo corresponde a un usuario activo, te enviamos un enlace para elegir una contraseña nueva. Vence en 30 minutos. Si no llega, pedí a la administración de la textil que restablezca tu contraseña.";
@@ -23,7 +24,7 @@ export default function RecoverPassword() {
   return (
     <main className="grid min-h-dvh place-items-center px-4 py-10">
       <div className="w-full max-w-sm">
-        <div className="font-display text-2xl font-extrabold uppercase tracking-wider">{process.env.PLATFORM_NAME ?? "Camada"}</div>
+        <BrandMark className="h-12" />
         <h1 className="mt-6 text-4xl font-extrabold">Recuperar contraseña</h1>
         <p className="mt-2 text-muted">Te enviamos un enlace al correo con el que ingresás al panel.</p>
         <div className="card mt-6 p-5">

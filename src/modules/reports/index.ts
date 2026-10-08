@@ -25,7 +25,7 @@ export function toCsv(sheet: Sheet): Buffer {
 
 export async function toXlsx(sheets: Sheet[], meta: { title: string }): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Camada";
+  wb.creator = "Walkersport";
   wb.title = meta.title;
   for (const s of sheets) {
     const ws = wb.addWorksheet(s.name.slice(0, 31));

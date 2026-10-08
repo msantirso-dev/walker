@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { db } from "@/shared/db";
 import { fmtDate } from "@/shared/dates";
+import { BrandMark } from "@/shared/ui/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -11,19 +12,20 @@ export default async function Home() {
     select: { slug: true, name: true, city: true, logoUrl: true, colorPrimary: true, campaigns: { where: { status: "PUBLISHED", closesAt: { gt: now } }, select: { title: true, closesAt: true }, take: 1 } },
     orderBy: { name: "asc" },
   });
-  const name = process.env.PLATFORM_NAME ?? "Camada";
+  const name = process.env.PLATFORM_NAME ?? "Walkersport";
   return (
     <main>
       <section className="relative overflow-hidden bg-brand text-brand-ink">
         <div className="hoops absolute inset-0" style={{ ["--club-2" as string]: "var(--accent)" }} aria-hidden />
         <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-10">
           <div className="flex items-center justify-between">
-            <span className="font-display text-2xl font-extrabold uppercase tracking-wider">{name}</span>
+            <BrandMark className="h-12" title={name} />
             <Link href="/admin" className="text-sm font-semibold underline">Ingresar al panel</Link>
           </div>
-          <h1 className="mt-14 max-w-4xl text-6xl font-extrabold md:text-8xl">Indumentaria oficial, fabricada a pedido</h1>
+          <div className="eyebrow mt-14 opacity-80">Tu equipo · la mejor indumentaria</div>
+          <h1 className="mt-2 max-w-4xl text-6xl font-extrabold md:text-8xl">La marca de tu club, fabricada a pedido</h1>
           <p className="mt-6 max-w-[56ch] text-lg opacity-90">
-            Cada club tiene su tienda. Socios y familias reservan con una seña, consolidamos los pedidos confirmados y fabricamos solo lo vendido. El club no compra stock ni adelanta dinero.
+            Cada club tiene su tienda de preventa. Socios y familias pagan un anticipo con Mercado Pago y el saldo al club; fabricamos lo vendido y entregamos todo junto en la sede.
           </p>
         </div>
       </section>
@@ -52,6 +54,12 @@ export default async function Home() {
           </ul>
         )}
       </section>
+      <footer className="border-t border-line py-6 text-sm text-muted">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4">
+          <BrandMark className="h-6" title={name} />
+          <span>Instagram @walkersport · WhatsApp 11 3610 0004</span>
+        </div>
+      </footer>
     </main>
   );
 }

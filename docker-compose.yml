@@ -9,8 +9,8 @@ services:
       SERVICE_FQDN_APP_3000: ${SERVICE_FQDN_APP_3000:-}
       DATABASE_URL: postgresql://camada:${POSTGRES_PASSWORD}@db:5432/camada
       APP_URL: ${APP_URL}
-      PLATFORM_NAME: ${PLATFORM_NAME:-Camada}
-      TEXTIL_BRAND: ${TEXTIL_BRAND:-Marca Textil}
+      PLATFORM_NAME: ${PLATFORM_NAME:-Walkersport}
+      TEXTIL_BRAND: ${TEXTIL_BRAND:-Walkersport}
       APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY}
       CRON_SECRET: ${CRON_SECRET}
       PAYMENT_SIMULATOR: ${PAYMENT_SIMULATOR:-disabled}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { fmtDate, fmtDateTime } from "@/shared/dates";
+import { BrandMark } from "@/shared/ui/brand";
 
 export function ClubBar({ club, href }: { club: { name: string; logoUrl: string | null; city: string | null; venue: string | null; slug: string }; href?: string }) {
   return (
@@ -127,7 +128,7 @@ export function WindowLine({ c, open }: { c: { status: string; opensAt: Date; cl
 export function DemoBanner() {
   return (
     <div role="note" className="bg-ink px-4 py-2 text-center text-sm font-semibold text-paper">
-      DEMOSTRACIÓN · Club, productos y precios de ejemplo. No es una tienda oficial ni una venta real; los pagos son simulados.
+      DEMOSTRACIÓN · Bocetos de Walkersport con precios de ejemplo. No es una tienda oficial del club ni una venta real; los pagos son simulados.
     </div>
   );
 }
@@ -137,7 +138,7 @@ export function PlatformFooter({ name, brandLine, demo }: { name: string; brandL
     <footer className="mt-16 border-t border-line py-6 text-sm text-muted">
       <div className="mx-auto flex max-w-6xl flex-wrap justify-between gap-2 px-4">
         <span>{demo ? `Demostración para ${name}` : `Tienda oficial de ${name}`}{brandLine ? ` · ${brandLine}` : ""}</span>
-        <span>Fabricación y gestión: {process.env.PLATFORM_NAME ?? "Camada"}</span>
+        <span className="inline-flex items-center gap-2">Fabricación y gestión: <BrandMark className="h-5" /> {process.env.PLATFORM_NAME ?? "Walkersport"}</span>
       </div>
     </footer>
   );

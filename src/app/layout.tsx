@@ -10,7 +10,7 @@ import "@fontsource/ibm-plex-mono/500.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: process.env.PLATFORM_NAME ?? "Camada", template: `%s · ${process.env.PLATFORM_NAME ?? "Camada"}` },
+  title: { default: process.env.PLATFORM_NAME ?? "Walkersport", template: `%s · ${process.env.PLATFORM_NAME ?? "Walkersport"}` },
   description: "Preventa de indumentaria oficial para clubes.",
 };
 

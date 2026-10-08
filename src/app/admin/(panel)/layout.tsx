@@ -4,6 +4,7 @@ import { requireUser, logout, can, ROLE_LABELS } from "@/modules/auth";
 import { db } from "@/shared/db";
 import { emailConfigured, simulatorEnabled } from "@/shared/env";
 import { NavLinks } from "./nav";
+import { BrandMark } from "@/shared/ui/brand";
 
 async function doLogout() {
   "use server";
@@ -33,7 +34,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
     <div className="min-h-dvh md:grid md:grid-cols-[240px_1fr]">
       <aside className="bg-brand text-brand-ink md:sticky md:top-0 md:h-dvh md:overflow-y-auto">
         <div className="flex items-center justify-between gap-2 px-4 py-4 md:block">
-          <Link href="/admin" className="font-display text-2xl font-extrabold uppercase tracking-wider">{process.env.PLATFORM_NAME ?? "Camada"}</Link>
+          <Link href="/admin" className="inline-block" aria-label="Inicio del panel"><BrandMark className="h-10" /></Link>
           <div className="text-right text-xs opacity-80 md:mt-2 md:text-left">
             <div className="font-semibold">{u.name}</div>
             <div>{ROLE_LABELS[u.role]}{club ? ` · ${club.name}` : ""}</div>

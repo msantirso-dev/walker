@@ -5,6 +5,7 @@ import { findValidReset, resetPassword, MIN_PASSWORD } from "@/modules/auth";
 import { ActionForm, SubmitButton } from "@/shared/ui/client";
 import { run, str } from "@/shared/actions";
 import type { FormState } from "@/shared/actions-types";
+import { BrandMark } from "@/shared/ui/brand";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Nueva contraseña", robots: { index: false } };
@@ -28,7 +29,7 @@ export default async function ResetPage({ params }: { params: Promise<{ token: s
   return (
     <main className="grid min-h-dvh place-items-center px-4 py-10">
       <div className="w-full max-w-sm">
-        <div className="font-display text-2xl font-extrabold uppercase tracking-wider">{process.env.PLATFORM_NAME ?? "Camada"}</div>
+        <BrandMark className="h-12" />
         <h1 className="mt-6 text-4xl font-extrabold">Nueva contraseña</h1>
         {!r ? (
           <div className="card mt-6 grid gap-3 p-5">
