@@ -1,6 +1,6 @@
 # Verificación automática
 
-Fecha: 2026-10-08T20:55:47.038Z · Resultado: **45/45**
+Fecha: 2026-10-08T21:51:20.684Z · Resultado: **45/45**
 
 Pagos online verificados con el simulador interno (rotulado) y con el código real de Mercado Pago contra un simulador local de su API (`scripts/mock-mercadopago.mjs`). Falta la prueba con credenciales reales de Mercado Pago.
 
@@ -13,7 +13,7 @@ Los escenarios "Modelo anterior" verifican la compatibilidad con campañas de se
 | Personalización por unidad (mismo talle, distinto nombre y número) | ✔ | nombres en mayúsculas por unidad; se rechazan caracteres inválidos, cantidad > 1 personalizada y productos sin personalización |
 | Edición de una prenda antes de fabricar (talle, nombre, número y jugador) | ✔ | talle 10 → 12, nombre y número, cambio de jugador; quitar nombre resta $ 6.000; historial con antes y después |
 | El servidor ignora importes enviados por el navegador y rechaza talles inexistentes | ✔ | total 34.000 aunque el navegador mande 1; talle 3 rechazado en prenda sin curva numérica |
-| Reenvío idéntico del formulario no duplica el pedido | ✔ | mismo pedido 2CU-5ZC7 |
+| Reenvío idéntico del formulario no duplica el pedido | ✔ | mismo pedido W54-YK3X |
 | Volver de Mercado Pago no confirma el pago | ✔ | la página de retorno muestra 'Esperando la confirmación' |
 | Seña aprobada por notificación verificada; notificaciones repetidas y concurrentes no duplican | ✔ | 1 pago aprobado tras 6 notificaciones; saldo 127000; firma falsa → 401; beneficio 8 % fijado al confirmar |
 | Pago rechazado y reintento sobre el mismo pedido | ✔ | rechazado → nuevo intento → aprobado; un solo pedido |

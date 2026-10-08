@@ -1,4 +1,4 @@
-# Camada · Preventa de indumentaria para clubes
+# Walkersport · Preventa de indumentaria para clubes
 
 Plataforma para una textil que ofrece a cada club su tienda de preventa: socios y familias configuran prendas, talles, jugadores y personalización; pagan el **anticipo** (precio textil + cobertura impositiva sobre la diferencia del club) con Mercado Pago a la textil; la textil consolida los pedidos y entrega toda la producción en el club; desde ahí el club cobra su **saldo** y entrega a cada socio, con una planilla de gestión propia opcional que no modifica los datos del sistema.
 

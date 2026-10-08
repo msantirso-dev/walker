@@ -1,4 +1,4 @@
-# Camada — Plataforma de preventa de indumentaria para clubes
+# Walkersport — Plataforma de preventa de indumentaria para clubes
 
 Documento de diseño previo a la implementación. Describe arquitectura, modelo de datos, pantallas, flujos y supuestos comerciales. Todo lo marcado como **[Definir]** requiere una decisión comercial antes de operar con dinero real.
 

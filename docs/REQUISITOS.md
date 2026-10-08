@@ -50,7 +50,7 @@ Los pedidos y campañas existentes conservan sus precios y reglas (modelo "seña
 - Entrega al socio bloqueada con saldo pendiente, salvo excepción autorizada y registrada. **[Confirmado]**
 
 ### 2.5 Acuerdo comercial privado
-- Se registra por club: exclusividad (un año), inicio y vencimiento, marca propia "by [marca textil]", muestrarios comprometidos, catálogo acordado, condiciones de activación, compras iniciales, reglas de precios y cobros, contrato adjunto. Nunca se publica. Alertas de vencimiento. Sin firma electrónica en esta etapa. **[Confirmado]**
+- Se registra por club: exclusividad (un año), inicio y vencimiento, marca propia "by Walkersport", muestrarios comprometidos, catálogo acordado, condiciones de activación, compras iniciales, reglas de precios y cobros, contrato adjunto. Nunca se publica. Alertas de vencimiento. Sin firma electrónica en esta etapa. **[Confirmado]**
 
 ### 2.6 Muestrario de talles
 - El club compra curvas para que los socios se prueben: inicialmente una curva superior (remera) y una inferior (short); no una por producto. Se registra tipo, prenda de referencia, talles, cantidades, fecha de entrega, disponibilidad y lugar. Cantidad de talles configurable. **[Confirmado]**
@@ -94,7 +94,7 @@ Los pedidos y campañas existentes conservan sus precios y reglas (modelo "seña
 | Adicionales | **Confirmado**: son de la textil; el recargo del club también se aplica sobre ellos | Opciones del producto |
 | Cobertura impositiva del anticipo | 24 % (21 % + 3 %) de la diferencia del club | Por campaña (pedido: guarda la vigente) |
 | Flete textil → club | "A cargo del comprador" (no lo paga la textil); no se suma solo al precio del socio | Envío al club |
-| Marca textil en "by …" | Variable `TEXTIL_BRAND` (por defecto "Marca Textil"); la línea solo se muestra si hay un acuerdo vigente | Entorno y acuerdo del club |
+| Marca textil en "by …" | Variable `TEXTIL_BRAND` (por defecto "Walkersport"); la línea solo se muestra si hay un acuerdo vigente | Entorno y acuerdo del club |
 | Transferencia para el anticipo | Deshabilitada en campañas nuevas (solo Mercado Pago) | Configuración de la campaña |
 | Exclusividad | 12 meses desde el inicio | Acuerdo del club |
 | Alerta de vencimiento del acuerdo | 60 días antes | Acuerdo del club |
@@ -112,7 +112,7 @@ Los pedidos y campañas existentes conservan sus precios y reglas (modelo "seña
 6. Compra de respaldo: compromiso de cantidad antes de abrir y distribución por talle al cerrar.
 7. Si una misma compra puede cumplir funciones de muestrario, compra inicial y respaldo.
 8. Conciliación con Mercado Pago: tratamiento de comisiones y de intereses de financiación, a verificar con pagos reales.
-9. Denominación de la marca textil.
+9. ~~Denominación de la marca textil.~~ Resuelto: **WKR Walkersport** (logo en `public/brand/wkr.svg`).
 10. Datos oficiales del club de Virreyes (nombre, escudo, colores) y su aprobación.
 
 ## 5. Pantallas y entidades afectadas
@@ -163,7 +163,7 @@ Verificación automática: **45/45** escenarios (`docs/VERIFICACION.md`): 28 del
 
 | Pedido del cliente | Cómo quedó |
 |---|---|
-| El club desarrolla su propia marca "by [marca textil]" | Línea de marca por acuerdo (pública) y en la propuesta comercial. La marca textil es configurable (`TEXTIL_BRAND`). |
+| El club desarrolla su propia marca "by Walkersport" | Línea de marca por acuerdo (pública) y en la propuesta comercial. La marca textil es configurable (`TEXTIL_BRAND`). |
 | Al saldo del club se le descuenta 21 % + 3 % (facturación total del fabricante) | Anticipo = total textil + 24 % de la diferencia del club. Ej.: 10.000 / 13.000 → anticipo **10.720**, saldo **2.280**. El comprador ve solo anticipo y saldo. El % es configurable por campaña y queda guardado en cada pedido. |
 | Los adicionales son de la textil y llevan el recargo | Ej.: 10.000 + 2.000 con 30 % → final 15.600, anticipo 12.000 + 24 % de 3.600 = **12.864**. Con precio directo (sin %), se usa la misma proporción precio/precio textil. |
 | Retiro solo contra pago total; lo cobra el club | Texto en tienda, carrito, pedido y correos. |
@@ -177,3 +177,9 @@ Verificación automática: **45/45** escenarios (`docs/VERIFICACION.md`): 28 del
 | Prendas de juego: pool de preventa sin compra del club | Categoría completa sin compra inicial (ya implementado). |
 | Outfit: mínimo 20, el club compra la diferencia; si llega a 20, sugerir 5 | Regla "mínimo con compra de la diferencia": para abrir, compromiso del club + aprobación de la textil; al cerrar, diferencia = 20 − vendidas (o respaldo de 5) con talles sugeridos; la producción se retiene hasta aprobar esa compra o una excepción. |
 | Landing de muestra para reunión con Virreyes | `docs/muestra/index.html` actualizado con todas estas reglas. |
+
+## 8. Marca y material real de la textil (octubre 2026)
+
+- La textil es **WKR Walkersport** (Instagram @walkersport, WhatsApp 11 3610 0004). Su logo (`public/brand/wkr.svg`) se usa en la portada, el panel, el pie de las tiendas y el remito; la plataforma toma su paleta grafito.
+- El piloto de Virreyes usa los **bocetos reales del catálogo "Outfit verano WKR27"**: remera algodón, musculosa run, bermuda, gorra, piluso, toallón, neceser, bolso (con número opcional) y poncho. Los precios siguen siendo de ejemplo y la tienda sigue rotulada como demostración, sujeta a aprobación del club.
+- Las medidas de remera (referencia Remera Run) y bermuda salen del **catálogo de talles WKR26**, que además se ofrece en PDF desde el selector de talle de cada prenda (`/brand/guia-talles-wkr26.pdf`).
