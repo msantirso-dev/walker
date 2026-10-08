@@ -31,7 +31,16 @@ http
     }
     if (req.method === "POST" && url.pathname === "/__pay") {
       const id = String(++seq);
-      payments.set(id, { id: Number(id), status: body.status, status_detail: body.status === "approved" ? "accredited" : body.status, transaction_amount: body.amount, currency_id: body.currency ?? "ARS", external_reference: body.external_reference });
+      // Conciliación: con cuotas el comprador paga intereses (total_paid_amount > transaction_amount); el vendedor recibe el neto de cargos
+      const inst = Number(body.installments ?? 1);
+      const totalPaid = Math.round(body.amount * (inst > 1 ? 1.12 : 1) * 100) / 100;
+      const fee = Math.round(body.amount * 0.0629 * 100) / 100;
+      payments.set(id, {
+        id: Number(id), status: body.status, status_detail: body.status === "approved" ? "accredited" : body.status, transaction_amount: body.amount, currency_id: body.currency ?? "ARS",
+        external_reference: body.external_reference, installments: inst,
+        transaction_details: { total_paid_amount: totalPaid, net_received_amount: Math.round((body.amount - fee) * 100) / 100 },
+        fee_details: [{ type: "mercadopago_fee", amount: fee, fee_payer: "collector" }],
+      });
       return send(res, 201, { id });
     }
     if (req.method === "PUT" && url.pathname.startsWith("/__pay/")) {

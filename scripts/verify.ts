@@ -12,18 +12,25 @@
  */
 import "dotenv/config";
 import { createHmac, randomUUID } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import sharp from "sharp";
 import { db } from "@/shared/db";
 import { decryptSecret, encryptSecret } from "@/shared/crypto";
-import { submitTransfer, reviewTransfer, startOnlinePayment, registerManualPayment } from "@/modules/payments";
+import { submitTransfer, reviewTransfer, startOnlinePayment, registerManualPayment, registerClubBalance, advanceStates } from "@/modules/payments";
 import { expireReservations, cancelUnit, editUnit, requestOrderLinks } from "@/modules/orders";
 import { changeOwnPassword, requestPasswordReset, resetPassword } from "@/modules/auth/password";
 import bcrypt from "bcryptjs";
 import { generateLot, approveLot, advanceLot, lotReport } from "@/modules/production";
 import { registerDelivery } from "@/modules/deliveries";
-import { closeExpiredCampaigns, decideMinimum } from "@/modules/campaigns";
+import {
+  closeExpiredCampaigns, decideMinimum, requestActivation, approveActivation, publishCampaign, activationProblems, setCampaignProductPrices,
+  setProductRule, approveProductRule,
+} from "@/modules/campaigns";
+import { createShipment, dispatchShipment, receiveShipment, distributionList } from "@/modules/logistics";
+import { runAgreementAlerts } from "@/modules/agreements";
+import { paymentStateLabel } from "@/modules/orders";
+import { CHANGE_POLICY_VERSION } from "@/modules/catalog/options";
 import type { SessionUser } from "@/modules/auth";
 import type { Actor } from "@/modules/audit";
 
@@ -129,7 +136,21 @@ async function receiptPng() {
 async function main() {
   const nandues = await db.club.findUniqueOrThrow({ where: { slug: "los-nandues-rugby" } });
   const sauce = await db.club.findUniqueOrThrow({ where: { slug: "el-sauce-hockey" } });
-  const camp = await db.campaign.findFirstOrThrow({ where: { clubId: nandues.id, slug: "coleccion-2026" } });
+  const advCamp = await db.campaign.findFirstOrThrow({ where: { clubId: nandues.id, slug: "coleccion-2026" } });
+  // Compatibilidad: el modelo anterior (seña 50 %, envío, transferencia) se sigue verificando sobre una campaña con ese modelo
+  const legacyAccount = await db.paymentAccount.findFirstOrThrow({ where: { clubId: nandues.id, owner: "CLUB" } });
+  const camp = await db.campaign.create({
+    data: {
+      clubId: nandues.id, slug: `coleccion-anterior-${Date.now()}`, title: "Colección (modelo anterior)", status: "PUBLISHED", pricingModel: "LEGACY_DEPOSIT",
+      opensAt: new Date(Date.now() - 3 * 86400_000), closesAt: new Date(Date.now() + 24 * 86400_000), paymentAccountId: legacyAccount.id,
+      paymentMode: "DEPOSIT", depositType: "PERCENT", depositValue: 50, minUnits: 60, minPolicyText: "Si no se llega al mínimo, se decide y se informa.",
+      shippingEnabled: true, shippingPrice: 950000, policyChanges: "Cambios hasta el cierre.", allowTransfer: true,
+      products: {
+        create: (await db.campaignProduct.findMany({ where: { campaignId: advCamp.id } })).map((cp) => ({ productId: cp.productId, price: cp.price, listPrice: cp.listPrice, sort: cp.sort })),
+      },
+      benefitRule: { create: { type: "PERCENT_OF_GARMENTS", value: 800 } },
+    },
+  });
   const sauceCamp = await db.campaign.findFirstOrThrow({ where: { clubId: sauce.id } });
   const prod = Object.fromEntries((await db.product.findMany({ where: { clubId: nandues.id } })).map((p) => [p.code, p.id]));
   const textil = await user("textil@camada.test");
@@ -139,7 +160,7 @@ async function main() {
 
   // ───────────────────────── Compra ─────────────────────────
   let multi: Awaited<ReturnType<typeof newOrder>>;
-  await step("Compra con varios jugadores, talles y prendas sin jugador", async () => {
+  await step("Modelo anterior (seña): compra con varios jugadores, talles y prendas sin jugador", async () => {
     multi = await newOrder(camp.id, cart({
       players: [{ key: "a", name: "Joaquín Ferreyra", sport: "Rugby", category: "M12" }, { key: "b", name: "Martina Ferreyra", sport: "Rugby", category: "Femenino" }],
       items: [
@@ -292,7 +313,7 @@ async function main() {
   });
   const mpCamp = await db.campaign.create({
     data: {
-      clubId: nandues.id, slug: `mp-test-${Date.now()}`, title: "Prueba Mercado Pago", status: "PUBLISHED", opensAt: new Date(Date.now() - 3600_000), closesAt: new Date(Date.now() + 86400_000),
+      clubId: nandues.id, slug: `mp-test-${Date.now()}`, title: "Prueba Mercado Pago", status: "PUBLISHED", pricingModel: "LEGACY_DEPOSIT", opensAt: new Date(Date.now() - 3600_000), closesAt: new Date(Date.now() + 86400_000),
       paymentAccountId: mpAccount.id, paymentMode: "DEPOSIT", allowTransfer: false, products: { create: [{ productId: prod["P-CAM-ENT"], price: 3400000 }] },
     },
   });
@@ -414,10 +435,10 @@ async function main() {
     const r = await api(`/api/campanas/${camp.id}/pedidos`, { body: cart({ items: [{ productId: prod["P-CAM-TIT"], playerKey: null, sizes: { Camiseta: "M" }, quantity: 1 }] }) });
     assert.equal(r.status, 409);
     assert.match(String(r.json.error), /cerrada/);
-    const page = await api(`/club/los-nandues-rugby/coleccion-2026`);
+    const page = await api(`/club/los-nandues-rugby/${camp.slug}`);
     assert.ok(page.text.includes("Ventana cerrada"));
     assert.ok(page.text.includes("Camiseta titular 2026"), "el catálogo sigue visible");
-    assert.ok(!page.text.includes("Elegir talle"), "sin botones de compra");
+    assert.ok(!page.text.includes(">Configurar<"), "sin botones de compra");
     assert.equal(await closeExpiredCampaigns(), 1);
     return "409 al comprar; catálogo visible sin compra; la tarea programada la pasa a Cerrada";
   });
@@ -634,6 +655,350 @@ async function main() {
     return `${checks.length} combinaciones de rol y página`;
   });
 
+
+  // ═════════════════════ Modelo comercial v2: anticipo textil + saldo al club ═════════════════════
+  const demoClub = await db.club.findUniqueOrThrow({ where: { slug: "demo-virreyes-rugby" } });
+  const demoCamp = await db.campaign.findFirstOrThrow({ where: { clubId: demoClub.id, slug: "verano-demo" } });
+  const dp = Object.fromEntries((await db.product.findMany({ where: { clubId: demoClub.id } })).map((p) => [p.code, p]));
+  const demoAdmin = await user("club@virreyes-demo.test");
+  const remGroups = await db.productOptionGroup.findMany({ where: { productId: dp["D-REM"].id }, include: { values: true } });
+  const legendG = remGroups.find((g) => g.role === "LEGEND")!;
+  const nameG = remGroups.find((g) => g.role === "NAME")!;
+  const rugby = legendG.values.find((v) => v.label === "RUGBY")!.id;
+  const approveAdvance = async (orderId: string) => {
+    const p = await db.payment.findFirstOrThrow({ where: { orderId, kind: "ADVANCE", status: { in: ["CREATED", "PENDING"] } }, orderBy: { createdAt: "desc" } });
+    await simNotify(p.id, "APPROVED");
+    return db.order.findUniqueOrThrow({ where: { id: orderId } });
+  };
+
+  let basic: Awaited<ReturnType<typeof newOrder>>;
+  await step("v2 · Textil $10.000, final $13.000: anticipo $10.000 por Mercado Pago y saldo $3.000 al club", async () => {
+    basic = await newOrder(demoCamp.id, cart({ items: [{ productId: dp["D-REM"].id, playerKey: null, sizes: { Remera: "M" }, quantity: 1 }] }));
+    assert.equal(basic.order.pricingModel, "TEXTIL_ADVANCE");
+    assert.equal(basic.order.total, 1300000);
+    assert.equal(basic.order.advanceRequired, 1000000);
+    assert.equal(basic.order.clubBalanceRequired, 300000);
+    const pay = await db.payment.findFirstOrThrow({ where: { orderId: basic.order.id } });
+    assert.equal(pay.kind, "ADVANCE");
+    assert.equal(pay.receiver, "TEXTIL");
+    assert.equal(pay.amount, 1000000, "online se cobra solo el anticipo");
+    return "total 13.000 · anticipo 10.000 (textil) · saldo 3.000 (club); el pago online es solo el anticipo";
+  });
+
+  await step("v2 · Anticipo aprobado con saldo al club pendiente: confirmado, nunca 'pagado'", async () => {
+    const o = await approveAdvance(basic.order.id);
+    assert.equal(o.status, "CONFIRMED");
+    assert.equal(o.advancePaid, 1000000);
+    assert.equal(o.clubPaid, 0);
+    const st = advanceStates(o);
+    assert.equal(st.advance, "Anticipo aprobado");
+    assert.equal(st.club, "Saldo al club pendiente");
+    assert.equal(st.fullyPaid, false);
+    assert.ok(!/^Pagado/.test(paymentStateLabel(o)), "no se muestra como pagado");
+    const page = await api(`/pedido/${basic.token}`);
+    assert.ok(page.text.includes("Anticipo aprobado") && page.text.includes("Saldo al club pendiente"));
+    assert.ok(!page.text.includes("Pagar el saldo"), "el saldo del club no se paga por la plataforma");
+    assert.equal(await db.payment.count({ where: { orderId: o.id, kind: "CLUB_BALANCE" } }), 0);
+    return `estados separados: ${st.advance} · ${st.club}; sin cobro online del saldo`;
+  });
+
+  await step("v2 · Precio final igual al textil: saldo al club $0", async () => {
+    const r = await newOrder(demoCamp.id, cart({ items: [{ productId: dp["D-MUS"].id, playerKey: null, sizes: { Musculosa: "L" }, quantity: 2 }] }));
+    assert.equal(r.order.total, 1800000);
+    assert.equal(r.order.advanceRequired, 1800000);
+    assert.equal(r.order.clubBalanceRequired, 0);
+    const o = await approveAdvance(r.order.id);
+    assert.equal(advanceStates(o).fullyPaid, true);
+    assert.equal(paymentStateLabel(o), "Pagado (sin saldo al club)");
+    return "2 musculosas: total = anticipo = 18.000; sin saldo";
+  });
+
+  let multiV2: Awaited<ReturnType<typeof newOrder>>;
+  await step("v2 · Pedido con varios ítems y adicionales (reparto textil/club por adicional)", async () => {
+    const c = cart({
+      players: [{ key: "a", name: "Santino Gómez", sport: "Rugby", category: "M15" }, { key: "b", name: "Lola Gómez", sport: "Hockey", category: "Sub-14" }],
+      items: [
+        { productId: dp["D-REM"].id, playerKey: "a", sizes: { Remera: "M" }, options: { [legendG.id]: rugby, [nameG.id]: "SANTI" }, quantity: 1 },
+        { productId: dp["D-SHO"].id, playerKey: "a", sizes: { Short: "M" }, quantity: 1 },
+        { productId: dp["D-BOL"].id, playerKey: "b", sizes: { Bolso: "U" }, quantity: 1 },
+      ],
+    });
+    const noPolicy = await api(`/api/campanas/${demoCamp.id}/pedidos`, { body: c });
+    assert.equal(noPolicy.status, 409, "con nombre estampado hay que aceptar la política de cambios");
+    multiV2 = await newOrder(demoCamp.id, { ...c, idempotencyKey: randomUUID(), policyVersion: CHANGE_POLICY_VERSION });
+    // remera 13.000 + leyenda (1.500 textil + 500 club) + nombre 2.000 textil; short 15.000/12.000; bolso 19.500/15.000 (30 %)
+    assert.equal(multiV2.order.total, (13000 + 2000 + 2000 + 15000 + 19500) * 100);
+    assert.equal(multiV2.order.advanceRequired, (10000 + 1500 + 2000 + 12000 + 15000) * 100);
+    assert.equal(multiV2.order.clubBalanceRequired, (3000 + 500 + 3000 + 4500) * 100);
+    assert.equal(multiV2.order.policyVersion, CHANGE_POLICY_VERSION);
+    const rem = await db.orderUnit.findFirstOrThrow({ where: { orderId: multiV2.order.id, productCode: "D-REM" }, include: { options: true } });
+    assert.equal(rem.legend, "RUGBY");
+    assert.equal(rem.persName, "SANTI");
+    assert.equal(rem.noSizeChange, true);
+    assert.equal(rem.optionsTextil, 350000);
+    assert.equal(rem.optionsClub, 50000);
+    await approveAdvance(multiV2.order.id);
+    return "total 51.500 · anticipo 40.500 · saldo club 11.000; política de cambios aceptada y registrada";
+  });
+
+  await step("v2 · Personalización condicional por unidad", async () => {
+    const bad = await api(`/api/campanas/${demoCamp.id}/pedidos`, {
+      body: cart({ items: [{ productId: dp["D-REM"].id, playerKey: null, sizes: { Remera: "S" }, options: { [nameG.id]: "SOLO" }, quantity: 1 }], policyVersion: CHANGE_POLICY_VERSION }),
+    });
+    assert.equal(bad.status, 409, "el nombre solo corresponde con leyenda");
+    const many = await api(`/api/campanas/${demoCamp.id}/pedidos`, {
+      body: cart({ items: [{ productId: dp["D-REM"].id, playerKey: null, sizes: { Remera: "S" }, options: { [legendG.id]: rugby, [nameG.id]: "DOS" }, quantity: 2 }], policyVersion: CHANGE_POLICY_VERSION }),
+    });
+    assert.equal(many.status, 409, "con nombre, de a una unidad");
+    const r = await newOrder(demoCamp.id, cart({
+      items: [
+        { productId: dp["D-REM"].id, playerKey: null, sizes: { Remera: "S" }, options: { [legendG.id]: rugby, [nameG.id]: "ANA" }, quantity: 1 },
+        { productId: dp["D-REM"].id, playerKey: null, sizes: { Remera: "XL" }, options: { [legendG.id]: rugby, [nameG.id]: "JUAN" }, quantity: 1 },
+        { productId: dp["D-REM"].id, playerKey: null, sizes: { Remera: "S" }, options: { [legendG.id]: legendG.values.find((v) => v.label === "HOCKEY")!.id }, quantity: 2 },
+        { productId: dp["D-REM"].id, playerKey: null, sizes: { Remera: "L" }, quantity: 1 },
+      ],
+      policyVersion: CHANGE_POLICY_VERSION,
+    }));
+    const units = await db.orderUnit.findMany({ where: { orderId: r.order.id }, orderBy: { sort: "asc" } });
+    assert.deepEqual(units.map((u) => [u.legend, u.persName]), [["RUGBY", "ANA"], ["RUGBY", "JUAN"], ["HOCKEY", null], ["HOCKEY", null], [null, null]]);
+    await approveAdvance(r.order.id);
+    return "nombre sin leyenda → rechazado; nombre de a una; 5 unidades con leyenda/nombre propios";
+  });
+
+  await step("v2 · Cambio de talle: personalizada no admite cambio voluntario; error de carga o de la textil sí, con motivo", async () => {
+    const rem = await db.orderUnit.findFirstOrThrow({ where: { orderId: multiV2.order.id, productCode: "D-REM" } });
+    await assert.rejects(editUnit(actor(demoAdmin), rem.id, { sizes: { Remera: "L" }, reason: "VOLUNTARY" }), /no admite cambio de talle/);
+    await assert.rejects(editUnit(actor(demoAdmin), rem.id, { sizes: { Remera: "L" }, reason: "TEXTIL_ERROR" }), /Describí/);
+    await editUnit(actor(demoAdmin), rem.id, { sizes: { Remera: "L" }, reason: "TEXTIL_ERROR", note: "La textil cargó M en lugar de L" });
+    const log = await db.auditLog.findFirstOrThrow({ where: { entityId: multiV2.order.id, action: "order.unit_edited" }, orderBy: { createdAt: "desc" } });
+    assert.match(JSON.stringify(log.data), /TEXTIL_ERROR/);
+    const page = await api(`/club/${demoClub.slug}/${demoCamp.slug}`);
+    assert.ok(page.text.includes("no admiten cambio de talle"), "la política se muestra en la tienda");
+    return "voluntario rechazado; error de la textil con nota registrado";
+  });
+
+  await step("v2 · Tienda: sin envío a domicilio, texto de financiación exacto, muestrario y demo identificada", async () => {
+    const page = await api(`/club/${demoClub.slug}/${demoCamp.slug}`);
+    assert.equal(page.status, 200);
+    assert.ok(page.text.includes("El pago y las opciones de financiación se gestionan mediante Mercado Pago. Consultá las condiciones disponibles al pagar."));
+    assert.ok(!/sin inter[eé]s|cuotas sin/i.test(page.text), "no promete cuotas sin interés");
+    assert.ok(!page.text.includes("Envío a domicilio"));
+    assert.ok(page.text.includes("DEMOSTRACIÓN"));
+    assert.ok(page.text.includes("Podés probarte el muestrario en el club antes de elegir tu talle."));
+    const ship = await api(`/api/campanas/${demoCamp.id}/pedidos`, { body: cart({ items: [{ productId: dp["D-SHO"].id, playerKey: null, sizes: { Short: "M" }, quantity: 1 }], delivery: { method: "SHIPPING", address: "Calle Falsa 123, Virreyes" } }) });
+    assert.equal(ship.status, 409);
+    const home = await api(`/club/${demoClub.slug}`);
+    assert.ok(home.text.includes("Próximamente"), "producto en catálogo sin venta");
+    assert.ok(!home.text.includes("Sin valor contractual"), "el acuerdo no se publica");
+    return "envío rechazado; texto MP exacto; aviso de muestrario; catálogo con estados; acuerdo privado";
+  });
+
+  await step("v2 · Activación: el club solicita, la textil autoriza; reglas y precios bloqueados al publicar", async () => {
+    const draft = await db.campaign.create({
+      data: {
+        clubId: demoClub.id, slug: `invierno-demo-${Date.now()}`, title: "Invierno · demo", status: "DRAFT", pricingModel: "TEXTIL_ADVANCE",
+        opensAt: new Date(Date.now() - 3600_000), closesAt: new Date(Date.now() + 10 * 86400_000), paymentAccountId: demoCamp.paymentAccountId, allowTransfer: false, shippingEnabled: false,
+        products: { create: [{ productId: dp["D-REM"].id, price: 1300000, sort: 0 }] },
+      },
+    });
+    const cp = await db.campaignProduct.findFirstOrThrow({ where: { campaignId: draft.id } });
+    await assert.rejects(setCampaignProductPrices(demoAdmin, actor(demoAdmin), cp.id, { textilPrice: 900000 }), /lo define la textil/);
+    await setCampaignProductPrices(textil, actor(textil), cp.id, { textilPrice: 1000000 });
+    await assert.rejects(setCampaignProductPrices(demoAdmin, actor(demoAdmin), cp.id, { price: 900000 }), /no puede ser menor/);
+    const mk = await setCampaignProductPrices(demoAdmin, actor(demoAdmin), cp.id, { markupPercent: 30 });
+    assert.equal(mk.price, 1300000, "recargo 30 % sobre 10.000");
+    await requestActivation(demoAdmin, actor(demoAdmin), draft.id, "Queremos abrir en junio");
+    await assert.rejects(publishCampaign(actor(demoAdmin), draft.id), /autorización/);
+    await assert.rejects(approveActivation(demoAdmin, actor(demoAdmin), draft.id), /Solo la textil/);
+    // Outfit: compra inicial mínima 15 (estimada, editable); sin compra suficiente no abre
+    const small = await db.clubPurchase.create({ data: { clubId: demoClub.id, productId: dp["D-REM"].id, purposes: ["INITIAL"], committedQty: 10, paidQty: 10, sizeStatus: "DEFINED", approvedAt: new Date(), createdById: textil.id, items: { create: [{ sizeLabel: "M", quantity: 10 }] } } });
+    await setProductRule(textil, actor(textil), cp.id, { ruleType: "INITIAL_PURCHASE", initialPurchaseMin: 15, initialPurchaseEstimated: true, clubPurchaseId: small.id });
+    let probs = await activationProblems(draft.id);
+    assert.ok(probs.some((p) => /no alcanza el mínimo \(15\)/.test(p)), probs.join(" | "));
+    await assert.rejects(approveActivation(textil, actor(textil), draft.id), /No se puede autorizar/);
+    await setProductRule(textil, actor(textil), cp.id, { ruleType: "INITIAL_PURCHASE", initialPurchaseMin: 10, initialPurchaseEstimated: true, clubPurchaseId: small.id });
+    probs = await activationProblems(draft.id);
+    assert.ok(probs.some((p) => /falta la aprobación/.test(p)), probs.join(" | "));
+    await assert.rejects(approveActivation(textil, actor(textil), draft.id), /No se puede autorizar/, "la regla cambiada necesita aprobarse de nuevo");
+    await approveProductRule(textil, actor(textil), cp.id, "open", "");
+    // La regla nueva no se aprueba sola; ahora sí
+    probs = await activationProblems(draft.id);
+    assert.deepEqual(probs, []);
+    await approveActivation(textil, actor(textil), draft.id);
+    await publishCampaign(actor(demoAdmin), draft.id);
+    assert.equal((await db.product.findUniqueOrThrow({ where: { id: dp["D-REM"].id } })).catalogStatus, "PRESALE");
+    await assert.rejects(setCampaignProductPrices(textil, actor(textil), cp.id, { price: 1400000 }), /publicada/);
+    await db.campaign.update({ where: { id: draft.id }, data: { status: "CANCELLED" } });
+    return "precio textil solo la textil; final ≥ textil; recargo 30 %; mínimo 15 editado a 10 con nueva aprobación; publicar requiere autorización";
+  });
+
+  // Categoría completa: 11 esperados en M15; con menos, solo con aprobación excepcional
+  const m15Camp = await db.campaign.findFirstOrThrow({ where: { clubId: nandues.id, slug: "m15-camiseta-de-juego" } });
+  const m15Cp = await db.campaignProduct.findFirstOrThrow({ where: { campaignId: m15Camp.id } });
+  await step("v2 · Campaña de categoría completa (11 jugadores) con aprobación excepcional", async () => {
+    const wrong = await api(`/api/campanas/${m15Camp.id}/pedidos`, {
+      body: cart({ players: [{ key: "a", name: "Otro Jugador", sport: "Rugby", category: "M14" }], items: [{ productId: prod["P-CAM-TIT"], playerKey: "a", sizes: { Camiseta: "M" }, quantity: 1 }] }),
+    });
+    assert.equal(wrong.status, 409, "la campaña es solo para M15");
+    for (let i = 0; i < 8; i++) {
+      const r = await newOrder(m15Camp.id, cart({
+        players: [{ key: "a", name: `Jugador M15 ${i + 1}`, sport: "Rugby", category: "M15" }],
+        items: [{ productId: prod["P-CAM-TIT"], playerKey: "a", sizes: { Camiseta: ["S", "M", "L"][i % 3] }, persName: ["PEREZ", "GOMEZ", "DIAZ", "SOSA", "RUIZ", "LOPEZ", "MOLINA", "ROJAS"][i], persNumber: String(i + 1), quantity: 1 }],
+        policyVersion: CHANGE_POLICY_VERSION,
+      }));
+      await approveAdvance(r.order.id);
+    }
+    await db.campaign.update({ where: { id: m15Camp.id }, data: { closesAt: new Date(Date.now() - 1000) } });
+    await assert.rejects(generateLot(actor(textil), m15Camp.id), /8 de 11/);
+    await assert.rejects(approveProductRule(textil, actor(textil), m15Cp.id, "production", ""), /Explicá/);
+    await approveProductRule(textil, actor(textil), m15Cp.id, "production", "El club confirma 8 jugadores; se produce igual");
+    const lot = await generateLot(actor(textil), m15Camp.id);
+    const r = await lotReport(lot.id);
+    assert.equal(r.garments.find((g) => g.code === "CAM-TIT-26")?.total, 8);
+    return "M14 rechazado; 8 de 11 retiene la producción; con aprobación excepcional registrada se consolidan las 8";
+  });
+
+  let demoLotId = "";
+  await step("v2 · Consolidación: prendas base por modelo y talle, personalización aparte sin fragmentar", async () => {
+    await db.campaign.update({ where: { id: demoCamp.id }, data: { closesAt: new Date(Date.now() - 1000) } });
+    const lot = await generateLot(actor(textil), demoCamp.id);
+    demoLotId = lot.id;
+    const r = await lotReport(lot.id);
+    const comps = await db.orderUnitComponent.findMany({ where: { unit: { status: "ACTIVE", order: { campaignId: demoCamp.id, status: "CONFIRMED" } } } });
+    const remTotal = comps.filter((c) => c.garmentCode === "REM-VER-D").length;
+    assert.equal(r.garments.find((g) => g.code === "REM-VER-D")?.total, remTotal, "todas las remeras base juntas, con o sin leyenda");
+    const job = (kind: string, value: string) => r.persJobs?.find((j) => j.kind === kind && j.value === value)?.quantity ?? 0;
+    assert.equal(job("Leyenda", "RUGBY"), 3);
+    assert.equal(job("Leyenda", "HOCKEY"), 2);
+    assert.equal(job("Nombre", "(individual)"), 3);
+    assert.ok(r.personalization.some((p) => p.name === "SANTI" && p.legend === "RUGBY"));
+    const pending = await db.order.findFirst({ where: { campaignId: demoCamp.id, status: "PENDING_PAYMENT" } });
+    if (pending) assert.ok(!(await db.productionLotUnit.findFirst({ where: { lotId: lot.id, unit: { orderId: pending.id } } })), "sin anticipo no entra");
+    await approveLot(actor(textil), lot.id);
+    return `remeras base: ${remTotal}; trabajos: leyenda RUGBY 3, HOCKEY 2, nombres 3; anticipo aprobado con saldo pendiente entra a producción`;
+  });
+
+  await step("v2 · Producción completa entregada al club: envío consolidado, remito y recepción", async () => {
+    for (const to of ["IN_PRODUCTION", "QUALITY_CONTROL", "READY_TO_SHIP"] as const) await advanceLot(actor(produccion), demoLotId, to);
+    const sh = await createShipment(actor(textil), demoCamp.id, { address: "Sede del club (ejemplo)", receiverName: "Responsable demo", carrier: "Via Cargo", trackingRef: "VC-0001", costBearer: "PENDING", lotIds: [demoLotId] });
+    assert.equal(sh.costBearer, "PENDING", "el costo no se asume");
+    const remito = await api(`/admin/campanas/${demoCamp.id}/logistica/remito/${sh.id}`, { cookie: await session("textil@camada.test") });
+    assert.equal(remito.status, 200);
+    assert.ok(remito.text.includes("Remito consolidado") && remito.text.includes("Remera"));
+    await assert.rejects(receiveShipment(actor(demoAdmin), demoAdmin.clubId, sh.id, { receivedAt: new Date(), receivedBy: "Responsable demo" }), /no fue despachado/);
+    await dispatchShipment(actor(textil), sh.id, { dispatchedAt: new Date() });
+    await assert.rejects(receiveShipment(actor(clubAdmin), clubAdmin.clubId, sh.id, { receivedAt: new Date(), receivedBy: "Otro club" }), /no es de tu club/);
+    await receiveShipment(actor(demoAdmin), demoAdmin.clubId, sh.id, { receivedAt: new Date(), receivedBy: "Responsable demo" });
+    const o = await db.order.findUniqueOrThrow({ where: { id: basic.order.id } });
+    assert.equal(o.deliveryStatus, "READY");
+    assert.equal(await db.emailOutbox.count({ where: { orderId: o.id, template: "BALANCE_REQUESTED" } }), 1, "aviso de saldo al club");
+    const mail = await db.emailOutbox.findFirstOrThrow({ where: { orderId: o.id, template: "BALANCE_REQUESTED" } });
+    assert.match(mail.body, /pagá al club el saldo de \$\s?3\.000/);
+    const list = await distributionList(demoCamp.id);
+    assert.ok(list.find((x) => x.code === basic.order.code)?.clubDue === 300000);
+    const xl = await fetch(`${BASE}/api/admin/campanas/${demoCamp.id}/distribucion?format=csv`, { headers: { Cookie: `camada_session=${await session("club@virreyes-demo.test")}` } });
+    assert.equal(xl.status, 200);
+    return "lote → envío Via Cargo (costo a definir) → despachado → recibido por el club; pedidos listos; lista de distribución con saldo";
+  });
+
+  await step("v2 · Saldo al club registrado y retiro: bloqueado con saldo, luego entregado", async () => {
+    const units = await db.orderUnit.findMany({ where: { orderId: basic.order.id, status: "ACTIVE" } });
+    await assert.rejects(registerDelivery(demoAdmin, actor(demoAdmin), basic.order.id, { unitIds: units.map((u) => u.id), receivedByName: "Comprador demo" }), /saldo pendiente/);
+    await assert.rejects(registerClubBalance(clubAdmin, actor(clubAdmin), basic.order.id, { amount: 300000, method: "CASH", paidAt: new Date(), reference: "R-1" }), /permiso/);
+    await assert.rejects(registerClubBalance(demoAdmin, actor(demoAdmin), basic.order.id, { amount: 400000, method: "CASH", paidAt: new Date(), reference: "R-1" }), /supera/);
+    await registerClubBalance(demoAdmin, actor(demoAdmin), basic.order.id, { amount: 300000, method: "TRANSFER", paidAt: new Date(), reference: "Transf. 4455" });
+    const o = await db.order.findUniqueOrThrow({ where: { id: basic.order.id }, include: { payments: true } });
+    const cb = o.payments.find((p) => p.kind === "CLUB_BALANCE")!;
+    assert.equal(cb.receiver, "CLUB");
+    assert.equal(cb.operationRef, "Transf. 4455");
+    assert.ok(cb.paidAt);
+    assert.equal(advanceStates(o).club, "Saldo al club cobrado");
+    assert.equal(advanceStates(o).fullyPaid, true);
+    await registerDelivery(demoAdmin, actor(demoAdmin), basic.order.id, { unitIds: units.map((u) => u.id), receivedByName: "Comprador demo" });
+    assert.equal((await db.order.findUniqueOrThrow({ where: { id: basic.order.id } })).deliveryStatus, "DELIVERED");
+    const other = await db.order.findFirstOrThrow({ where: { id: multiV2.order.id } });
+    const ou = await db.orderUnit.findMany({ where: { orderId: other.id } });
+    await registerDelivery(demoAdmin, actor(demoAdmin), other.id, { unitIds: [ou[0].id], receivedByName: "Familia Gómez", exceptionReason: "Torneo el sábado; paga el saldo el lunes en secretaría" });
+    return "otro club sin permiso; exceso rechazado; saldo con fecha, medio y referencia; retiro registrado; excepción con motivo";
+  });
+
+  await step("v2 · Conciliación Mercado Pago: bruto, pagado por el comprador (con intereses) y neto", async () => {
+    const mpAcc = await db.paymentAccount.findFirstOrThrow({ where: { label: "MP de prueba (mock local)" } });
+    const c2 = await db.campaign.create({
+      data: {
+        clubId: nandues.id, slug: `mp-v2-${Date.now()}`, title: "Prueba anticipo MP", status: "PUBLISHED", pricingModel: "TEXTIL_ADVANCE", opensAt: new Date(Date.now() - 3600_000), closesAt: new Date(Date.now() + 86400_000),
+        paymentAccountId: mpAcc.id, allowTransfer: false, products: { create: [{ productId: prod["P-CAM-ENT"], textilPrice: 3000000, price: 3400000 }] },
+      },
+    });
+    const r = await newOrder(c2.id, cart({ items: [{ productId: prod["P-CAM-ENT"], playerKey: null, sizes: { Camiseta: "M" }, quantity: 1 }] }));
+    const pay = await db.payment.findFirstOrThrow({ where: { orderId: r.order.id } });
+    assert.equal(pay.amount, 3000000);
+    const res = await fetch(`${MOCK}/__pay`, { method: "POST", body: JSON.stringify({ external_reference: pay.id, status: "approved", amount: 30000, installments: 6 }) });
+    const mpId = String(((await res.json()) as { id: string }).id);
+    await mpNotify(mpAcc.id, mpId);
+    const p = await db.payment.findUniqueOrThrow({ where: { id: pay.id } });
+    assert.equal(p.status, "APPROVED");
+    assert.equal(p.providerGross, 3000000);
+    assert.equal(p.providerTotalPaid, 3360000, "intereses de financiación a cargo del comprador");
+    assert.ok(p.providerNet! < 3000000, "neto descuenta cargos del procesamiento");
+    assert.equal(p.installments, 6);
+    const o = await db.order.findUniqueOrThrow({ where: { id: r.order.id } });
+    assert.equal(o.advancePaid, 3000000, "el anticipo se acredita por el importe de la operación, no por el neto");
+    await db.campaign.update({ where: { id: c2.id }, data: { status: "CANCELLED" } });
+    return `bruto 30.000 · comprador 33.600 (6 cuotas) · neto ${p.providerNet! / 100}; anticipo acreditado 30.000`;
+  });
+
+  await step("v2 · Pedidos anteriores conservan precios y condiciones", async () => {
+    const legacyOrders = await db.order.count({ where: { campaignId: camp.id, NOT: { pricingModel: "LEGACY_DEPOSIT" } } });
+    assert.equal(legacyOrders, 0, "los pedidos del modelo anterior siguen con seña");
+    const u = await db.orderUnit.findFirstOrThrow({ where: { orderId: basic.order.id } });
+    await db.campaignProduct.updateMany({ where: { campaignId: demoCamp.id, productId: dp["D-REM"].id }, data: { textilPrice: 1100000, price: 1500000 } });
+    const after = await db.order.findUniqueOrThrow({ where: { id: basic.order.id } });
+    const ua = await db.orderUnit.findUniqueOrThrow({ where: { id: u.id } });
+    assert.equal(after.advanceRequired, 1000000);
+    assert.equal(after.clubBalanceRequired, 300000);
+    assert.equal(ua.textilPrice, 1000000);
+    assert.equal(ua.unitPrice, 1300000);
+    assert.equal((after.termsSnapshot as { pricingModel: string }).pricingModel, "TEXTIL_ADVANCE");
+    await db.campaignProduct.updateMany({ where: { campaignId: demoCamp.id, productId: dp["D-REM"].id }, data: { textilPrice: 1000000, price: 1300000 } });
+    return "sin recálculo retroactivo: anticipo, saldo y precio por prenda quedan como al comprar";
+  });
+
+  await step("v2 · Acuerdo privado: aviso de vencimiento una sola vez y nada público", async () => {
+    await runAgreementAlerts(); // la tarea programada ya pudo haberlo enviado
+    assert.equal(await runAgreementAlerts(), 0, "no se repite el aviso");
+    assert.ok((await db.emailOutbox.count({ where: { template: "AGREEMENT_EXPIRING" } })) >= 1);
+    const dash = await api("/admin", { cookie: await session("textil@camada.test") });
+    assert.ok(dash.text.includes("El acuerdo con Los Ñandúes Rugby Club vence en"), "alerta en el panel de la textil");
+    const clubDash = await api("/admin", { cookie: await session("club@nandues.test") });
+    assert.ok(!clubDash.text.includes("acuerdo con"), "el club no ve el panel de acuerdos");
+    assert.equal((await api(`/admin/clubes/${nandues.id}/acuerdo`, { cookie: await session("club@nandues.test") })).status, 404);
+    const store = await api("/club/los-nandues-rugby");
+    assert.ok(store.text.includes("LNRC by") && !store.text.includes("Cada campaña la solicita"), "solo la línea de marca es pública");
+    return "alerta a 45 días; sin duplicar; acuerdo invisible para el club y la tienda (salvo la línea de marca)";
+  });
+
+  await step("v2 · Páginas nuevas del panel por rol", async () => {
+    const checks: [string, string, number][] = [
+      ["textil@camada.test", `/admin/campanas/${demoCamp.id}/logistica`, 200],
+      ["club@virreyes-demo.test", `/admin/campanas/${demoCamp.id}/logistica`, 200],
+      ["club@nandues.test", `/admin/campanas/${demoCamp.id}/logistica`, 404],
+      ["textil@camada.test", `/admin/campanas/${demoCamp.id}/editar`, 200],
+      ["club@virreyes-demo.test", `/admin/campanas/${demoCamp.id}/editar`, 200],
+      ["club@nandues.test", `/admin/campanas/${demoCamp.id}/editar`, 404],
+      ["textil@camada.test", `/admin/clubes/${demoClub.id}/muestrario`, 200],
+      ["club@virreyes-demo.test", `/admin/clubes/${demoClub.id}/muestrario`, 200],
+      ["textil@camada.test", `/admin/clubes/${demoClub.id}/acuerdo`, 200],
+      ["club@virreyes-demo.test", `/admin/clubes/${demoClub.id}/acuerdo`, 404],
+      ["textil@camada.test", `/admin/clubes/${demoClub.id}/catalogo/productos/${dp["D-REM"].id}`, 200],
+      ["textil@camada.test", `/admin/pedidos/${multiV2.order.id}`, 200],
+      ["club@virreyes-demo.test", `/admin/campanas/nueva`, 200],
+      ["entregas@nandues.test", `/admin/campanas/nueva`, 404],
+    ];
+    for (const [email, path, code] of checks) assert.equal((await api(path, { cookie: await session(email) })).status, code, `${email} ${path}`);
+    return `${checks.length} combinaciones`;
+  });
+
   const okCount = results.filter((r) => r.ok).length;
   const md = [
     "# Verificación automática",
@@ -642,12 +1007,21 @@ async function main() {
     "",
     "Pagos online verificados con el simulador interno (rotulado) y con el código real de Mercado Pago contra un simulador local de su API (`scripts/mock-mercadopago.mjs`). Falta la prueba con credenciales reales de Mercado Pago.",
     "",
+    "Los escenarios \"Modelo anterior\" verifican la compatibilidad con campañas de seña ya existentes; los \"v2\" verifican las reglas comerciales nuevas (anticipo textil + saldo al club).",
+    "",
     "| Escenario | Resultado | Detalle |",
     "|---|---|---|",
     ...results.map((r) => `| ${r.name} | ${r.ok ? "✔" : "✘"} | ${r.detail.replace(/\|/g, "/")} |`),
     "",
   ].join("\n");
-  writeFileSync("docs/VERIFICACION.md", md);
+  // Las secciones escritas a mano (uso desde celular, lo no probado) se conservan
+  let manual = "";
+  try {
+    const prev = readFileSync("docs/VERIFICACION.md", "utf8");
+    const i = prev.indexOf("\n## ");
+    if (i >= 0) manual = prev.slice(i);
+  } catch { /* primera vez */ }
+  writeFileSync("docs/VERIFICACION.md", md + manual);
   console.log(`\n${okCount}/${results.length} escenarios OK`);
   await db.$disconnect();
   process.exit(okCount === results.length ? 0 : 1);
