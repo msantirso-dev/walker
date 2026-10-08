@@ -32,13 +32,13 @@ export default async function Logistics({ params }: { params: Promise<{ id: stri
   return (
     <>
       <PageHeader eyebrow={`${c.club.name} · ${c.title}`} title="Logística y retiros" actions={<Link href={`/admin/campanas/${id}`} className="btn btn-ghost">Volver a la campaña</Link>}>
-        La producción completa se entrega en el club (sin envío a domicilio). El costo del envío y quién lo paga están pendientes de definición: se registran, no se asumen.
+        La producción completa se entrega en el club (sin envío a domicilio), por el transporte que se elija. El flete es a cargo del comprador: se registra, no lo paga la textil. El seguimiento del sistema termina con la producción en el club; el saldo y los retiros los gestiona el club en su planilla.
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Pedidos confirmados" value={list.length} />
         <Stat label="Prendas entregadas" value={`${delivered} / ${units}`} />
-        <Stat label="Saldo al club pendiente" value={<Money cents={clubDue} />} tone={clubDue ? "warn" : undefined} hint="Sin cobrar, no se entrega salvo excepción autorizada" />
+        <Stat label="Saldo para el club" value={<Money cents={clubDue} />} hint="Lo cobra el club antes del retiro (planilla del club)" />
         <Stat label="Lotes listos para despacho" value={readyLots.length} />
       </div>
 
@@ -129,12 +129,12 @@ export default async function Logistics({ params }: { params: Promise<{ id: stri
                         </div>
                       ))}
                     </td>
-                    <td className="num">{o.clubDue > 0 ? <span className="text-warn"><Money cents={o.clubDue} /></span> : "—"}</td>
+                    <td className="num">{o.clubDue > 0 ? <Money cents={o.clubDue} /> : "—"}</td>
                     <td className="text-sm">
                       {DELIVERY_STATUS_LABEL[o.deliveryStatus]}
                       {o.deliveries.map((d, i) => <div key={i} className="text-xs text-muted">{fmtShortTime(d.at)} · {d.to}{d.exception ? " · con excepción" : ""}</div>)}
                     </td>
-                    <td><Link href={`/admin/entregas/${o.id}`} className="btn btn-ghost btn-sm">Entregar</Link></td>
+                    <td>{o.v2 ? <Link href={`/admin/planilla?q=${o.code}${manage ? `&club=${c.clubId}` : ""}`} className="btn btn-ghost btn-sm">Planilla</Link> : <Link href={`/admin/entregas/${o.id}`} className="btn btn-ghost btn-sm">Entregar</Link>}</td>
                   </tr>
                 ))}
               </tbody>

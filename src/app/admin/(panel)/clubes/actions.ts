@@ -144,3 +144,16 @@ export async function removePhoto(clubId: string, photoId: string) {
   await db.clubPhoto.deleteMany({ where: { id: photoId, clubId } });
   revalidatePath(`/admin/clubes/${clubId}`);
 }
+
+/** Servicio adicional: planilla de gestión propia del club (no afecta los datos del sistema). */
+export async function setManagementPanel(clubId: string, _p: FormState, fd: FormData): Promise<FormState> {
+  return run(async () => {
+    const u = await requireUser();
+    assertCan(u, "clubs.manage");
+    const on = bool(fd, "managementPanel");
+    await db.club.update({ where: { id: clubId }, data: { managementPanel: on } });
+    await audit(actorOf(u, await clientIp()), { entity: "Club", entityId: clubId, clubId, action: "club.management_panel", data: { on } });
+    revalidatePath(`/admin/clubes/${clubId}`);
+    return on ? "Planilla de gestión activada para el club." : "Planilla de gestión desactivada.";
+  });
+}

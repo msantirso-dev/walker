@@ -5,7 +5,7 @@ import { db } from "@/shared/db";
 import { PageHeader, Tabs, Badge, Empty } from "@/shared/ui";
 import { ActionForm, ImageInput, SubmitButton } from "@/shared/ui/client";
 import { ClubForm } from "../club-form";
-import { updateClub, setSports, addCategory, toggleCategory, addPhoto, removePhoto } from "../actions";
+import { setManagementPanel, updateClub, setSports, addCategory, toggleCategory, addPhoto, removePhoto } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +49,14 @@ export default async function ClubDetail({ params, searchParams }: { params: Pro
       />
       <Tabs items={tabs} current={tab} />
 
+      {tab === "perfil" && textil && (
+        <ActionForm action={setManagementPanel.bind(null, id)} className="card mb-6 flex flex-wrap items-center gap-4 p-4">
+          <label className="flex items-center gap-2 font-semibold"><input type="checkbox" name="managementPanel" defaultChecked={club.managementPanel} className="h-5 w-5" /> Planilla de gestión del club (servicio adicional)</label>
+          <span className="text-sm text-muted">El club ve lo que se compró y quién, y anota cobros y retiros. Lo que carga no modifica los datos del sistema.</span>
+          <SubmitButton className="btn btn-ghost btn-sm">Guardar</SubmitButton>
+          {club.managementPanel && <Link href={`/admin/planilla?club=${id}`} className="text-sm underline">Ver planilla</Link>}
+        </ActionForm>
+      )}
       {tab === "perfil" && <ClubForm action={updateClub.bind(null, id)} club={club} canSlug={textil} />}
 
       {tab === "deportes" && (

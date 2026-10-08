@@ -85,7 +85,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                 ]
               : [["Pago", <Badge key="p" tone={o.paidAmount >= o.total ? "ok" : o.paidAmount > 0 ? "info" : "warn"}>{paymentStateLabel(o)}</Badge>]]),
             ["Fabricación", <span key="f" className="font-semibold">{production}</span>],
-            ["Entrega", <span key="e" className="font-semibold">{o.status === "CONFIRMED" ? DELIVERY_STATUS_LABEL[o.deliveryStatus] : "—"}</span>],
+            ["Entrega", <span key="e" className="font-semibold">{o.status !== "CONFIRMED" ? "—" : adv ? (ready ? "En el club, listo para retirar" : "Se entrega en el club") : DELIVERY_STATUS_LABEL[o.deliveryStatus]}</span>],
           ].map(([k, v]) => (
             <div key={k as string} className="card p-3">
               <dt className="eyebrow">{k}</dt>
@@ -106,7 +106,6 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                 <div className="flex justify-between"><dt>Anticipo (Mercado Pago · lo cobra la textil)</dt><dd>{ars(o.advanceRequired)}</dd></div>
                 <div className="flex justify-between text-ok"><dt>Anticipo acreditado</dt><dd>{ars(o.advancePaid)}</dd></div>
                 <div className="flex justify-between"><dt>Saldo al club (lo cobra {club.name})</dt><dd>{ars(o.clubBalanceRequired)}</dd></div>
-                {o.clubBalanceRequired > 0 && <div className="flex justify-between text-ok"><dt>Saldo al club registrado</dt><dd>{ars(o.clubPaid)}</dd></div>}
               </>
             ) : (
               <div className="flex justify-between text-ok"><dt>Confirmado</dt><dd>{ars(o.paidAmount)}</dd></div>
@@ -193,7 +192,8 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               <h2 className="text-2xl font-bold">Retiro en el club</h2>
               <p className="mt-1">Código de retiro: <span className="select-all font-mono text-lg font-bold tracking-widest">{o.pickupCode}</span></p>
               <p className="mt-2 text-muted">{[club.pickupAddress, club.pickupHours, c.pickupInstructions].filter(Boolean).join(". ")}</p>
-              {balance > 0 && <p className="notice notice-warn mt-3">Antes de retirar, {adv ? `pagá al club el saldo de ${ars(balance)}` : `completá el saldo de ${ars(balance)}`}.</p>}
+              {balance > 0 && <p className="notice notice-warn mt-3">{adv ? `El retiro se realiza solo contra pago total: pagá al club el saldo de ${ars(balance)}. Lo cobra el club.` : `Antes de retirar, completá el saldo de ${ars(balance)}.`}</p>}
+              {adv && <p className="mt-2 text-sm text-muted">Desde acá, el retiro y el cobro del saldo los gestiona {club.name}.</p>}
               <p className="mt-2 text-xs text-muted">El código no contiene datos personales. Mostralo en la sede.</p>
             </div>
           </section>

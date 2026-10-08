@@ -124,7 +124,7 @@ export default async function CampaignOverview({ params }: { params: Promise<{ i
         {advance ? (
           <>
             <Stat label="Anticipos cobrados (textil)" value={<Money cents={m.advanceCollected} />} hint={m.inReview ? <>En revisión: <Money cents={m.inReview} /></> : "Por Mercado Pago"} />
-            <Stat label="Saldo al club pendiente" value={<Money cents={m.clubBalanceDue} />} hint={<>{m.ordersClubPending} pedidos · cobrado <Money cents={m.clubCollected} /></>} tone={m.clubBalanceDue ? "warn" : undefined} />
+            <Stat label="Saldo para el club" value={<Money cents={m.clubBalanceDue} />} hint={`${m.ordersClubPending} pedidos · lo cobra el club`} />
           </>
         ) : (
           <>

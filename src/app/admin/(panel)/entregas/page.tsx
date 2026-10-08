@@ -17,6 +17,8 @@ export default async function Deliveries({ searchParams }: { searchParams: Promi
   const orders = await db.order.findMany({
     where: {
       ...clubScope(u),
+      // Los pedidos con anticipo textil se retiran por la planilla del club
+      pricingModel: "LEGACY_DEPOSIT",
       status: "CONFIRMED",
       deliveryStatus: { in: statuses as never },
       ...(q ? { OR: [{ buyerName: { contains: q, mode: "insensitive" } }, { code: { contains: q.toUpperCase() } }, { players: { some: { name: { contains: q, mode: "insensitive" } } } }] } : {}),
@@ -27,7 +29,7 @@ export default async function Deliveries({ searchParams }: { searchParams: Promi
   });
   return (
     <>
-      <PageHeader eyebrow="Retiros en sede" title="Entregas" />
+      <PageHeader eyebrow="Retiros en sede" title="Entregas">Pedidos del modelo anterior (seña). Los pedidos con anticipo textil se gestionan en la <Link href="/admin/planilla" className="underline">planilla del club</Link>.</PageHeader>
       <div className="grid gap-4 md:grid-cols-2">
         <ActionForm action={findByCodeAction} className="card grid gap-3 p-4">
           <div className="field"><label htmlFor="code">Código de retiro o de pedido</label><input id="code" name="code" className="input font-mono uppercase" autoComplete="off" placeholder="Ej.: 7KQ2M9XHRT o K7Q-4MZ2" /></div>
@@ -54,7 +56,7 @@ export default async function Deliveries({ searchParams }: { searchParams: Promi
                     <td>{o.buyerName}</td>
                     <td className="text-sm">{o.players.map((p) => `${p.name}${p.category ? ` (${p.category})` : ""}`).join(", ") || "—"}</td>
                     <td className="num">{o._count.units}</td>
-                    <td className="num">{(() => { const due = o.pricingModel === "TEXTIL_ADVANCE" ? o.clubBalanceRequired - o.clubPaid : o.total - o.paidAmount; return due > 0 ? <span className="font-bold text-danger"><Money cents={due} />{o.pricingModel === "TEXTIL_ADVANCE" ? " (club)" : ""}</span> : "Sin saldo"; })()}</td>
+                    <td className="num">{o.total > o.paidAmount ? <span className="font-bold text-danger"><Money cents={o.total - o.paidAmount} /></span> : "Sin saldo"}</td>
                     <td><Badge tone={o.deliveryStatus === "DELIVERED" ? "ok" : o.deliveryStatus === "PARTIAL" ? "warn" : "info"}>{DELIVERY_STATUS_LABEL[o.deliveryStatus]}</Badge></td>
                   </tr>
                 ))}

@@ -27,7 +27,10 @@ export default async function Dashboard() {
   const refundPending = await db.order.count({ where: { ...scope, status: "CANCELLED", paidAmount: { gt: 0 } } });
   const expiring = can(u, "agreements.manage") ? await expiringAgreements() : [];
   const activations = await db.campaign.findMany({ where: { ...scope, status: u.role === "TEXTIL_ADMIN" ? "ACTIVATION_REQUESTED" : "ACTIVATION_APPROVED" }, select: { id: true, title: true, club: { select: { name: true } } } });
-  const clubPending = await db.order.count({ where: { ...scope, pricingModel: "TEXTIL_ADVANCE", status: "CONFIRMED", deliveryStatus: { in: ["READY", "PARTIAL"] }, NOT: { clubPaid: { gte: db.order.fields.clubBalanceRequired } } } });
+  // Club con planilla: pedidos ya en el club que su planilla todavía no marca como entregados o cancelados
+  const clubPending = u.role !== "TEXTIL_ADMIN" && u.clubId
+    ? await db.order.count({ where: { clubId: u.clubId, club: { managementPanel: true }, pricingModel: "TEXTIL_ADVANCE", status: "CONFIRMED", deliveryStatus: { in: ["READY", "PARTIAL"] }, NOT: { clubSheet: { status: { in: ["DELIVERED", "CANCELLED"] } } } } })
+    : 0;
 
   const tot = metrics.reduce(
     (a, m) => ({ collected: a.collected + m.collected, balance: a.balance + m.balanceDue, units: a.units + m.unitsConfirmed, review: a.review + m.inReview }),
@@ -56,7 +59,7 @@ export default async function Dashboard() {
               {`El acuerdo con ${a.club.name} ${a.daysLeft > 0 ? `vence en ${a.daysLeft} días (${fmtDate(a.endsAt)})` : "está vencido"} →`}
             </Link>
           ))}
-          {clubPending > 0 && <Link href="/admin/pedidos?pay=club" className="notice notice-warn font-semibold">{clubPending} pedido(s) listos para retirar con saldo al club pendiente →</Link>}
+          {clubPending > 0 && <Link href="/admin/planilla" className="notice notice-warn font-semibold">{clubPending} pedido(s) en el club sin retiro anotado en tu planilla →</Link>}
           {reviewCount > 0 && can(u, "payments.review") && <Link href="/admin/pagos" className="notice notice-info font-semibold">Hay {reviewCount} comprobante(s) esperando revisión →</Link>}
           {pendingLots > 0 && <Link href="/admin/produccion" className="notice notice-warn font-semibold">Hay {pendingLots} lote(s) de producción pendientes de aprobación →</Link>}
           {overCap > 0 && <Link href="/admin/pedidos?alerta=cupo" className="notice notice-danger font-semibold">{overCap} pedido(s) confirmados fuera de cupo requieren una decisión →</Link>}

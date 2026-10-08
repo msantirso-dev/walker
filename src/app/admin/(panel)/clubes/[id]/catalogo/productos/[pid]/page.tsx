@@ -59,7 +59,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       <Section title="Opciones del configurador">
         <p className="mb-3 text-sm text-muted">
           Grupos que ve el comprador, en orden: elección (ej. Personalización: Sin personalizar / Nombre y número), texto (nombre) o número. Un grupo puede mostrarse solo si en otro se eligió cierto valor.
-          Cada adicional separa la parte textil (se cobra en el anticipo) y la parte club (saldo). El reparto está pendiente de definición comercial: marcalo como confirmado solo cuando se acuerde.
+          Los adicionales son de la textil: en las campañas con anticipo, el recargo del club se aplica también sobre ellos y el anticipo los incluye. La "parte club" solo se usa en campañas del modelo anterior (seña).
         </p>
         <div className="grid gap-3">
           {[...p.optionGroups, null].map((g) => {
@@ -76,7 +76,6 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                       {g.dependsOnGroupId && <Badge tone="info">Condicional</Badge>}
                       {g.blocksSizeChange && <Badge tone="warn">Sin cambio de talle</Badge>}
                       {g.type !== "CHOICE" && (g.priceTextil + g.priceClub > 0) && <span className="text-sm">+<Money cents={g.priceTextil + g.priceClub} /></span>}
-                      {!g.splitConfirmed && (g.priceTextil + g.priceClub > 0 || g.values.some((v) => v.priceTextil + v.priceClub > 0)) && <Badge tone="warn">Reparto textil/club a definir</Badge>}
                     </span>
                   ) : <b>+ Agregar grupo de opciones</b>}
                 </summary>
@@ -88,12 +87,12 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                   <div className="field"><label htmlFor={`gml-${key}`}>Máx. caracteres (texto)</label><input id={`gml-${key}`} name="maxLength" type="number" min={1} max={30} className="input" defaultValue={g?.maxLength ?? ""} /></div>
                   <div className="field"><label htmlFor={`gmin-${key}`}>Número desde</label><input id={`gmin-${key}`} name="numberMin" type="number" min={0} className="input" defaultValue={g?.numberMin ?? ""} /></div>
                   <div className="field"><label htmlFor={`gmax-${key}`}>Número hasta</label><input id={`gmax-${key}`} name="numberMax" type="number" min={0} className="input" defaultValue={g?.numberMax ?? ""} /></div>
-                  <div className="field"><label htmlFor={`gpt-${key}`}>Precio textil (texto/número)</label><input id={`gpt-${key}`} name="priceTextil" className="input" inputMode="decimal" defaultValue={pesosInput(g?.priceTextil ?? 0)} /></div>
-                  <div className="field"><label htmlFor={`gpc-${key}`}>Precio club (texto/número)</label><input id={`gpc-${key}`} name="priceClub" className="input" inputMode="decimal" defaultValue={pesosInput(g?.priceClub ?? 0)} /></div>
+                  <div className="field"><label htmlFor={`gpt-${key}`}>Precio del adicional (textil)</label><input id={`gpt-${key}`} name="priceTextil" className="input" inputMode="decimal" defaultValue={pesosInput(g?.priceTextil ?? 0)} /></div>
+                  <div className="field"><label htmlFor={`gpc-${key}`}>Parte club (solo modelo anterior)</label><input id={`gpc-${key}`} name="priceClub" className="input" inputMode="decimal" defaultValue={pesosInput(g?.priceClub ?? 0)} /></div>
                   <div className="field md:col-span-2"><label htmlFor={`gh-${key}`}>Ayuda</label><input id={`gh-${key}`} name="help" className="input" defaultValue={g?.help ?? ""} /></div>
                   <div className="field md:col-span-4">
-                    <label htmlFor={`gv-${key}`}>Valores (elección): una línea por valor · Etiqueta | precio textil | precio club</label>
-                    <textarea id={`gv-${key}`} name="values" className="input font-mono text-sm" rows={3} defaultValue={g?.values.filter((v) => v.active).map((v) => `${v.label} | ${pesosInput(v.priceTextil)} | ${pesosInput(v.priceClub)}`).join("\n") ?? ""} placeholder={"Sin personalizar | 0 | 0\nNombre y número | 3000 | 0"} />
+                    <label htmlFor={`gv-${key}`}>Valores (elección): una línea por valor · Etiqueta | precio textil | parte club (solo modelo anterior)</label>
+                    <textarea id={`gv-${key}`} name="values" className="input font-mono text-sm" rows={3} defaultValue={g?.values.filter((v) => v.active).map((v) => `${v.label} | ${pesosInput(v.priceTextil)} | ${pesosInput(v.priceClub)}`).join("\n") ?? ""} placeholder={"Nombre y número | 3000\nSolo número | 1500"} />
                   </div>
                   {choiceValues.length > 0 && (
                     <fieldset className="md:col-span-4">
@@ -105,7 +104,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                   )}
                   <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="required" defaultChecked={g?.required} className="h-5 w-5" /> Obligatorio (si se muestra)</label>
                   <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="blocksSizeChange" defaultChecked={g?.blocksSizeChange ?? false} className="h-5 w-5" /> Completarlo bloquea el cambio de talle</label>
-                  <label className="flex items-center gap-2 text-sm md:col-span-2"><input type="checkbox" name="splitConfirmed" defaultChecked={g?.splitConfirmed} className="h-5 w-5" /> Reparto textil/club confirmado comercialmente</label>
+                  <input type="hidden" name="splitConfirmed" value="true" />
                   <div className="flex flex-wrap gap-2 md:col-span-4">
                     <SubmitButton className="btn btn-primary">{g ? "Guardar grupo" : "Agregar grupo"}</SubmitButton>
                   </div>

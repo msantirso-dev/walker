@@ -4,6 +4,7 @@ import { getCampaignStore, clubTheme } from "@/modules/clubs/public";
 import { fmtDate } from "@/shared/dates";
 import { ars } from "@/shared/money";
 import { Bar } from "@/shared/ui";
+import { Countdown } from "../../_ui/countdown";
 import { ClubBar, Contact, DemoBanner, Faq, PlatformFooter, Steps, WindowLine } from "../../_ui/parts";
 import { CHANGE_POLICY_TEXT, CHANGE_POLICY_UNPERSONALIZED } from "@/modules/catalog/options";
 import { MP_FINANCING_TEXT, SAMPLE_TEXT } from "@/shared/copy";
@@ -76,9 +77,14 @@ export default async function CampaignPage({ params }: P) {
               <WindowLine c={c} open={open} />
             </p>
             <h1 className="mt-4 text-5xl font-extrabold md:text-7xl">{c.title}</h1>
+            {c.audience !== "ALL" && <p className="mt-2 inline-block rounded bg-club-2 px-3 py-1 text-sm font-bold text-on-club-2">Exclusivo para {d.audience}</p>}
             {c.description && <p className="mt-4 max-w-[46ch] text-lg opacity-90">{c.description}</p>}
             <dl className="mt-6 flex flex-wrap gap-x-8 gap-y-3">
-              <div><dt className="text-sm opacity-80">Cierre</dt><dd className="font-display text-2xl font-bold uppercase">{fmtDate(c.closesAt)}</dd></div>
+              <div>
+                <dt className="text-sm opacity-80">Cierre</dt>
+                <dd className="font-display text-2xl font-bold uppercase">{fmtDate(c.closesAt)}</dd>
+                {open && <dd className="text-sm font-semibold"><Countdown to={c.closesAt.toISOString()} fallback={`Hasta el ${fmtDate(c.closesAt)}`} /></dd>}
+              </div>
               <div><dt className="text-sm opacity-80">Entrega estimada</dt><dd className="font-display text-2xl font-bold">{c.deliveryDaysMin} a {c.deliveryDaysMax} días del cierre</dd></div>
               <div><dt className="text-sm opacity-80">{advance ? "Entrega" : "Para reservar"}</dt><dd className="font-display text-2xl font-bold">{advance ? "En el club" : depositText}</dd></div>
             </dl>
@@ -139,7 +145,7 @@ export default async function CampaignPage({ params }: P) {
           <div className="grid gap-4 md:grid-cols-2">
             {[
               ["Pagos", advance
-                ? `Para confirmar el pedido pagás el anticipo con Mercado Pago; lo cobra ${payments.receiver}. Si el precio al socio es mayor que el anticipo, la diferencia es un saldo que pagás directamente a ${club.name}, antes del retiro. ${MP_FINANCING_TEXT}`
+                ? `Para confirmar el pedido pagás el anticipo con Mercado Pago; lo cobra ${payments.receiver}. Si hay saldo, lo pagás directamente a ${club.name}: el retiro en la dirección dispuesta por el club se realiza solo contra pago total de la compra. ${MP_FINANCING_TEXT}`
                 : `${deposit ? `Seña de ${depositText} para confirmar; el saldo ${c.balanceDueText ?? "se paga antes del retiro"}` : "Pago total al comprar"}. Los pagos se acreditan a: ${payments.receiver}. Un comprobante cargado queda en revisión hasta su aprobación.`],
               ["Fabricación y entrega", `Se fabrica solo lo pedido en la ventana. Entrega estimada entre ${c.deliveryDaysMin} y ${c.deliveryDaysMax} días desde el cierre.${advance ? ` La producción completa se entrega en ${club.name}; no hay envío a domicilio.` : ""}${(advance || c.pickupEnabled) && club.pickupAddress ? ` Retiro en ${club.pickupAddress}.` : ""}`],
               ["Cambios", [anyPersonalized ? `${CHANGE_POLICY_TEXT} ${CHANGE_POLICY_UNPERSONALIZED}` : null, c.policyChanges].filter(Boolean).join(" ") || null],

@@ -13,7 +13,7 @@ async function doLogout() {
 
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
   const u = await requireUser();
-  const club = u.clubId ? await db.club.findUnique({ where: { id: u.clubId }, select: { name: true } }) : null;
+  const club = u.clubId ? await db.club.findUnique({ where: { id: u.clubId }, select: { name: true, managementPanel: true } }) : null;
   const items = [
     { href: "/admin", label: "Inicio", show: true },
     { href: "/admin/clubes", label: u.role === "TEXTIL_ADMIN" ? "Clubes y catálogo" : "Mi club", show: can(u, "club.profile") },
@@ -21,6 +21,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
     { href: "/admin/pedidos", label: "Pedidos", show: can(u, "orders.view") },
     { href: "/admin/pagos", label: "Revisión de pagos", show: can(u, "payments.review") },
     { href: "/admin/produccion", label: "Producción", show: can(u, "production.view") || can(u, "lot.receive") },
+    { href: "/admin/planilla", label: "Planilla del club", show: Boolean(club?.managementPanel) && (u.role === "CLUB_ADMIN" || u.role === "DELIVERY") },
     { href: "/admin/entregas", label: "Entregas", show: can(u, "deliveries.register") },
     { href: "/admin/cuentas", label: "Cuentas de cobro", show: can(u, "clubs.manage") },
     { href: "/admin/usuarios", label: "Usuarios", show: can(u, "clubs.manage") },

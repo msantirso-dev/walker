@@ -67,7 +67,7 @@ export default async function Orders({ searchParams }: { searchParams: Promise<R
             <option value="review">Comprobante en revisión</option>
             <option value="deposit">Con saldo pendiente</option>
             <option value="paid">Pagados</option>
-            <option value="club">Saldo al club pendiente</option>
+            <option value="club">Con saldo para el club</option>
             <option value="refund">Devolución pendiente</option>
           </select>
         </div>

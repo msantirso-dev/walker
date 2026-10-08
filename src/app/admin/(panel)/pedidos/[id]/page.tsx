@@ -13,7 +13,9 @@ import { db } from "@/shared/db";
 import { fmtDateTime, fmtShortTime } from "@/shared/dates";
 import { Badge, Money, PageHeader, Section, type Tone } from "@/shared/ui";
 import { ActionForm, ConfirmAction, SubmitButton } from "@/shared/ui/client";
-import { cancelOrderAction, cancelUnitAction, clubBalanceAction, editUnitAction, manualPaymentAction, refundAction, resendLinkAction, reviewAction } from "../actions";
+import { SheetForm } from "../../planilla/sheet-form";
+import { canEditSheet, SHEET_STATUS_LABEL } from "@/modules/clubsheet";
+import { cancelOrderAction, cancelUnitAction, editUnitAction, manualPaymentAction, refundAction, resendLinkAction, reviewAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 const payTone: Record<string, Tone> = { APPROVED: "ok", IN_REVIEW: "info", PENDING: "warn", REJECTED: "danger", REFUNDED: "info" };
@@ -26,8 +28,9 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
   const o = await orderById(id);
   if (!o) notFound();
   assertCan(u, "orders.view", o.clubId);
-  const manage = can(u, "orders.manage", o.clubId);
-  const review = canReviewPayments(u, o.clubId, o.campaign.paymentAccount.owner);
+  // Pedidos v2: los datos del pedido los gestiona solo la textil; el club usa su planilla
+  const manage = can(u, "orders.manage", o.clubId) && (o.pricingModel !== "TEXTIL_ADVANCE" || u.role === "TEXTIL_ADMIN");
+  const review = canReviewPayments(u, o.clubId, o.campaign.paymentAccount.owner) && (o.pricingModel !== "TEXTIL_ADVANCE" || u.role === "TEXTIL_ADMIN");
   const [log, emails, users] = await Promise.all([
     history("Order", id),
     db.emailOutbox.findMany({ where: { orderId: id }, orderBy: { createdAt: "asc" } }),
@@ -45,7 +48,8 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
   const adv = o.pricingModel === "TEXTIL_ADVANCE";
   const st = adv ? advanceStates(o) : null;
   const balance = adv ? st!.clubDue : Math.max(0, o.total - o.paidAmount);
-  const canClubBalance = adv && (u.role === "TEXTIL_ADMIN" || (u.role === "CLUB_ADMIN" && u.clubId === o.clubId));
+  const sheetEdit = adv && canEditSheet(u, o.club);
+  const sheet = adv ? await db.clubOrderSheet.findUnique({ where: { orderId: o.id } }) : null;
   const groups = [...o.players.map((p) => ({ p, units: o.units.filter((x) => x.playerId === p.id) })), { p: null, units: o.units.filter((x) => !x.playerId) }].filter((g) => g.units.length);
 
   return (
@@ -105,7 +109,7 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
             {adv ? (
               <>
                 <div><dt className="text-muted">Anticipo textil</dt><dd><Money cents={o.advancePaid} /> de <Money cents={o.advanceRequired} /></dd></div>
-                <div><dt className="text-muted">Saldo club cobrado</dt><dd><Money cents={o.clubPaid} /> de <Money cents={o.clubBalanceRequired} /></dd></div>
+                <div><dt className="text-muted">Saldo para el club</dt><dd><Money cents={o.clubBalanceRequired} />{o.clubTaxBp != null && <span className="block text-xs text-muted">anticipo con cobertura {o.clubTaxBp / 100} % de la diferencia</span>}</dd></div>
               </>
             ) : (
               <div><dt className="text-muted">Seña requerida</dt><dd><Money cents={o.depositRequired} /></dd></div>
@@ -260,21 +264,21 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
             ))}
           </div>
         )}
-        {canClubBalance && o.status === "CONFIRMED" && balance > 0 && (
-          <details className="card mt-4 p-4" open>
-            <summary className="cursor-pointer font-bold">Registrar saldo cobrado por el club</summary>
-            <ActionForm action={clubBalanceAction.bind(null, o.id)} className="mt-3 grid gap-3" resetOnOk>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="field"><label htmlFor="cb-amount">Importe</label><input id="cb-amount" name="amount" className="input" inputMode="decimal" defaultValue={String(balance / 100)} /></div>
-                <div className="field"><label htmlFor="cb-date">Fecha</label><input id="cb-date" name="date" type="date" className="input" defaultValue={toArLocal(new Date()).slice(0, 10)} /></div>
-                <div className="field"><label htmlFor="cb-method">Medio</label><select id="cb-method" name="method" className="input"><option value="CASH">Efectivo</option><option value="TRANSFER">Transferencia al club</option><option value="OTHER">Otro</option></select></div>
-              </div>
-              <div className="field"><label htmlFor="cb-ref">Referencia</label><input id="cb-ref" name="reference" className="input" placeholder="Recibo, operación o nota" /></div>
-              <input name="note" className="input" placeholder="Nota (opcional)" aria-label="Nota" />
-              <p className="text-xs text-muted">Lo cobra el club directamente. No pasa por Mercado Pago ni por la cuenta de la textil.</p>
-              <SubmitButton className="btn btn-primary justify-self-start">Registrar saldo</SubmitButton>
-            </ActionForm>
-          </details>
+        {adv && o.status === "CONFIRMED" && (
+          <div className="card mt-4 p-4">
+            <div className="font-bold">Planilla del club</div>
+            <p className="mt-1 text-xs text-muted">El seguimiento del sistema termina con la producción en el club. El saldo (<Money cents={o.clubBalanceRequired} />) y el retiro los gestiona el club en su planilla, que no modifica este pedido.</p>
+            {sheetEdit ? (
+              <div className="mt-3"><SheetForm orderId={o.id} sheet={sheet} balance={o.clubBalanceRequired} /></div>
+            ) : sheet ? (
+              <p className="mt-2 text-sm">
+                Según el club: <b>{SHEET_STATUS_LABEL[sheet.status]}</b>{sheet.balancePaid ? <> · cobrado <Money cents={sheet.balancePaid} /></> : null}
+                {sheet.deliveredTo ? ` · retiró ${sheet.deliveredTo}` : ""}{sheet.notes ? ` · ${sheet.notes}` : ""}
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-muted">{o.club.managementPanel ? "El club todavía no cargó datos." : "El club no tiene activada la planilla de gestión."}</p>
+            )}
+          </div>
         )}
         {review && o.status !== "CANCELLED" && (
           <div className="mt-4 grid gap-4 md:grid-cols-2">

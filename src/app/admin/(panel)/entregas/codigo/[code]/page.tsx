@@ -9,7 +9,9 @@ export default async function ByCode({ params }: { params: Promise<{ code: strin
   if (!can(u, "deliveries.register")) notFound();
   const code = normalizePickupCode((await params).code);
   if (!code) notFound();
-  const o = await db.order.findFirst({ where: { ...clubScope(u), pickupCode: code }, select: { id: true } });
+  const o = await db.order.findFirst({ where: { ...clubScope(u), pickupCode: code }, select: { id: true, code: true, pricingModel: true } });
   if (!o) notFound();
+  // v2: el retiro lo anota el club en su planilla
+  if (o.pricingModel === "TEXTIL_ADVANCE") redirect(`/admin/planilla?q=${code}`);
   redirect(`/admin/entregas/${o.id}`);
 }

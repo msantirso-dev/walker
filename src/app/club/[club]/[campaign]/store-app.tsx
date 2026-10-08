@@ -4,6 +4,7 @@ import type { StoreProduct, StoreComponent } from "@/modules/clubs/public";
 import { CHANGE_POLICY_TEXT, CHANGE_POLICY_UNPERSONALIZED, CHANGE_POLICY_VERSION, NAME_RE, isVisible, sortGroups, type OptionGroupT } from "@/modules/catalog/options";
 import { ars } from "@/shared/money";
 import { MP_FINANCING_TEXT, SAMPLE_TEXT } from "@/shared/copy";
+import { advanceUnit, extraForBuyer } from "@/shared/advance";
 
 type Player = { key: string; name: string; sport: string; category: string; team: string };
 type Line = { id: string; productId: string; playerKey: string | null; sizes: Record<string, string>; options: Record<string, string>; quantity: number };
@@ -35,7 +36,7 @@ export type StoreConfig = {
 };
 
 
-const GROUP_LABEL: Record<string, string> = { KIDS: "Infantiles", NUMERIC: "Curva 1 · 2 · 3", ALPHA: "Adultos", OTHER: "Otros" };
+const GROUP_LABEL: Record<string, string> = { KIDS: "Infantiles", NUMERIC: "Infantiles · 1 (6-8) · 2 (10-12) · 3 (14-16)", ALPHA: "Adultos", OTHER: "Otros" };
 const TAG_LABEL: Record<string, string> = { REAL: "Foto real", DESIGN: "Diseño", REFERENCE: "Referencia" };
 
 function groupSizes<T extends { group: string }>(list: T[]): [string, T[]][] {
@@ -70,17 +71,24 @@ function cleanSelections(groups: OptionGroupT[], sel: Record<string, string>) {
   return out;
 }
 
+/** Precio que ve el comprador por un adicional: en v2, precio textil con el recargo del club. */
+const optPrice = (p: StoreProduct, t: number, c: number) => (p.textilPrice != null ? extraForBuyer(t, p.textilPrice, p.price) : t + c);
+
 function linePrice(p: StoreProduct, l: Line) {
   const opts = chosenOptions(p.optionGroups, l.options);
-  const extraTextil = opts.reduce((a, o) => a + o.textil, 0);
+  const flags = { opts, noSizeChange: opts.some((o) => o.g.blocksSizeChange), freeText: opts.some((o) => o.g.type !== "CHOICE") };
+  if (p.textilPrice != null) {
+    // v2: el anticipo incluye la cobertura impositiva; el comprador ve solo anticipo y saldo
+    const r = advanceUnit({ textil: p.textilPrice, price: p.price, extrasTextil: opts.reduce((a, o) => a + o.textil, 0), taxBp: p.clubTaxBp ?? 0 });
+    return { base: p.price, extra: r.extrasFinal, unit: r.final, total: r.final * l.quantity, advance: r.advance * l.quantity, club: r.club * l.quantity, ...flags };
+  }
   const extra = opts.reduce((a, o) => a + o.textil + o.club, 0);
   const unit = p.price + extra;
-  const advance = (p.textilPrice ?? 0) + extraTextil;
-  return {
-    base: p.price, extra, unit, total: unit * l.quantity, advance: advance * l.quantity, club: (unit - advance) * l.quantity, opts,
-    noSizeChange: opts.some((o) => o.g.blocksSizeChange), freeText: opts.some((o) => o.g.type !== "CHOICE"),
-  };
+  return { base: p.price, extra, unit, total: unit * l.quantity, advance: 0, club: 0, ...flags };
 }
+
+/** Anticipo y saldo de una unidad sin adicionales (para las tarjetas). */
+const baseSplit = (p: StoreProduct) => (p.textilPrice != null ? advanceUnit({ textil: p.textilPrice, price: p.price, extrasTextil: 0, taxBp: p.clubTaxBp ?? 0 }) : null);
 
 export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: StoreConfig }) {
   const advanceModel = cfg.model === "TEXTIL_ADVANCE";
@@ -218,7 +226,7 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
           <dd>{ars(totals.later)}</dd>
         </div>
       )}
-      {advanceModel && totals.later > 0 && <div className="-mt-1 text-xs text-muted">Lo cobra {cfg.clubName} directamente, antes del retiro.</div>}
+      {advanceModel && totals.later > 0 && <div className="-mt-1 text-xs text-muted">Lo cobra {cfg.clubName}. El retiro en la dirección dispuesta por el club se realiza solo contra pago total.</div>}
       {advanceModel && totals.later === 0 && lines.length > 0 && <div className="text-xs text-muted">Sin saldo a pagar al club.</div>}
     </dl>
   );
@@ -257,9 +265,9 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
                     <span className="font-display text-2xl font-bold md:text-3xl">{ars(p.price)}</span>
                     {p.listPrice && <s className="text-sm text-muted">{ars(p.listPrice)}</s>}
                   </div>
-                  {advanceModel && p.textilPrice != null && (
+                  {advanceModel && baseSplit(p) && (
                     <p className="text-xs text-muted">
-                      Anticipo {ars(p.textilPrice)}{p.price > p.textilPrice ? ` · saldo al club ${ars(p.price - p.textilPrice)}` : ""}
+                      Ahora {ars(baseSplit(p)!.advance)}{baseSplit(p)!.club > 0 ? ` · al club ${ars(baseSplit(p)!.club)}` : ""}
                     </p>
                   )}
                   {p.samples.length > 0 && <p className="text-xs font-semibold">Muestrario disponible en el club</p>}
@@ -674,8 +682,8 @@ function ProductSheet({ p, cfg, players, canBuy, onClose, onAdd }: { p: StorePro
             <span className="font-display text-3xl font-bold">{ars(p.price)}</span>
             {p.listPrice && <s className="text-muted">{ars(p.listPrice)}</s>}
           </div>
-          {advanceModel && p.textilPrice != null && (
-            <p className="text-sm text-muted">Anticipo {ars(p.textilPrice)} por Mercado Pago{p.price > p.textilPrice ? ` · saldo ${ars(p.price - p.textilPrice)} al club` : ""}</p>
+          {advanceModel && baseSplit(p) && (
+            <p className="text-sm text-muted">Anticipo {ars(baseSplit(p)!.advance)} por Mercado Pago{baseSplit(p)!.club > 0 ? ` · saldo ${ars(baseSplit(p)!.club)} al club` : ""}</p>
           )}
           {p.components.map((c) => (
             <p key={c.label} className="mt-1 text-xs text-muted">
@@ -755,7 +763,7 @@ function ProductSheet({ p, cfg, players, canBuy, onClose, onAdd }: { p: StorePro
               <Step n={step++} title="Personalización" aside="Por unidad" />
               <div className="grid gap-3 sm:grid-cols-2">
                 {visible.map((g) => {
-                  const price = g.priceTextil + g.priceClub;
+                  const price = optPrice(p, g.priceTextil, g.priceClub);
                   return (
                     <div key={g.id} className={`field ${g.type === "CHOICE" ? "sm:col-span-2" : ""}`}>
                       <label htmlFor={`og-${g.id}`}>
@@ -771,7 +779,7 @@ function ProductSheet({ p, cfg, players, canBuy, onClose, onAdd }: { p: StorePro
                           )}
                           {g.values.map((v) => (
                             <button key={v.id} type="button" className="chip-size" aria-pressed={sel[g.id] === v.id} onClick={() => setSel({ ...sel, [g.id]: v.id })}>
-                              {v.label}{v.priceTextil + v.priceClub > 0 ? ` +${ars(v.priceTextil + v.priceClub)}` : ""}
+                              {v.label}{v.priceTextil + v.priceClub > 0 ? ` +${ars(optPrice(p, v.priceTextil, v.priceClub))}` : ""}
                             </button>
                           ))}
                         </div>

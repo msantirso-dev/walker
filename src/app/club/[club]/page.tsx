@@ -5,6 +5,7 @@ import { getClubStore, clubTheme, CATALOG_PUBLIC_LABEL } from "@/modules/clubs/p
 import { CAMPAIGN_STATUS_LABEL, effectiveStatus } from "@/modules/campaigns";
 import { fmtDate, fmtDateTime } from "@/shared/dates";
 import { ClubBar, Contact, DemoBanner, Faq, PlatformFooter, Steps } from "../_ui/parts";
+import { Countdown } from "../_ui/countdown";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,8 @@ export async function generateMetadata({ params }: { params: Promise<{ club: str
 export default async function ClubPage({ params }: { params: Promise<{ club: string }> }) {
   const data = await getClubStore((await params).club);
   if (!data) notFound();
-  const { club, current, history, catalog, brandLine } = data;
+  const { club, current, openList, history, catalog, brandLine } = data;
+  const others = openList.filter((c) => c.id !== current?.id);
   const faq = (current?.faq as { q: string; a: string }[] | null) ?? [];
 
   return (
@@ -47,8 +49,12 @@ export default async function ClubPage({ params }: { params: Promise<{ club: str
                 <div className="eyebrow">Preventa vigente</div>
                 <h2 className="mt-1 text-4xl font-extrabold">{current.title}</h2>
                 {current.description && <p className="mt-3 max-w-[56ch] text-muted">{current.description}</p>}
+                {current.audience !== "ALL" && <p className="mt-2 inline-block rounded bg-club-2 px-3 py-1 text-sm font-bold text-on-club-2">Exclusivo para {current.audienceText}</p>}
                 <dl className="mt-5 flex flex-wrap gap-x-10 gap-y-3">
-                  <div><dt className="text-sm text-muted">Cierre</dt><dd className="font-display text-2xl font-bold">{fmtDateTime(current.closesAt)}</dd></div>
+                  <div>
+                    <dt className="text-sm text-muted">Cierre</dt><dd className="font-display text-2xl font-bold">{fmtDateTime(current.closesAt)}</dd>
+                    <dd className="text-sm font-semibold"><Countdown to={current.closesAt.toISOString()} fallback="" /></dd>
+                  </div>
                   <div><dt className="text-sm text-muted">Entrega estimada</dt><dd className="font-display text-2xl font-bold">{current.deliveryDaysMin} a {current.deliveryDaysMax} días del cierre</dd></div>
                 </dl>
                 <Link href={`/club/${club.slug}/${current.slug}`} className="btn btn-club mt-6">
@@ -67,6 +73,24 @@ export default async function ClubPage({ params }: { params: Promise<{ club: str
             </div>
           )}
         </section>
+
+        {others.length > 0 && (
+          <section className="mt-6 grid gap-3 md:grid-cols-2">
+            {others.map((c) => (
+              <Link key={c.id} href={`/club/${club.slug}/${c.slug}`} className="card flex flex-wrap items-center justify-between gap-3 p-4">
+                <div>
+                  <div className="eyebrow">Preventa abierta</div>
+                  <div className="font-display text-2xl font-bold uppercase">{c.title}</div>
+                  {c.audience !== "ALL" ? <span className="badge badge-info mt-1">Exclusivo para {c.audienceText}</span> : <span className="badge badge-ok mt-1">Para todo el club</span>}
+                </div>
+                <div className="text-right text-sm">
+                  <div>Hasta el {fmtDate(c.closesAt)}</div>
+                  <div className="font-semibold"><Countdown to={c.closesAt.toISOString()} fallback="" /></div>
+                </div>
+              </Link>
+            ))}
+          </section>
+        )}
 
         <section className="mt-14">
           <div className="eyebrow">Cómo funciona</div>
@@ -89,7 +113,14 @@ export default async function ClubPage({ params }: { params: Promise<{ club: str
                   </div>
                   <div className="p-3">
                     <div className="font-bold">{p.name}</div>
-                    <span className={`badge mt-1 ${p.catalogStatus === "PRESALE" ? "badge-ok" : "badge-muted"}`}>{CATALOG_PUBLIC_LABEL[p.catalogStatus]}</span>
+                    {p.sale ? (
+                      <>
+                        <Link href={`/club/${club.slug}/${p.sale.slug}`} className="badge badge-ok mt-1">En preventa hasta el {fmtDate(p.sale.closesAt)}</Link>
+                        {p.sale.audience !== "ALL" && <div className="mt-1 text-xs text-muted">Solo {p.sale.audienceText}</div>}
+                      </>
+                    ) : (
+                      <span className="badge badge-muted mt-1">{CATALOG_PUBLIC_LABEL[p.catalogStatus === "PRESALE" ? "PRESALE_CLOSED" : p.catalogStatus]}</span>
+                    )}
                   </div>
                 </li>
               ))}

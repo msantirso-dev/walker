@@ -1,7 +1,8 @@
+import { advanceUnit } from "@/shared/advance";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser, assertCan, can } from "@/modules/auth";
-import { RULE_LABEL, AUDIENCE_LABEL, OUTFIT_INITIAL_PURCHASE_DEFAULT, productionRuleStatus, CAMPAIGN_STATUS_LABEL } from "@/modules/campaigns";
+import { RULE_LABEL, AUDIENCE_LABEL, OUTFIT_INITIAL_PURCHASE_DEFAULT, OUTFIT_BACKUP_SUGGESTION, productionRuleStatus, CAMPAIGN_STATUS_LABEL } from "@/modules/campaigns";
 import { PURPOSE_LABEL } from "@/modules/samples";
 import { Badge, Money } from "@/shared/ui";
 import { db } from "@/shared/db";
@@ -11,7 +12,7 @@ import { PageHeader, Section } from "@/shared/ui";
 import { ActionForm, SubmitButton } from "@/shared/ui/client";
 import { onlineMode } from "@/modules/payments";
 import { BENEFIT_TYPE_LABEL } from "@/modules/benefits";
-import { updateCampaign, saveCollection, saveBenefit, saveRuleAction, approveRuleAction, audienceAction } from "../../actions";
+import { updateCampaign, saveCollection, saveBenefit, saveRuleAction, approveRuleAction, audienceAction, commitShortfallAction, shortfallPurchaseAction } from "../../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -74,7 +75,7 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
                   {advance && <th>Precio textil (anticipo)</th>}
                   <th>{advance ? "Precio al socio" : "Precio preventa"}</th>
                   {advance && <th>o recargo %</th>}
-                  {advance && <th>Saldo club</th>}
+                  {advance && <th>Anticipo / saldo club</th>}
                   {textil && <th>Precio de lista</th>}
                   {textil && <th>Cupo</th>}
                   {textil && <th>Orden</th>}
@@ -94,7 +95,7 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
                     )}
                     <td><input name={`price_${cp.id}`} className="input w-32" inputMode="decimal" defaultValue={pesosInput(cp.price)} aria-label="Precio al socio" disabled={advance && !editable} /></td>
                     {advance && <td><input name={`markup_${cp.id}`} className="input w-24" inputMode="decimal" defaultValue={cp.markupBp != null ? String(cp.markupBp / 100).replace(".", ",") : ""} placeholder="—" aria-label="Recargo %" disabled={!editable} /></td>}
-                    {advance && <td className="num">{cp.textilPrice != null ? <Money cents={Math.max(0, cp.price - cp.textilPrice)} /> : "—"}</td>}
+                    {advance && <td className="num text-sm">{cp.textilPrice != null ? (() => { const r = advanceUnit({ textil: cp.textilPrice, price: cp.price, extrasTextil: 0, taxBp: c.clubTaxBp }); return <><Money cents={r.advance} /> / <Money cents={r.club} /></>; })() : "—"}</td>}
                     {textil && <td><input name={`list_${cp.id}`} className="input w-32" inputMode="decimal" defaultValue={pesosInput(cp.listPrice)} aria-label="Precio de lista" /></td>}
                     {textil && <td><input name={`max_${cp.id}`} type="number" min={1} className="input w-24" defaultValue={cp.maxUnits ?? ""} placeholder="Sin límite" aria-label="Cupo" /></td>}
                     {textil && <td><input name={`sort_${cp.id}`} type="number" className="input w-20" defaultValue={cp.sort} aria-label="Orden" /></td>}
@@ -118,7 +119,7 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
           )}
           <p className="text-sm text-muted">
             {advance
-              ? "El precio textil lo fija la textil y es el anticipo que paga el comprador por Mercado Pago. El club fija el precio al socio (directo o con recargo %), nunca menor al textil; la diferencia es el saldo que cobra el club. Si completás el recargo, se usa en lugar del precio directo. Los pedidos hechos conservan su precio."
+              ? `El precio textil lo fija la textil. El club fija el precio al socio (directo o con recargo %), nunca menor al textil. El anticipo que paga el comprador por Mercado Pago es el precio textil más ${c.clubTaxBp / 100} % de la diferencia (cobertura impositiva: la venta total la factura el fabricante); el resto es el saldo que cobra el club. El comprador ve solo anticipo y saldo. Si completás el recargo, se usa en lugar del precio directo. Los pedidos hechos conservan su precio.`
               : "El precio de lista solo se muestra tachado si es mayor que el de preventa. El cupo por producto es opcional; sin cupo no se muestra disponibilidad."}
           </p>
           <SubmitButton className="btn btn-primary justify-self-start">Guardar colección</SubmitButton>
@@ -158,7 +159,7 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
       {advance && (
         <Section title="Reglas de producción por producto">
           <p className="mb-3 text-sm text-muted">
-            Las define y aprueba la textil. Categoría completa: la cantidad esperada se fija por campaña (no es universal). Outfit: compra inicial del club, sugerida {OUTFIT_INITIAL_PURCHASE_DEFAULT} unidades (estimada, editable). Ninguna regla se aprueba sola.
+            Las define y aprueba la textil. Categoría completa: la cantidad esperada se fija por campaña (no es universal). Outfit: mínimo de producción {OUTFIT_INITIAL_PURCHASE_DEFAULT} unidades (editable); el club se compromete a comprar la diferencia entre lo vendido y el mínimo, y si se llega se le sugiere un respaldo de {OUTFIT_BACKUP_SUGGESTION}. Ninguna regla se aprueba sola.
           </p>
           <div className="grid gap-3">
             {c.products.map((cp) => {
@@ -171,10 +172,31 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
                       <Badge tone="muted">{RULE_LABEL[cp.ruleType]}</Badge>
                       {cp.ruleType !== "NONE" && <Badge tone={cp.ruleApprovedAt ? "ok" : "warn"}>{cp.ruleApprovedAt ? "Aprobada para abrir" : "Sin aprobar"}</Badge>}
                       {cp.ruleType === "FULL_CATEGORY" && r && <Badge tone={r.canProduce ? "ok" : "warn"}>{r.confirmed} de {cp.expectedQty ?? "?"} confirmados{cp.productionApprovedAt ? " · producción aprobada" : ""}</Badge>}
+                      {cp.ruleType === "INITIAL_PURCHASE" && !cp.initialPurchaseWaived && <Badge tone={cp.clubCommitAt ? "ok" : "warn"}>{cp.clubCommitAt ? "Club comprometido" : "Sin compromiso del club"}</Badge>}
+                      {cp.ruleType === "INITIAL_PURCHASE" && r && !cp.initialPurchaseWaived && <Badge tone={r.canProduce ? "ok" : "warn"}>{r.confirmed} de {cp.initialPurchaseMin}{cp.initialPurchaseEstimated ? " (estimado)" : ""} vendidas</Badge>}
                     </span>
                   </div>
                   {r && r.openProblems.length > 0 && <ul className="mt-2 list-disc pl-5 text-sm text-warn">{r.openProblems.map((p) => <li key={p}>{p}</li>)}</ul>}
                   {cp.ruleNote && <p className="mt-1 text-sm text-muted">Nota: {cp.ruleNote}</p>}
+                  {cp.ruleType === "INITIAL_PURCHASE" && r && !r.waived && !editable && (
+                    <div className="mt-2 rounded-lg bg-surface-2 p-3 text-sm">
+                      {r.shortfall > 0
+                        ? <p>El club compra la diferencia: <b>{r.shortfall}</b> unidades para llegar a {r.initialPurchaseMin}.</p>
+                        : <p>La preventa llegó al mínimo. Respaldo sugerido al club: <b>{r.backup}</b> unidades (cambios de talle o venta posterior).</p>}
+                      {r.suggestion.length > 0 && <p className="mt-1">Talles sugeridos según lo vendido: {r.suggestion.map((x) => `${x.size}: ${x.qty}`).join(" · ")}</p>}
+                      {r.purchase ? <p className="mt-1">Compra registrada: {r.purchase.committedQty} u. · {r.purchase.approvedAt ? "aprobada" : "sin aprobar"} · <Link className="underline" href={`/admin/clubes/${c.clubId}/muestrario`}>revisar</Link></p>
+                        : textil && (r.shortfall > 0 || r.backup > 0) && (
+                          <ActionForm action={shortfallPurchaseAction.bind(null, id, cp.id)} className="mt-2"><SubmitButton className="btn btn-primary btn-sm">Registrar compra sugerida del club</SubmitButton></ActionForm>
+                        )}
+                      {r.shortfall > 0 && !r.shortfallCovered && <p className="mt-1 text-warn">La producción de este producto queda retenida hasta aprobar esa compra (o una excepción).</p>}
+                    </div>
+                  )}
+                  {cp.ruleType === "INITIAL_PURCHASE" && !cp.initialPurchaseWaived && !cp.clubCommitAt && editable && (
+                    <ActionForm action={commitShortfallAction.bind(null, id, cp.id)} className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="text-sm">El club se compromete a comprar la diferencia hasta {cp.initialPurchaseMin ?? OUTFIT_INITIAL_PURCHASE_DEFAULT} unidades si la preventa no llega.</span>
+                      <SubmitButton className="btn btn-ghost btn-sm">Registrar compromiso del club</SubmitButton>
+                    </ActionForm>
+                  )}
                   {textil && editable && (
                     <details className="mt-3">
                       <summary className="btn btn-ghost btn-sm">Editar regla</summary>
@@ -191,8 +213,8 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
                           </select>
                         </div>
                         <div className="field"><label htmlFor={`eq-${cp.id}`}>Cantidad esperada</label><input id={`eq-${cp.id}`} name="expectedQty" type="number" min={1} className="input" defaultValue={cp.expectedQty ?? ""} /></div>
-                        <div className="field"><label htmlFor={`im-${cp.id}`}>Compra inicial mínima</label><input id={`im-${cp.id}`} name="initialPurchaseMin" type="number" min={1} className="input" defaultValue={cp.initialPurchaseMin ?? ""} placeholder={String(OUTFIT_INITIAL_PURCHASE_DEFAULT)} /></div>
-                        <div className="field"><label htmlFor={`cp-${cp.id}`}>Compra inicial del club</label>
+                        <div className="field"><label htmlFor={`im-${cp.id}`}>Mínimo de producción</label><input id={`im-${cp.id}`} name="initialPurchaseMin" type="number" min={1} className="input" defaultValue={cp.initialPurchaseMin ?? ""} placeholder={String(OUTFIT_INITIAL_PURCHASE_DEFAULT)} /></div>
+                        <div className="field"><label htmlFor={`cp-${cp.id}`}>Compra del club (diferencia o respaldo)</label>
                           <select id={`cp-${cp.id}`} name="clubPurchaseId" className="input" defaultValue={cp.clubPurchaseId ?? ""}>
                             <option value="">Sin vincular</option>
                             {purchases.map((p) => <option key={p.id} value={p.id}>{p.purposes.map((x) => PURPOSE_LABEL[x]).join(" + ")} · {p.committedQty} u. {p.approvedAt ? "(aprobada)" : ""}</option>)}
@@ -200,7 +222,7 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
                         </div>
                         <div className="grid gap-1 self-end">
                           <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="initialPurchaseEstimated" defaultChecked={cp.initialPurchaseEstimated} className="h-5 w-5" /> Mínimo estimado (a confirmar)</label>
-                          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="initialPurchaseWaived" defaultChecked={cp.initialPurchaseWaived} className="h-5 w-5" /> Excepción: abrir sin compra inicial</label>
+                          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="initialPurchaseWaived" defaultChecked={cp.initialPurchaseWaived} className="h-5 w-5" /> Excepción: sin mínimo (con aprobación)</label>
                         </div>
                         <div className="field md:col-span-3"><label htmlFor={`rn-${cp.id}`}>Nota</label><input id={`rn-${cp.id}`} name="ruleNote" className="input" defaultValue={cp.ruleNote ?? ""} /></div>
                         <SubmitButton className="btn btn-primary justify-self-start">Guardar regla</SubmitButton>
@@ -215,7 +237,7 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
                           <SubmitButton className="btn btn-primary btn-sm">Aprobar para abrir</SubmitButton>
                         </ActionForm>
                       )}
-                      {cp.ruleType === "FULL_CATEGORY" && cp.ruleApprovedAt && !cp.productionApprovedAt && r && !r.canProduce && (
+                      {cp.ruleApprovedAt && !cp.productionApprovedAt && r && !r.canProduce && !editable && (
                         <ActionForm action={approveRuleAction.bind(null, id, cp.id, "production")} className="flex flex-wrap items-end gap-2">
                           <input name="note" className="input w-64" placeholder="Motivo de producir con menos (obligatorio)" aria-label="Motivo" />
                           <SubmitButton className="btn btn-ghost btn-sm">Aprobar producción excepcional</SubmitButton>
@@ -263,6 +285,13 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
 
           <fieldset className="card grid gap-4 p-5 md:grid-cols-2">
             <legend className="px-1 font-display text-lg font-bold uppercase">Cobro</legend>
+            {advance && (
+              <div className="field md:col-span-2">
+                <label htmlFor="clubTaxPercent">Cobertura impositiva sobre la diferencia del club (%)</label>
+                <input id="clubTaxPercent" name="clubTaxPercent" className="input" inputMode="decimal" defaultValue={String(c.clubTaxBp / 100).replace(".", ",")} />
+                <small>Se suma al anticipo (21 % + 3 % = 24 % por defecto). Rige para pedidos nuevos; no se muestra desglosada al comprador.</small>
+              </div>
+            )}
             <div className="field md:col-span-2">
               <label htmlFor="paymentAccountId">Destinatario único de los cobros</label>
               <select id="paymentAccountId" name="paymentAccountId" className="input" defaultValue={c.paymentAccountId}>

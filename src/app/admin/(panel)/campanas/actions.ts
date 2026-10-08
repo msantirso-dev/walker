@@ -12,7 +12,7 @@ import { requireUser, assertCan, can, actorOf, clientIp } from "@/modules/auth";
 import { audit } from "@/modules/audit";
 import {
   publishCampaign, closeCampaign, finishCampaign, cancelCampaign, decideMinimum, requestActivation, approveActivation, rejectActivation,
-  setCampaignProductPrices, setProductRule, approveProductRule, setAudience,
+  setCampaignProductPrices, setProductRule, approveProductRule, setAudience, commitShortfall, createShortfallPurchase,
 } from "@/modules/campaigns";
 import { setBenefitRule, addSettlement } from "@/modules/benefits";
 import { generateLot } from "@/modules/production";
@@ -137,7 +137,13 @@ export async function updateCampaign(id: string, _p: FormState, fd: FormData): P
     } as const;
     if (data.title.length < 3) throw new UserError("Escribí el título de la campaña.");
     if (data.minUnits && !data.minPolicyText) throw new UserError("Con mínimo de producción, explicá públicamente qué pasa si no se alcanza.");
-    await db.campaign.update({ where: { id }, data });
+    let clubTaxBp = c.clubTaxBp;
+    if (c.pricingModel === "TEXTIL_ADVANCE" && str(fd, "clubTaxPercent")) {
+      const pct = Number(str(fd, "clubTaxPercent").replace(",", "."));
+      if (!Number.isFinite(pct) || pct < 0 || pct > 100) throw new UserError("La cobertura impositiva debe estar entre 0 % y 100 %.");
+      clubTaxBp = Math.round(pct * 100);
+    }
+    await db.campaign.update({ where: { id }, data: { ...data, clubTaxBp } });
     await audit(actor, {
       entity: "Campaign", entityId: id, clubId: c.clubId, action: "campaign.updated",
       data: { deposit: [c.paymentMode, c.depositType, c.depositValue, "→", paymentMode, depositType, depositValue], closesAt: closesAt.toISOString(), receiver: acc.id },
@@ -191,8 +197,8 @@ export async function saveCollection(id: string, _p: FormState, fd: FormData): P
       ops.push(db.campaignProduct.create({
         data: {
           campaignId: id, productId: addId, price, listPrice: !advance && p.basePrice > price ? p.basePrice : null, sort: c.products.length,
-          // Outfit: compra inicial sugerida (estimada, editable). Nunca se aprueba sola.
-          ...(advance && p.family === "OUTFIT" ? { ruleType: "INITIAL_PURCHASE" as const, initialPurchaseMin: 15, initialPurchaseEstimated: true } : {}),
+          // Outfit: mínimo 20 (estimado, editable); el club compra la diferencia. Nunca se aprueba sola.
+          ...(advance && p.family === "OUTFIT" ? { ruleType: "INITIAL_PURCHASE" as const, initialPurchaseMin: 20, initialPurchaseEstimated: true } : {}),
         },
       }));
     }
@@ -342,5 +348,23 @@ export async function productionNoticeAction(id: string, _p: FormState, fd: Form
     await audit(actor, { entity: "Campaign", entityId: id, clubId: c.clubId, action: "campaign.notice" });
     revalidatePath(`/admin/campanas/${id}`);
     return "Aviso publicado en el seguimiento de los compradores.";
+  });
+}
+
+export async function commitShortfallAction(id: string, cpId: string, _p: FormState, _fd: FormData): Promise<FormState> {
+  return run(async () => {
+    const { u, actor } = await editor(id);
+    await commitShortfall(u, actor, cpId);
+    revalidatePath(`/admin/campanas/${id}/editar`);
+    return "Compromiso del club registrado.";
+  });
+}
+
+export async function shortfallPurchaseAction(id: string, cpId: string, _p: FormState, _fd: FormData): Promise<FormState> {
+  return run(async () => {
+    const { u, actor } = await editor(id);
+    await createShortfallPurchase(u, actor, cpId);
+    revalidatePath(`/admin/campanas/${id}/editar`);
+    return "Compra registrada con los talles sugeridos. Revisala y aprobala en Muestrario y compras.";
   });
 }
