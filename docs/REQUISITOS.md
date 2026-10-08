@@ -92,11 +92,13 @@ Los pedidos y campañas existentes conservan sus precios y reglas (modelo "seña
 | Compra inicial mínima de outfit | 15 unidades, marcado "estimado" | Por producto en la campaña |
 | Cantidad esperada en categoría completa | La que cargue la textil (ej. 11) | Por producto en la campaña |
 | Reparto textil/club de cada adicional | Se carga explícitamente; por defecto 100 % textil y marcado "a definir" | Opciones del producto |
-| Marca textil en "by …" | Variable `TEXTIL_BRAND`; si está vacía no se muestra | Entorno |
+| Marca textil en "by …" | Variable `TEXTIL_BRAND` (por defecto "Marca Textil"); la línea solo se muestra si hay un acuerdo vigente | Entorno y acuerdo del club |
 | Transferencia para el anticipo | Deshabilitada en campañas nuevas (solo Mercado Pago) | Configuración de la campaña |
 | Exclusividad | 12 meses desde el inicio | Acuerdo del club |
 | Alerta de vencimiento del acuerdo | 60 días antes | Acuerdo del club |
-| Política de cambio para leyendas de disciplina | Sin restricción declarada; se muestra como "a confirmar" en el panel | Opción del producto |
+| Política de cambio para leyendas de disciplina | La leyenda no bloquea el cambio de talle; nombre y número sí. Configurable por grupo de opciones ("completarlo bloquea el cambio de talle") | Opciones del producto |
+| Producción con anticipo | Entra al lote todo pedido con anticipo aprobado; el saldo al club no frena la producción | Fijo en el modelo v2 |
+| Regla al agregar un outfit a una campaña | Se propone "compra inicial" con mínimo 15 (estimado); igual requiere aprobación de la textil | Regla del producto en la campaña |
 
 ## 4. Definiciones pendientes
 
@@ -121,3 +123,36 @@ Los pedidos y campañas existentes conservan sus precios y reglas (modelo "seña
 - Tienda: catálogo del club con estados, campaña con alcance, configurador guiado, aviso de muestrario, política de cambios, texto de Mercado Pago, retiro en el club, banner de demostración.
 - Pedido del comprador: anticipo y saldo club separados, club destinatario y retiro.
 - Panel: acuerdos (con alertas), muestrarios y equivalencias, compras del club, catálogo (estado, familia, técnica, opciones), solicitud y aprobación de campañas, precio textil y precio al socio, reglas por producto, registro del saldo club, despachos al club con remito, listado de distribución y registro de retiros, reporte de fabricación con prendas base y trabajos de personalización.
+
+## 6. Estado de implementación (08/10/2026)
+
+Verificación automática: **44/44** escenarios (`docs/VERIFICACION.md`): 28 del modelo anterior, que siguen funcionando para campañas con seña, y 16 del modelo v2.
+
+**Implementado**
+
+- Precio textil y precio al socio por producto de campaña (directo o recargo %), validación final ≥ textil, bloqueo de cambios con la campaña publicada y nueva autorización si el club cambia precios ya autorizados.
+- Anticipo = precio textil + parte textil de los adicionales, cobrado online por Mercado Pago a la cuenta de la textil; saldo club = final − anticipo, registrado a mano por el club o la textil (fecha, medio, referencia). Sin reparto automático.
+- Estados separados de anticipo y saldo al club en la tienda, el pedido, el panel, los correos y los reportes; un pedido nunca figura como "pagado" con saldo al club pendiente; precio final = textil → saldo 0.
+- Texto exacto de financiación de Mercado Pago; sin promesas de cuotas. Conciliación guardada por pago: importe de la operación, total pagado por el comprador (incluye intereses), neto acreditado, cargos y cuotas. El anticipo se acredita por el importe de la operación.
+- Sin envío a domicilio en campañas v2: envío consolidado textil → club (dirección, responsable, transporte, referencia, fechas, costo y quién lo paga "a definir"), remito consolidado imprimible, recepción por el club, lista de distribución por comprador y jugador con saldo (Excel/CSV), registro de retiros. Retiro bloqueado con saldo al club pendiente salvo excepción con motivo.
+- Acuerdo privado por club (exclusividad, fechas, línea de marca, muestras, catálogo, condiciones, compras iniciales, reglas de precio, contrato adjunto privado), alerta en el panel y aviso por correo una vez dentro de la ventana; vencimiento automático. Solo la línea de marca es pública.
+- Muestrario: curvas superior/inferior con prenda de referencia, talles, cantidades, entrega, disponibilidad y lugar; equivalencia aprobada por producto; aviso público solo con equivalencia aprobada y curva disponible.
+- Compras del club con funciones separadas (muestrario, compra inicial, respaldo), distribución de talles manual y aprobación; referencia de talles pedidos para el respaldo (solo informativa).
+- Catálogo con estados (preparación, catálogo sin venta, preventa activa, preventa cerrada, archivado), familia y técnica como campos separados; los estados de preventa se actualizan al publicar y cerrar.
+- Campañas: el club arma el borrador (productos, precio al socio, alcance por disciplina o categoría) y solicita activación; la textil autoriza por separado; con autorización, se publica. El alcance se valida en el servidor.
+- Reglas por producto: categoría completa (categoría, cantidad esperada, confirmados, aprobación para abrir y aprobación excepcional para producir con menos) y compra inicial (mínimo editable y marcado estimado, compra vinculada comprometida, pagada, con talles y aprobada, o excepción aprobada). Nada se aprueba solo.
+- Configurador guiado por pasos (talle, jugador, personalización, cantidad, resumen con total, anticipo y saldo), grupos de opciones con dependencias, obligatoriedad, límites y precios textil/club; editor en el panel. Validación en el servidor (un valor en un grupo que no corresponde se rechaza).
+- Reporte de fabricación: prendas base consolidadas por modelo y talle y, aparte, trabajos de personalización (leyenda, nombre, número, adicionales) sin fragmentar el lote base.
+- Política de cambios: se muestra en la ficha, al personalizar y antes de confirmar; el pedido guarda la versión aceptada; el panel distingue cambio voluntario, error de carga, error de la textil y falla (estos dos últimos con nota).
+- Pedidos y campañas anteriores conservan su modelo (seña), precios y condiciones; no hay recálculo retroactivo.
+- Piloto demostrativo "Rugby de Virreyes (demo)": escudo genérico, colores provisorios, remera de uso diario (con leyenda y nombre), short de verano, musculosa (precio final = textil), bolso (recargo 30 %), producto en "catálogo sin venta", compra inicial de 15, muestrario y acuerdo en borrador; banner de demostración en toda la tienda y pagos simulados.
+- Borrador de propuesta comercial `docs/PROPUESTA-COMERCIAL.md`: excluido del repositorio (que es público) y entregado aparte; no publicado.
+
+**Pendiente o fuera de alcance**
+
+- Prueba con credenciales reales de Mercado Pago (incluida la conciliación de intereses y comisiones con pagos reales).
+- Definiciones comerciales de la sección 4: quedan configurables y marcadas, sin comportamientos que comprometan cobros o promesas.
+- Devoluciones a través de la API de Mercado Pago (se registran a mano), facturación electrónica e integración con transportes (Via Cargo se registra como texto).
+- Firma electrónica del acuerdo (se adjunta el contrato firmado).
+- Datos oficiales del club de Virreyes (nombre, escudo, colores, precios) y su aprobación antes de mostrar la demo como propia del club.
+- La muestra HTML estática (`docs/muestra/`) es anterior y refleja el modelo de seña; la referencia vigente es la tienda demo.

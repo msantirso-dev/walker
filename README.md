@@ -1,6 +1,8 @@
 # Camada · Preventa de indumentaria para clubes
 
-Plataforma para una textil que ofrece a cada club su tienda de preventa: socios y familias eligen prendas, talles, jugadores y personalización; pagan seña o total; la textil consolida los pedidos confirmados en una orden de fabricación; el club cobra el saldo y registra la entrega.
+Plataforma para una textil que ofrece a cada club su tienda de preventa: socios y familias configuran prendas, talles, jugadores y personalización; pagan el **anticipo** (precio textil) con Mercado Pago a la textil; la textil consolida los pedidos y entrega toda la producción en el club; el club cobra su **saldo** (precio al socio − anticipo), lo registra y entrega a cada socio.
+
+Las reglas comerciales vigentes, los supuestos y lo pendiente están en [`docs/REQUISITOS.md`](docs/REQUISITOS.md). Las campañas creadas antes del 08/10/2026 conservan el modelo anterior de seña.
 
 - Diseño previo: [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md)
 - Verificación de punta a punta: [`docs/VERIFICACION.md`](docs/VERIFICACION.md)
@@ -28,7 +30,14 @@ Plataforma para una textil que ofrece a cada club su tienda de preventa: socios 
 | Panel: cambio de contraseña propio y "olvidé mi contraseña" con enlace de un solo uso | Implementado (el enlace llega por correo: requiere SMTP) |
 | Edición de talles, nombre, número y jugador por prenda mientras no esté en un lote aprobado | Implementado |
 | Correos (8 avisos) | Plantillas y registro; **envío pendiente de SMTP** (sin SMTP se marcan "no enviado") |
-| Devoluciones vía API de Mercado Pago, facturación electrónica, envíos con operador logístico | Pendiente (las devoluciones se registran manualmente) |
+| Anticipo textil por Mercado Pago + saldo al club registrado a mano; estados separados | Implementado |
+| Solicitud de activación (club) y autorización (textil); precio textil / precio al socio / recargo; alcance por disciplina o categoría | Implementado |
+| Reglas por producto: categoría completa y compra inicial, con aprobaciones explícitas | Implementado |
+| Configurador guiado con opciones condicionales y reparto textil/club por adicional | Implementado |
+| Acuerdos privados con alertas, muestrario de talles, compras del club | Implementado |
+| Envío consolidado al club, remito, lista de distribución y retiros | Implementado |
+| Piloto demostrativo "Rugby de Virreyes (demo)" | Implementado, con datos de ejemplo |
+| Devoluciones vía API de Mercado Pago, facturación electrónica, integración con transportes | Pendiente (las devoluciones se registran manualmente) |
 
 ## Stack
 
@@ -63,20 +72,21 @@ Usuarios de demostración (contraseña `camada-demo-2026`, cambiar con `SEED_PAS
 | club@nandues.test | Administración del club Los Ñandúes |
 | entregas@nandues.test | Entregas Los Ñandúes |
 | club@sauce.test | Administración del club El Sauce |
+| club@virreyes-demo.test | Administración del club del piloto demo |
 
-Tienda: `/club/los-nandues-rugby` · Campaña: `/club/los-nandues-rugby/coleccion-2026`. Para probar pagos online sin credenciales, `PAYMENT_SIMULATOR=enabled`.
+Tienda: `/club/los-nandues-rugby` · Campaña: `/club/los-nandues-rugby/coleccion-2026` · Piloto: `/club/demo-virreyes-rugby/verano-demo`. Para probar pagos online sin credenciales, `PAYMENT_SIMULATOR=enabled`.
 
 ## Despliegue en Coolify
 
 1. **Recurso nuevo → Docker Compose** apuntando a este repositorio (rama `main`). El `docker-compose.yml` levanta la app y PostgreSQL 16 con volúmenes persistentes (`/data` para imágenes y comprobantes, y los datos de la base).
    - Si ya tenés una base PostgreSQL en Coolify, usá el build pack **Dockerfile**, montá un volumen persistente en `/data` y completá `DATABASE_URL`.
-2. **Variables de entorno** (ver `.env.example`): `APP_URL` (dominio público con https), `APP_ENCRYPTION_KEY` (32 bytes base64, no cambiarla después), `CRON_SECRET`, `POSTGRES_PASSWORD`. Opcionales: `SMTP_URL`, `MAIL_FROM`, `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `SEED_DEMO=1` (solo el primer arranque, carga la demo si la base está vacía).
+2. **Variables de entorno** (ver `.env.example`): `APP_URL` (dominio público con https), `APP_ENCRYPTION_KEY` (32 bytes base64, no cambiarla después), `CRON_SECRET`, `POSTGRES_PASSWORD`. Opcionales: `TEXTIL_BRAND` (marca para la línea "Club by Marca"), `SMTP_URL`, `MAIL_FROM`, `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`, `SEED_DEMO=1` (solo el primer arranque, carga la demo si la base está vacía).
 3. **Dominio**: asignalo al servicio `app`, puerto 3000. Healthcheck: `/api/health`.
 4. **Tarea programada** (Scheduled Tasks del servicio `app`, cada 5 minutos):
    ```
    node -e "fetch('http://127.0.0.1:3000/api/cron/mantenimiento',{method:'POST',headers:{Authorization:'Bearer '+process.env.CRON_SECRET}}).then(r=>r.text()).then(console.log)"
    ```
-   Vence reservas sin pago, cierra campañas por fecha y envía correos pendientes.
+   Vence reservas sin pago, cierra campañas por fecha, avisa vencimientos de acuerdos y envía correos pendientes.
 5. Al iniciar, el contenedor aplica `prisma migrate deploy` y luego arranca `server.js`.
 6. Respaldos: base de datos (backups de Coolify) y volumen `/data`.
 
@@ -98,15 +108,11 @@ MP_API_BASE=http://127.0.0.1:4010 ORDER_RATE_LIMIT=1000 PAYMENT_SIMULATOR=enable
 MOCK_MP_TOKEN=TEST-0000000000000000000000-mock npm run verify
 ```
 
-28 escenarios: varios jugadores y talles, conjuntos con talles independientes, personalización por unidad, seña y saldo, comprobantes rechazados y reemplazados, eventos de pago duplicados y concurrentes, rechazo y reintento, firma inválida, reembolso, cierre de campaña, mínimo no alcanzado, consolidación sin duplicar componentes, lotes de ajuste, entregas parcial y con excepción, aislamiento entre clubes y roles, cupos concurrentes (40 compras simultáneas, cupo 25), edición de prendas antes y después de fabricar, recuperación del enlace del pedido y gestión de contraseñas. Resultado en `docs/VERIFICACION.md`.
+44 escenarios. Modelo v2: anticipo $10.000 / final $13.000 / saldo $3.000, varios ítems con adicionales, anticipo aprobado con saldo pendiente, final = textil, categoría completa de 11 con aprobación excepcional, compra inicial de 15 editable, personalización condicional por unidad, consolidación de prendas base y trabajos de personalización, envío consolidado y recepción en el club, saldo al club y retiro, conciliación de Mercado Pago, conservación de pedidos anteriores, acuerdos y páginas por rol. Modelo anterior: varios jugadores y talles, conjuntos con talles independientes, personalización por unidad, seña y saldo, comprobantes rechazados y reemplazados, eventos de pago duplicados y concurrentes, rechazo y reintento, firma inválida, reembolso, cierre de campaña, mínimo no alcanzado, consolidación sin duplicar componentes, lotes de ajuste, entregas parcial y con excepción, aislamiento entre clubes y roles, cupos concurrentes (40 compras simultáneas, cupo 25), edición de prendas antes y después de fabricar, recuperación del enlace del pedido y gestión de contraseñas. Resultado en `docs/VERIFICACION.md`.
 
 ## Decisiones comerciales pendientes
 
-- Quién absorbe la comisión de Mercado Pago y si se necesita reparto automático entre club y textil (hoy: un destinatario por campaña).
-- Política de devolución de la seña si la campaña se cancela.
-- Facturación electrónica y datos fiscales del comprador.
-- Operador logístico y costo de envío por zona (hoy: costo fijo por pedido).
-- Cambios de talle después de aprobar el lote.
+Ver la sección 4 de [`docs/REQUISITOS.md`](docs/REQUISITOS.md) (transporte al club, reparto de adicionales, política de cambios de leyendas, mínimo de outfit, respaldo, conciliación, marca, datos del club piloto). Además: facturación electrónica y devoluciones del anticipo si se cancela una campaña.
 
 ## Notas técnicas
 

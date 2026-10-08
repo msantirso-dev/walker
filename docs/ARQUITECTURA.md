@@ -75,18 +75,24 @@ Club ─┬─ ClubSport ── Sport
       ├─ PaymentAccount (dueño: textil o club; datos bancarios; credenciales MP cifradas)
       ├─ Garment (prenda fabricable: código, variante, material, cuidado)
       │    └─ GarmentSize (talle, grupo, orden, ancho de pecho, largo, unidad)
-      ├─ Product (lo que se vende: simple, conjunto o combo)
+      ├─ Product (lo que se vende: simple, conjunto o combo; estado de catálogo, familia, técnica)
+      │    ├─ ProductOptionGroup ─ ProductOptionValue (configurador: elección/texto/número, dependencias, precio textil y club)
       │    ├─ ProductComponent → Garment     (un producto simple tiene 1 componente)
       │    └─ ProductImage (vista + etiqueta REAL | DISEÑO | REFERENCIA)
-      └─ Campaign (ventana, seña, mínimo, cupo, retiro/envío, políticas, cuenta de cobro)
-           ├─ CampaignProduct (precio de preventa, precio de lista, cupo)
+      ├─ ClubAgreement (acuerdo privado: exclusividad, fechas, línea de marca, contrato adjunto, alertas)
+      ├─ SizeSampleSet (curva del muestrario) ─ SizeSampleItem; ProductSampleLink (equivalencia aprobada)
+      ├─ ClubPurchase (muestrario | compra inicial | respaldo) ─ ClubPurchaseItem (talles)
+      └─ Campaign (modelo de precios, alcance, solicitud/autorización, ventana, mínimo, cupo, políticas, cuenta de cobro)
+           ├─ CampaignProduct (precio textil, precio al socio o recargo, cupo, regla de producción)
+           ├─ ClubShipment (envío consolidado al club; agrupa lotes)
            ├─ BenefitRule (fijo por prenda | % sobre precio de prendas)
            ├─ BenefitSettlement (liquidaciones registradas)
            ├─ Order ─┬─ Buyer (por club, por email)
            │         ├─ Player (nombre, deporte, categoría, equipo)
-           │         ├─ OrderUnit (1 fila = 1 producto vendido; snapshot de precio, jugador, personalización, beneficio)
-           │         │    └─ OrderUnitComponent (prenda, código, variante, talle elegido)
-           │         ├─ Payment (seña | saldo | total | devolución; transferencia | MP | efectivo)
+           │         ├─ OrderUnit (1 fila = 1 producto vendido; snapshot de precio al socio y textil, jugador, opciones, sin cambio de talle)
+           │         │    ├─ OrderUnitComponent (prenda, código, variante, talle elegido)
+           │         │    └─ OrderUnitOption (grupo, valor, precio textil y club al momento de comprar)
+           │         ├─ Payment (anticipo | saldo al club | seña | saldo | total | devolución; quién cobra; conciliación MP)
            │         │    └─ Receipt (comprobante; historial de reemplazos)
            │         └─ Delivery (quién retiró, cuándo, unidades, excepción con motivo)
            └─ ProductionLot (versión, estado, snapshot congelado al aprobar; principal o ajuste)
@@ -104,13 +110,17 @@ Decisiones clave:
 
 ### 2.1 Estados
 
-- Campaña: `BORRADOR → PUBLICADA → CERRADA → EN_PRODUCCIÓN → LISTA_PARA_RETIRO → FINALIZADA`, o `CANCELADA`. La compra solo se habilita si está publicada y dentro de la ventana (hora de Argentina).
+- Campaña: `BORRADOR → ACTIVACIÓN_SOLICITADA → ACTIVACIÓN_APROBADA → PUBLICADA → CERRADA → EN_PRODUCCIÓN → LISTA_PARA_RETIRO → FINALIZADA`, o `CANCELADA` (las del modelo anterior pasan de borrador a publicada). La compra solo se habilita si está publicada y dentro de la ventana (hora de Argentina).
+- Producto en catálogo: `PREPARACIÓN | CATÁLOGO_SIN_VENTA | PREVENTA_ACTIVA | PREVENTA_CERRADA | ARCHIVADO`.
+- Envío al club: `EN_PREPARACIÓN → DESPACHADO → RECIBIDO` (al recibirlo, sus lotes pasan a "recibido por el club").
 - Pago: `CREADO → PENDIENTE | EN_REVISIÓN → APROBADO | RECHAZADO | CANCELADO | VENCIDO | DEVUELTO`.
 - Lote: `PENDIENTE_APROBACIÓN → APROBADO → EN_PRODUCCIÓN → CONTROL_CALIDAD → LISTO_DESPACHO → RECIBIDO_POR_CLUB`.
 
 ### 2.2 Importes visibles
 
 Por pedido se muestran por separado: **total**, **confirmado** (pagos aprobados − devoluciones), **en revisión** (comprobantes sin revisar) y **saldo adeudado** (total − confirmado). Un comprobante en revisión nunca reduce el saldo.
+
+En el modelo v2 (`pricingModel = TEXTIL_ADVANCE`) además: **anticipo** requerido y acreditado (lo cobra la textil por Mercado Pago) y **saldo al club** requerido y registrado (lo cobra el club fuera de la plataforma). El pedido se confirma con el anticipo; nunca figura "pagado" con saldo al club pendiente.
 
 ---
 
@@ -170,6 +180,8 @@ Por pedido se muestran por separado: **total**, **confirmado** (pagos aprobados 
 
 ## 5. Supuestos comerciales
 
+> Esta sección describe el **modelo anterior (seña)**, que se conserva para las campañas existentes. Las campañas nuevas usan el modelo v2: ver la sección 6 y `docs/REQUISITOS.md`.
+
 1. **Un destinatario de cobro por campaña** (textil o club). Sin reparto automático. **[Definir]** modelo de split si se requiere (Mercado Pago marketplace/OAuth).
 2. Seña por defecto **50 %** sobre prendas + personalización; el **envío se cobra con el saldo**. Configurable: porcentaje o importe fijo, o pago total obligatorio, o elección del comprador.
 3. El pedido queda **confirmado** cuando lo confirmado ≥ seña requerida. Por defecto, el lote incluye pedidos con seña aprobada (configurable: solo pagos completos).
@@ -185,7 +197,16 @@ Por pedido se muestran por separado: **total**, **confirmado** (pagos aprobados 
 
 ---
 
-## 6. Alcance del MVP
+## 6. Modelo comercial v2 (desde 08/10/2026)
+
+Las reglas, supuestos y definiciones pendientes están en `docs/REQUISITOS.md`. Resumen técnico:
+
+- `Campaign.pricingModel`: `TEXTIL_ADVANCE` (nuevas) o `LEGACY_DEPOSIT` (las existentes, migradas sin cambios). `Order.pricingModel` se copia al comprar y no cambia.
+- Anticipo = Σ (precio textil + parte textil de adicionales). Saldo club = total − anticipo. Ambos se guardan en el pedido; `Payment.receiver` distingue TEXTIL o CLUB y `recomputeOrder` acumula por destinatario.
+- Módulos nuevos: `campaigns/rules` (activación, precios, reglas, alcance), `catalog/options` (configurador compartido cliente/servidor) y `catalog/admin`, `agreements`, `samples` (muestrario y compras), `logistics` (envíos, remito, distribución).
+- La migración `20261008030000_modelo_comercial_v2` crea las tablas nuevas, marca todo lo anterior como `LEGACY_DEPOSIT` y convierte la personalización de cada producto en grupos de opciones.
+
+## 7. Alcance del MVP
 
 | Funcionalidad | Estado previsto |
 |---|---|
@@ -197,5 +218,8 @@ Por pedido se muestran por separado: **total**, **confirmado** (pagos aprobados 
 | Lotes de producción, versiones y ajustes, exportación | Real |
 | Entregas totales y parciales, código y QR de retiro | Real |
 | Beneficio del club y liquidaciones | Real (registro interno) |
+| Anticipo textil + saldo al club, activación de campañas, reglas por producto | Real |
+| Acuerdos, muestrario, compras del club, envío consolidado, remito y distribución | Real |
+| Integración con transportes y firma electrónica | No incluido (se registran como datos) |
 | Correos | Plantillas reales; envío **pendiente de SMTP** (se registra "no enviado" si falta) |
 | Devoluciones vía API de Mercado Pago | Pendiente (se registran manualmente) |
