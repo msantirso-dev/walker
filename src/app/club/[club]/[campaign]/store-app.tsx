@@ -569,10 +569,20 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
   );
 }
 
+/** Catálogo de talles de la textil con medidas de todas sus prendas. */
+const SIZE_GUIDE_URL = "/brand/guia-talles-wkr26.pdf";
+
 function SizeChart({ c }: { c: StoreComponent }) {
   const hasMeasures = c.sizes.some((s) => s.a != null || s.b != null);
-  if (!hasMeasures) return null;
+  const sized = c.sizes.some((s) => s.group !== "OTHER");
+  const guide = sized ? (
+    <a href={SIZE_GUIDE_URL} target="_blank" rel="noopener" className="mt-1 block text-sm font-semibold underline">
+      Guía de talles Walkersport (PDF)
+    </a>
+  ) : null;
+  if (!hasMeasures) return guide;
   return (
+    <>
     <details className="mt-2">
       <summary className="cursor-pointer text-sm font-semibold underline">Tabla de medidas · {c.label.toLowerCase()}</summary>
       <div className="tbl-wrap mt-2 rounded-lg border border-line">
@@ -587,6 +597,8 @@ function SizeChart({ c }: { c: StoreComponent }) {
       </div>
       {c.note && <p className="mt-1 text-xs text-muted">{c.note}</p>}
     </details>
+    {guide}
+    </>
   );
 }
 
