@@ -1,29 +1,37 @@
-<title>Tienda Los Ñandúes RC</title>
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Demostración de la tienda de preventa con anticipo textil y saldo al club (datos de ejemplo).">
+<meta name="robots" content="noindex">
+<title>Tienda demo Virreyes</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
 /* Layout: banda de club con aros de rugby arriba; colección en grilla; carrito persistente por jugador; barra inferior en celular */
 :root{
-  --paper:#F1F4EE; --surface:#FFFFFF; --ink:#10231C; --muted:#56665E; --line:#D3DCD5;
-  --club:#0F4D3A; --club-deep:#0A3A2B; --gold:#D9A520; --on-club:#F6F3E4; --gold-ink:#3B2C05;
-  --ok:#1F7A4D; --warn:#9A6400; --danger:#B42318; --chip:#E4EBE5;
+  --paper:#EEF2F5; --surface:#FFFFFF; --ink:#101C28; --muted:#55626F; --line:#D2DAE2;
+  --club:#1D3557; --club-deep:#14263F; --gold:#A8DADC; --on-club:#F4F7FA; --gold-ink:#0F2236;
+  --ok:#1F7A4D; --warn:#9A6400; --danger:#B42318; --chip:#E3EAF0;
   --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
   --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
   --r:10px;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --paper:#0B1712; --surface:#12221B; --ink:#E6EDE8; --muted:#97A89F; --line:#26392F;
-  --club:#145C45; --club-deep:#0C3D2E; --gold:#E6B84A; --on-club:#F6F3E4; --gold-ink:#2A1F03;
-  --ok:#4FBF85; --warn:#E0A53A; --danger:#F07167; --chip:#1B2E25; color-scheme:dark}}
+  --paper:#0B121A; --surface:#121D29; --ink:#E6ECF2; --muted:#98A6B4; --line:#263545;
+  --club:#2A4A73; --club-deep:#1A3150; --gold:#A8DADC; --on-club:#F4F7FA; --gold-ink:#0F2236;
+  --ok:#4FBF85; --warn:#E0A53A; --danger:#F07167; --chip:#1B2A3A; color-scheme:dark}}
 :root[data-theme="dark"]{
-  --paper:#0B1712; --surface:#12221B; --ink:#E6EDE8; --muted:#97A89F; --line:#26392F;
-  --club:#145C45; --club-deep:#0C3D2E; --gold:#E6B84A; --on-club:#F6F3E4; --gold-ink:#2A1F03;
-  --ok:#4FBF85; --warn:#E0A53A; --danger:#F07167; --chip:#1B2E25; color-scheme:dark}
+  --paper:#0B121A; --surface:#121D29; --ink:#E6ECF2; --muted:#98A6B4; --line:#263545;
+  --club:#2A4A73; --club-deep:#1A3150; --gold:#A8DADC; --on-club:#F4F7FA; --gold-ink:#0F2236;
+  --ok:#4FBF85; --warn:#E0A53A; --danger:#F07167; --chip:#1B2A3A; color-scheme:dark}
 
 *{box-sizing:border-box}
-body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.5;padding-bottom:84px}
+img{max-width:100%}[hidden]{display:none!important}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.5;padding-bottom:84px}
 h1,h2,h3{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.01em;line-height:.95;margin:0;text-wrap:balance}
 p{margin:0}
 button,input,select{font:inherit;color:inherit}
@@ -208,103 +216,97 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px}
   .hero-art svg{animation:rise .7s ease-out both}
   @keyframes rise{from{transform:translateY(14px)}to{transform:none}}
 }
-</style>
 
-<div class="sample">Muestra de diseño: club ficticio, ningún dato es real y no se procesan pagos.</div>
+
+.demo{background:var(--ink);color:var(--paper);font-size:.85rem;font-weight:600;text-align:center;padding:8px 16px}
+.split{font-size:.82rem;color:var(--muted)}
+.sample-note{display:flex;gap:10px;align-items:flex-start;background:color-mix(in srgb,var(--gold) 30%,var(--surface));border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
+.soon{position:absolute;left:10px;bottom:10px;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:4px;background:var(--ink);color:var(--paper)}
+.stepn{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--club);color:var(--on-club);font-size:.85rem;margin-right:8px}
+.notice{background:color-mix(in srgb,var(--gold) 28%,var(--surface));border-radius:8px;padding:10px 12px;font-size:.9rem;margin-top:10px}
+.mini{background:var(--chip);border-radius:8px;padding:12px;margin-top:18px}
+.mini div{display:flex;justify-content:space-between;gap:12px;font-size:.95rem}
+.who{font-size:.8rem;color:var(--muted);margin:-2px 0 4px}
+.states{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.pill{border-radius:999px;padding:4px 12px;font-weight:700;font-size:.85rem;background:var(--chip)}
+.pill.ok{background:color-mix(in srgb,var(--ok) 18%,var(--surface));color:var(--ok)}
+.pill.warn{background:color-mix(in srgb,var(--warn) 18%,var(--surface));color:var(--warn)}
+</style>
+</head>
+<body>
+
+<div class="demo" role="note">DEMOSTRACIÓN · Club, productos y precios de ejemplo. No es una tienda oficial ni una venta real; no se procesan pagos.</div>
 
 <header class="hero">
   <div class="hoops" aria-hidden="true"></div>
   <div class="wrap hero-inner">
     <div>
       <div class="clubbar">
-        <svg class="crest" viewBox="0 0 52 60" aria-hidden="true"><path d="M2 4h48v26c0 15-11 23-24 28C13 53 2 45 2 30Z" fill="var(--gold)"/><path d="M7 9h38v21c0 11.5-8.4 18.3-19 22.4C15.4 48.3 7 41.5 7 30Z" fill="var(--club-deep)"/><text x="26" y="36" text-anchor="middle" font-family="Barlow Condensed,Arial Narrow,sans-serif" font-weight="800" font-size="20" fill="var(--gold)">LÑ</text></svg>
-        <div class="clubname">Los Ñandúes Rugby Club<small>Sede Benavídez · Tigre, Buenos Aires</small></div>
+        <svg class="crest" viewBox="0 0 52 60" aria-hidden="true"><path d="M2 4h48v26c0 15-11 23-24 28C13 53 2 45 2 30Z" fill="var(--gold)"/><path d="M7 9h38v21c0 11.5-8.4 18.3-19 22.4C15.4 48.3 7 41.5 7 30Z" fill="var(--club-deep)"/><text x="26" y="36" text-anchor="middle" font-family="Barlow Condensed,Arial Narrow,sans-serif" font-weight="800" font-size="20" fill="var(--gold)">V</text></svg>
+        <div class="clubname">Rugby de Virreyes (demo)<small>Escudo genérico y colores provisorios · Virreyes, Buenos Aires</small></div>
       </div>
-      <div class="status"><i></i>Preventa abierta hasta el viernes 31 de octubre, 23:59</div>
-      <h1>Colección<br>oficial <span>2026</span></h1>
-      <p class="lead">Indumentaria del club fabricada a pedido. Reservás con una seña del 50 %, la fábrica produce solo lo vendido y retirás en la sede cuando completás el saldo.</p>
+      <div class="status"><i></i>Preventa abierta (fechas de ejemplo)</div>
+      <h1>Verano<br><span>demo</span></h1>
+      <p class="lead">Así se vería una preventa del club: pagás el anticipo con Mercado Pago, la textil fabrica solo lo vendido, toda la producción llega a la sede y, si corresponde, el saldo se paga al club.</p>
       <div class="facts">
-        <div class="fact"><b>31 OCT</b><span>Cierre de la preventa</span></div>
-        <div class="fact"><b>30 a 40 días</b><span>Entrega desde el cierre</span></div>
-        <div class="fact"><b>50 %</b><span>Seña para reservar</span></div>
+        <div class="fact"><b>Anticipo</b><span>Al comprar, por Mercado Pago</span></div>
+        <div class="fact"><b>30 a 45 días</b><span>Entrega estimada desde el cierre</span></div>
+        <div class="fact"><b>En el club</b><span>Sin envío a domicilio</span></div>
       </div>
     </div>
     <div class="hero-art">
-      <div class="big" aria-hidden="true">26</div>
+      <div class="big" aria-hidden="true">V</div>
       <span class="tag">Diseño</span>
-      <div id="heroJersey"></div>
+      <div id="heroArt"></div>
     </div>
   </div>
 </header>
 
 <main>
   <section class="wrap" aria-labelledby="como">
-    <div class="sec-head"><div><div class="eyebrow">Cómo funciona</div><h2 id="como">De la reserva al retiro</h2></div></div>
+    <div class="sec-head"><div><div class="eyebrow">Cómo funciona</div><h2 id="como">Configurás, anticipás y retirás en el club</h2></div></div>
     <ol class="steps">
-      <li class="paid"><div class="n">PASO 1</div><h3>Elegís</h3><p>Prendas, talles y el jugador de cada una. Podés comprar para varios hijos en un solo pedido.</p></li>
-      <li class="paid"><div class="n">PASO 2</div><h3>Reservás</h3><p>Pagás el 50 % con Mercado Pago o transferencia. Tu pedido queda confirmado al acreditarse.</p></li>
+      <li class="paid"><div class="n">PASO 1</div><h3>Configurás</h3><p>Producto, talle, jugador y personalización. Varios hijos en un solo pedido.</p></li>
+      <li class="paid"><div class="n">PASO 2</div><h3>Anticipás</h3><p>Pagás el anticipo con Mercado Pago. El pedido se confirma al acreditarse.</p></li>
       <li><div class="n">PASO 3</div><h3>Fabricamos</h3><p>Al cierre se consolida la orden y se produce solo lo que se pidió.</p></li>
-      <li><div class="n">PASO 4</div><h3>Completás</h3><p>Te avisamos cuando las prendas llegan al club y pagás el saldo.</p></li>
-      <li><div class="n">PASO 5</div><h3>Retirás</h3><p>En la sede, con tu código de retiro, en los horarios publicados.</p></li>
+      <li><div class="n">PASO 4</div><h3>Llega al club</h3><p>Toda la producción se entrega en la sede. Si hay saldo, se paga al club.</p></li>
+      <li><div class="n">PASO 5</div><h3>Retirás</h3><p>En la sede, con tu código de retiro, en los horarios del club.</p></li>
     </ol>
   </section>
 
-  <section class="wrap" aria-labelledby="coleccion" style="padding-top:8px">
+  <div class="wrap"><div class="sample-note"><span aria-hidden="true">👕</span><div><b>Podés probarte el muestrario en el club antes de elegir tu talle.</b> <span class="split">Curvas superior e inferior en la secretaría del club (dato de ejemplo).</span></div></div></div>
+
+  <section class="wrap" aria-labelledby="coleccion" style="padding-top:28px">
     <div class="sec-head">
-      <div><div class="eyebrow">Precios de preventa</div><h2 id="coleccion">La colección</h2></div>
-      <p class="note" style="margin:0;max-width:40ch">Las imágenes marcadas “Diseño” son renders del modelo final. Las fotos reales se publican al recibir la muestra.</p>
+      <div><div class="eyebrow">Precios de ejemplo</div><h2 id="coleccion">La colección</h2></div>
+      <p class="split" style="max-width:46ch">Cada producto muestra el precio al socio, el anticipo que se paga ahora y el saldo que se paga al club.</p>
     </div>
     <div class="grid" id="grid"></div>
-  </section>
-
-  <section class="wrap" aria-labelledby="medidas">
-    <div class="measure">
-      <div class="how">
-        <div class="eyebrow">Tabla de medidas</div>
-        <h2 id="medidas" style="font-size:clamp(2rem,5vw,2.8rem);font-weight:800">Cómo elegir el talle</h2>
-        <p>Las medidas son de la prenda extendida, no del cuerpo. Tomá una remera que te quede bien, apoyala sobre una mesa y medí el ancho de pecho de costura a costura, 2 cm debajo de la sisa, y el largo desde el hombro hasta el ruedo.</p>
-        <p>Los talles 1, 2 y 3 son una curva propia del club: no equivalen a S, M o L. Si quedás entre dos talles, elegí el mayor.</p>
-        <svg viewBox="0 0 280 200" role="img" aria-label="Esquema de medición: ancho de pecho y largo">
-          <path d="M84 20 L118 10 Q140 24 162 10 L196 20 L254 52 L236 96 L208 84 L208 188 L72 188 L72 84 L44 96 L26 52 Z" fill="var(--chip)" stroke="var(--muted)" stroke-width="2"/>
-          <line x1="72" y1="100" x2="208" y2="100" stroke="var(--gold)" stroke-width="3"/>
-          <path d="M72 100 l8 -5 v10 Z M208 100 l-8 -5 v10 Z" fill="var(--gold)"/>
-          <text x="140" y="94" text-anchor="middle" font-family="Barlow,sans-serif" font-weight="700" font-size="13" fill="var(--ink)">A · Ancho de pecho</text>
-          <line x1="226" y1="22" x2="226" y2="188" stroke="var(--club)" stroke-width="3" stroke-dasharray="6 4"/>
-          <text x="246" y="130" font-family="Barlow,sans-serif" font-weight="700" font-size="13" fill="var(--ink)" transform="rotate(90 246 130)" text-anchor="middle">B · Largo</text>
-        </svg>
-      </div>
-      <div>
-        <div class="seg" id="chartSeg" role="group" aria-label="Prenda"></div>
-        <div class="tablebox"><table><thead id="chartHead"></thead><tbody id="chartBody"></tbody></table></div>
-        <p class="note">Tolerancia de fabricación ± 1 cm.</p>
-      </div>
-    </div>
   </section>
 
   <section class="wrap" aria-labelledby="pedido" id="pedido-sec">
     <div class="sec-head"><div><div class="eyebrow">Tu pedido</div><h2 id="pedido">Carrito por jugador</h2></div></div>
     <div class="order">
-      <div class="panel">
-        <h3>Prendas</h3>
-        <div id="cart"></div>
-      </div>
+      <div class="panel" id="cart"></div>
       <form class="panel" id="checkout" novalidate>
         <h3>Datos y pago</h3>
-        <div class="field"><label for="bName">Nombre y apellido</label><input id="bName" autocomplete="name" required></div>
+        <div class="field"><label for="bName">Nombre y apellido</label><input id="bName" autocomplete="name"></div>
         <div class="row2">
-          <div class="field"><label for="bEmail">Correo</label><input id="bEmail" type="email" autocomplete="email" required></div>
-          <div class="field"><label for="bPhone">Celular</label><input id="bPhone" type="tel" autocomplete="tel" placeholder="11 5555 5555" required></div>
+          <div class="field"><label for="bEmail">Correo</label><input id="bEmail" type="email" autocomplete="email"></div>
+          <div class="field"><label for="bPhone">Celular</label><input id="bPhone" type="tel" autocomplete="tel" placeholder="11 5555 5555"></div>
         </div>
-        <div class="field"><label for="bMember">N.º de socio <small>(opcional, declarativo)</small></label><input id="bMember" inputmode="numeric"></div>
-        <div class="field"><span style="font-weight:600;font-size:.92rem">Entrega</span>
-          <label class="radio"><input type="radio" name="dl" value="pickup" id="dlPickup" checked><span><b>Retiro en sede</b> · sin costo<br><small style="color:var(--muted)">Av. Los Ñandúes 1450, Benavídez. Martes y jueves de 18 a 21, sábados de 9 a 13.</small></span></label>
-          <label class="radio"><input type="radio" name="dl" value="ship" id="dlShip"><span><b>Envío a domicilio</b> · $ 9.500<br><small style="color:var(--muted)">Se cobra junto con el saldo.</small></span></label>
+        <div class="field"><label>Entrega</label>
+          <div class="radio" style="cursor:default"><span><b>Retiro en el club</b><br><span class="split">La producción completa se entrega en la sede. Te avisamos cuando esté disponible.</span></span></div>
         </div>
-        <div class="field" id="addrField" hidden><label for="bAddr">Dirección de envío</label><input id="bAddr" autocomplete="street-address"></div>
+        <div class="field"><label>Pago del anticipo</label>
+          <label class="radio"><input type="radio" checked name="pm"><span><b>Mercado Pago</b><br><span class="split">El pago y las opciones de financiación se gestionan mediante Mercado Pago. Consultá las condiciones disponibles al pagar.</span></span></label>
+          <small class="split">El anticipo lo cobra la textil. El saldo, si corresponde, se paga al club.</small>
+        </div>
         <div class="sum num" id="sum"></div>
-        <label class="check"><input type="checkbox" id="terms"><span>Acepto las condiciones de la preventa: la seña confirma la fabricación, el saldo se paga antes del retiro y los cambios de talle se aceptan hasta el cierre.</span></label>
-        <div class="err" id="formErr" hidden></div>
-        <button class="btn btn-club btn-block" type="submit" id="goReview">Revisar pedido</button>
+        <label class="check" id="policyRow" hidden><input type="checkbox" id="policy"><span><b>Política de cambios.</b> Las prendas con nombre o número estampado no admiten cambio de talle. Esto no afecta los reclamos por fallas de fabricación o errores de la textil.</span></label>
+        <label class="check"><input type="checkbox" id="terms"><span>Leí y acepto las condiciones de la preventa y el uso de mis datos solo para gestionar este pedido.</span></label>
+        <p class="err" id="formErr" role="alert" hidden></p>
+        <button class="btn btn-club btn-block" type="submit">Revisar pedido</button>
       </form>
     </div>
   </section>
@@ -312,297 +314,225 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px}
   <section class="wrap" aria-labelledby="faq">
     <div class="sec-head"><div><div class="eyebrow">Preguntas frecuentes</div><h2 id="faq">Antes de comprar</h2></div></div>
     <div class="faq">
-      <details><summary>¿Qué pasa si no se llega al mínimo de producción?</summary><p>El club y la fábrica deciden entre extender la preventa, cancelarla o producir igual, y lo informan por correo. Si se cancela, la devolución de la seña se coordina con cada comprador.</p></details>
-      <details><summary>¿Puedo comprar para dos hijos en el mismo pedido?</summary><p>Sí. Cada prenda queda asociada a su jugador, con su categoría, para que la entrega en el club sea ordenada.</p></details>
-      <details><summary>¿Cuándo se confirma mi pedido?</summary><p>Cuando se acredita la seña. Con transferencia, al aprobarse el comprobante; un comprobante cargado queda en revisión hasta entonces.</p></details>
-      <details><summary>¿Puedo cambiar el talle?</summary><p>Hasta el cierre de la preventa, escribiendo al club. Después la orden ya está en fábrica.</p></details>
-      <details><summary>¿Cómo pago el saldo?</summary><p>Con el mismo enlace privado de tu pedido, por Mercado Pago o transferencia, cuando te avisemos que las prendas llegaron.</p></details>
-      <details><summary>¿Qué cubre la garantía?</summary><p>Fallas de costura o estampado con uso normal. Lavar con agua fría, del revés, sin suavizante y sin planchar sobre el estampado.</p></details>
-    </div>
-    <div class="contact">
-      <div><b>WhatsApp del club</b><span>11 4000-1450</span></div>
-      <div><b>Correo</b><span>tienda@losnandues.example</span></div>
-      <div><b>Instagram</b><span>@losnandues.rc</span></div>
+      <details><summary>¿Qué pago ahora y qué pago después?</summary><p>Ahora pagás el anticipo (precio de la textil más la parte textil de los adicionales) con Mercado Pago. Si el precio al socio es mayor, la diferencia es un saldo que pagás directamente al club antes de retirar.</p></details>
+      <details><summary>¿Hay cuotas?</summary><p>El pago y las opciones de financiación se gestionan mediante Mercado Pago. Consultá las condiciones disponibles al pagar.</p></details>
+      <details><summary>¿Hay envío a domicilio?</summary><p>No. Toda la producción se entrega en el club y la retirás en la sede con tu código.</p></details>
+      <details><summary>¿Puedo cambiar el talle?</summary><p>Las prendas con nombre o número estampado no admiten cambio de talle (salvo fallas o errores de la textil). Para el resto depende de la política del club y de las unidades disponibles. Probate el muestrario antes de elegir.</p></details>
+      <details><summary>¿Es una tienda real?</summary><p>No. Es una demostración con datos de ejemplo; el club no la respalda ni la aprobó todavía.</p></details>
+      <details><summary>¿Cuándo se confirma mi pedido?</summary><p>Cuando se acredita el anticipo. Volver de Mercado Pago no alcanza: la confirmación llega del propio Mercado Pago.</p></details>
     </div>
   </section>
 </main>
 
-<footer><div class="wrap"><span>Tienda oficial de Los Ñandúes Rugby Club</span><span>Fabricación y gestión: Camada · Preventa de indumentaria para clubes</span></div></footer>
+<footer><div class="wrap"><span>Demostración para Rugby de Virreyes · datos de ejemplo</span><span>Fabricación y gestión: Camada</span></div></footer>
 
-<div class="bar" id="bar"><div class="wrap">
-  <div><div class="t" id="barT">Tu pedido está vacío</div><b class="num" id="barTotal">$ 0</b></div>
-  <a class="btn btn-gold" href="#pedido-sec" id="barBtn">Ver pedido</a>
-</div></div>
-
+<div class="bar"><div class="wrap"><div><div class="t" id="barT">Tu pedido está vacío</div><b class="num" id="barTot">$ 0</b></div><a href="#pedido-sec" class="btn btn-gold">Ver pedido</a></div></div>
+<div class="toast" id="toast" role="status" hidden></div>
 <div id="modalRoot"></div>
-<div class="toast" id="toast" hidden></div>
 
 <script>
 (() => {
-  const ARS = n => "$ " + n.toLocaleString("es-AR");
-  const $ = s => document.querySelector(s);
-  const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const $ = (s, r = document) => r.querySelector(s);
+  const ARS = (n) => "$ " + n.toLocaleString("es-AR");
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const NAME_RE = /^[A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ .'-]*$/;
 
-  /* ---------- Ilustraciones (diseño) ---------- */
-  const JERSEY = "M60 22 L86 13 Q100 26 114 13 L140 22 L184 48 L170 86 L150 76 L150 206 L50 206 L50 76 L30 86 L16 48 Z";
-  let uid = 0;
-  function jersey({base, hoop, hoops = 0, stripe, collar = "var(--gold)"}) {
-    const id = "j" + (++uid);
-    let bands = "";
-    for (let i = 0; i < hoops; i++) bands += `<rect x="0" y="${70 + i * 34}" width="200" height="15" fill="${hoop}"/>`;
-    if (stripe) bands += `<rect x="0" y="96" width="200" height="22" fill="${stripe}"/>`;
-    return `<svg viewBox="0 0 200 220" aria-hidden="true"><defs><clipPath id="${id}"><path d="${JERSEY}"/></clipPath></defs>
-      <path d="${JERSEY}" fill="${base}"/><g clip-path="url(#${id})">${bands}</g>
-      <path d="M86 13 Q100 26 114 13 L110 30 Q100 36 90 30 Z" fill="${collar}"/>
-      <path d="${JERSEY}" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="2"/></svg>`;
-  }
-  function hoodie() {
-    const P = "M62 22 L88 14 Q100 22 112 14 L138 22 L170 50 L192 186 L166 192 L150 92 L150 206 L50 206 L50 92 L34 192 L8 186 L30 50 Z";
-    return `<svg viewBox="0 0 200 220" aria-hidden="true"><path d="${P}" fill="#14473A"/>
-      <rect x="50" y="190" width="100" height="16" fill="#0E3A2E"/><path d="M100 18 V96" stroke="#D9A520" stroke-width="4"/>
-      <circle cx="100" cy="98" r="5" fill="#D9A520"/><path d="M88 14 Q100 30 112 14 L114 34 Q100 40 86 34 Z" fill="#0E3A2E"/>
-      <rect x="112" y="64" width="18" height="18" rx="3" fill="#D9A520" opacity=".9"/>
-      <path d="${P}" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="2"/></svg>`;
-  }
-  function set() {
-    const S = "M20 20 H110 L116 120 L74 124 L66 66 L58 124 L14 120 Z";
-    return `<svg viewBox="0 0 320 220" aria-hidden="true"><g transform="translate(0,0) scale(.95)">${jersey({base:"#0F4D3A",hoop:"#D9A520",hoops:4}).replace(/^<svg[^>]*>|<\/svg>$/g,"")}</g>
-      <g transform="translate(196,48)"><path d="${S}" fill="#F3F1EA"/><rect x="20" y="20" width="90" height="10" fill="#0F4D3A"/><path d="${S}" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="2"/></g></svg>`;
-  }
-  $("#heroJersey").innerHTML = jersey({base:"#0F4D3A",hoop:"#D9A520",hoops:4});
+  const tee = (legend) => `<svg viewBox="-20 -10 240 240" aria-hidden="true"><path d="M60 22 L86 13 Q100 22 114 13 L140 22 L176 46 L162 74 L148 66 L150 206 L50 206 L52 66 L38 74 L24 46 Z" fill="var(--club)"/><path d="M86 13 Q100 26 114 13" fill="none" stroke="var(--gold)" stroke-width="5"/>${legend ? `<text x="100" y="118" text-anchor="middle" font-family="Barlow Condensed,Arial Narrow" font-weight="800" font-size="20" fill="var(--gold)">${legend}</text>` : ""}</svg>`;
+  const short = () => `<svg viewBox="0 0 200 230" aria-hidden="true"><path d="M40 40 H160 L170 190 L112 196 L100 110 L88 196 L30 190 Z" fill="var(--club)"/><rect x="40" y="40" width="120" height="14" fill="var(--gold)"/></svg>`;
+  const tank = () => `<svg viewBox="-20 -10 240 240" aria-hidden="true"><path d="M70 14 Q100 40 130 14 L146 18 Q144 60 160 74 L160 206 L40 206 L40 74 Q56 60 54 18 Z" fill="var(--gold)"/><path d="M70 14 Q100 40 130 14" fill="none" stroke="var(--club)" stroke-width="5"/></svg>`;
+  const bag = () => `<svg viewBox="0 0 240 200" aria-hidden="true"><path d="M80 60 Q80 30 120 30 Q160 30 160 60" fill="none" stroke="var(--gold)" stroke-width="8"/><rect x="30" y="60" width="180" height="110" rx="26" fill="var(--club)"/><rect x="30" y="104" width="180" height="12" fill="var(--gold)"/></svg>`;
+  const jersey = () => `<svg viewBox="-20 -10 240 240" aria-hidden="true"><path d="M60 22 L86 13 Q100 26 114 13 L140 22 L184 48 L170 86 L150 76 L150 206 L50 206 L50 76 L30 86 L16 48 Z" fill="var(--club)"/><rect x="50" y="80" width="100" height="14" fill="var(--gold)"/><rect x="50" y="114" width="100" height="14" fill="var(--gold)"/></svg>`;
 
-  /* ---------- Catálogo ---------- */
-  const KIDS = ["4","6","8","10","12","14","16"], NUM = ["1","2","3"], ALPHA = ["S","M","L","XL","2XL","3XL","4XL","5XL"];
-  const CHART_TOP = {"4":[34,46],"6":[36,49],"8":[38,52],"10":[41,55],"12":[44,58],"14":[47,62],"16":[49,65],"1":[50,68],"2":[53,70],"3":[56,72],"S":[50,70],"M":[53,72],"L":[56,74],"XL":[59,76],"2XL":[62,78],"3XL":[65,80],"4XL":[68,82],"5XL":[71,84]};
-  const CHART_HOOD = {"4":[36,44],"6":[38,47],"8":[40,50],"10":[43,53],"12":[46,56],"14":[49,60],"16":[51,63],"S":[54,68],"M":[57,70],"L":[60,72],"XL":[63,74],"2XL":[66,76],"3XL":[69,78]};
-  const CHART_SHORT = {"4":[25,28],"6":[26,30],"8":[28,32],"10":[30,34],"12":[32,36],"14":[34,38],"16":[36,40],"S":[38,42],"M":[41,44],"L":[44,46],"XL":[47,48],"2XL":[50,50],"3XL":[53,52]};
-  const GARMENTS = {
-    camiseta: {name:"Camiseta de juego", groups:[["Infantiles",KIDS],["Curva del club",NUM],["Adultos",ALPHA]], chart:CHART_TOP, cols:["Ancho de pecho","Largo"]},
-    buzo:     {name:"Buzo medio cierre", groups:[["Infantiles",KIDS],["Adultos",ALPHA.slice(0,6)]], chart:CHART_HOOD, cols:["Ancho de pecho","Largo"]},
-    short:    {name:"Short de juego", groups:[["Infantiles",KIDS],["Adultos",ALPHA.slice(0,6)]], chart:CHART_SHORT, cols:["Medio contorno de cintura","Largo"]},
-    entreno:  {name:"Camiseta de entrenamiento", groups:[["Infantiles",KIDS],["Adultos",ALPHA.slice(0,6)]], chart:CHART_TOP, cols:["Ancho de pecho","Largo"]}
-  };
+  // Precios de ejemplo (centavos no: pesos enteros). textil = anticipo; price = precio al socio
   const PRODUCTS = [
-    {id:"tit", code:"CAM-TIT-26", name:"Camiseta titular 2026", desc:"Aros verde y oro. Tela de juego de alta resistencia con cuello reforzado.", price:48000, list:56000, comps:[["Camiseta","camiseta"]], pers:true, art:() => jersey({base:"#0F4D3A",hoop:"#D9A520",hoops:4}), tag:"Diseño"},
-    {id:"cnj", code:"CNJ-JUE-26", name:"Conjunto de juego", desc:"Camiseta titular y short. Elegís el talle de cada prenda por separado.", price:72000, list:84000, comps:[["Camiseta","camiseta"],["Short","short"]], pers:true, art:set, tag:"Diseño"},
-    {id:"buz", code:"BUZ-MC-26", name:"Buzo medio cierre", desc:"Frisa liviana, cierre metálico y escudo bordado.", price:62000, list:72000, comps:[["Buzo","buzo"]], pers:false, art:hoodie, tag:"Diseño"},
-    {id:"ent", code:"CAM-ENT-26", name:"Camiseta de entrenamiento", desc:"Blanca con franja verde. Secado rápido para la semana.", price:34000, list:39000, comps:[["Camiseta","entreno"]], pers:false, art:() => jersey({base:"#F3F1EA",stripe:"#0F4D3A",collar:"#0F4D3A"}), tag:"Referencia"}
+    { id: "rem", code: "D-REM", name: "Remera uso diario", desc: "Algodón para el día a día. Leyenda de disciplina y nombre opcionales.", art: tee, textil: 10000, price: 13000,
+      sizes: ["8", "10", "12", "14", "16", "S", "M", "L", "XL", "2XL"], sample: true,
+      groups: [
+        { id: "leg", name: "Leyenda de disciplina", type: "choice", help: "Se estampa sobre la remera base.", values: [{ id: "RUGBY", label: "RUGBY", t: 1500, c: 500 }, { id: "HOCKEY", label: "HOCKEY", t: 1500, c: 500 }] },
+        { id: "nom", name: "Nombre en la espalda", type: "text", max: 12, t: 2000, c: 0, blocks: true, dependsOn: "leg", help: "Disponible con leyenda. Con nombre, la prenda no admite cambio de talle." },
+      ] },
+    { id: "sho", code: "D-SHO", name: "Short de verano", desc: "Microfibra liviana para entrenar o usar en verano.", art: short, textil: 12000, price: 15000, sizes: ["8", "10", "12", "14", "16", "S", "M", "L", "XL", "2XL"], sample: true, groups: [] },
+    { id: "mus", code: "D-MUS", name: "Musculosa", desc: "Precio al socio igual al de la textil: sin saldo al club.", art: tank, textil: 9000, price: 9000, sizes: ["S", "M", "L", "XL", "2XL"], sample: true, groups: [] },
+    { id: "bol", code: "D-BOL", name: "Bolso", desc: "Con bolsillo para botines. Precio al socio con recargo del 30 %.", art: bag, textil: 15000, price: 19500, sizes: ["U"], groups: [] },
+    { id: "cam", code: "D-CAM", name: "Camiseta de juego", desc: "Se habilita por categoría completa.", art: jersey, soon: true },
   ];
-  const PERS = {namePrice:6000, numberPrice:4000, nameMax:12, numMin:1, numMax:99};
-  const CATS = ["M8","M10","M12","M14","M15","M16","M17","M19","Plantel superior","Femenino"];
-  const SHIP = 9500, DEPOSIT = .5;
+  const CATS = { Rugby: ["M13", "M15", "M17", "M19", "Plantel superior"], Hockey: ["Sub-14", "Primera"] };
 
-  $("#grid").innerHTML = PRODUCTS.map(p => `
-    <article class="card">
-      <div class="pic">${p.art()}<span class="tag">${p.tag}</span></div>
-      <div class="body">
-        <div class="code">${p.code}</div>
-        <h3>${p.name}</h3>
-        <p class="desc">${p.desc}</p>
-        <div class="price num"><b>${ARS(p.price)}</b><s>${ARS(p.list)}</s></div>
-        <button class="btn btn-club btn-block" data-add="${p.id}">Elegir talle</button>
-      </div>
-    </article>`).join("");
+  let players = [], lines = [], seq = 0;
+  $("#heroArt").innerHTML = tee("RUGBY");
 
-  /* ---------- Tabla de medidas ---------- */
-  let chartKey = "camiseta";
-  function renderChart() {
-    $("#chartSeg").innerHTML = Object.entries(GARMENTS).map(([k,g]) => `<button type="button" aria-pressed="${k===chartKey}" data-chart="${k}">${g.name}</button>`).join("");
-    const g = GARMENTS[chartKey];
-    $("#chartHead").innerHTML = `<tr><th>Talle</th><th>A · ${g.cols[0]} (cm)</th><th>B · ${g.cols[1]} (cm)</th></tr>`;
-    $("#chartBody").innerHTML = g.groups.map(([gn, list]) => `<tr class="grp"><td colspan="3">${gn}</td></tr>` +
-      list.map(s => `<tr><td><b>${s}</b></td><td>${g.chart[s][0]}</td><td>${g.chart[s][1]}</td></tr>`).join("")).join("");
+  const visible = (g, sel) => !g.dependsOn || Boolean(sel[g.dependsOn]);
+  function priceLine(p, l) {
+    let t = 0, c = 0; const opts = [];
+    for (const g of p.groups) {
+      if (!visible(g, l.sel) || !l.sel[g.id]) continue;
+      if (g.type === "choice") { const v = g.values.find((x) => x.id === l.sel[g.id]); t += v.t; c += v.c; opts.push(`${g.name}: ${v.label}`); }
+      else { t += g.t; c += g.c; opts.push(`${g.name}: ${l.sel[g.id]}`); }
+    }
+    const unit = p.price + t + c, adv = p.textil + t;
+    const noChange = p.groups.some((g) => g.blocks && visible(g, l.sel) && l.sel[g.id]);
+    return { unit, total: unit * l.qty, adv: adv * l.qty, club: (unit - adv) * l.qty, extra: (t + c) * l.qty, opts, noChange };
   }
-  $("#chartSeg").addEventListener("click", e => { const b = e.target.closest("[data-chart]"); if (b) { chartKey = b.dataset.chart; renderChart(); } });
-  renderChart();
-
-  /* ---------- Estado ---------- */
-  const players = [{id:"p1", name:"Joaquín Ferreyra", sport:"Rugby", cat:"M12", team:""}];
-  const units = [];   // cada fila = 1 producto vendido
-  let pid = 1;
-
-  // Pedido de ejemplo para que la página abra en un estado realista
-  units.push({pid:"tit", player:"p1", sizes:{Camiseta:"10"}, name:"JOAQO", number:"9"});
-  units.push({pid:"buz", player:"p1", sizes:{Buzo:"12"}, name:"", number:""});
-  players.push({id:"p2", name:"Martina Ferreyra", sport:"Rugby", cat:"Femenino", team:""}); pid = 2;
-  units.push({pid:"cnj", player:"p2", sizes:{Camiseta:"S", Short:"M"}, name:"MARTU", number:"14"});
-  units.push({pid:"ent", player:null, sizes:{Camiseta:"XL"}, name:"", number:""});
-
-  const prod = id => PRODUCTS.find(p => p.id === id);
-  const unitPrice = u => prod(u.pid).price + (u.name ? PERS.namePrice : 0) + (u.number ? PERS.numberPrice : 0);
   function totals() {
-    const items = units.reduce((a,u) => a + prod(u.pid).price, 0);
-    const pers = units.reduce((a,u) => a + (u.name ? PERS.namePrice : 0) + (u.number ? PERS.numberPrice : 0), 0);
-    const ship = $("#dlShip").checked && units.length ? SHIP : 0;
-    const deposit = Math.round((items + pers) * DEPOSIT);
-    const total = items + pers + ship;
-    return {items, pers, ship, total, deposit, balance: total - deposit};
+    let items = 0, extra = 0, adv = 0;
+    for (const l of lines) { const p = PRODUCTS.find((x) => x.id === l.pid); const r = priceLine(p, l); items += p.price * l.qty; extra += r.extra; adv += r.adv; }
+    return { items, extra, total: items + extra, adv, club: items + extra - adv, units: lines.reduce((a, l) => a + l.qty, 0) };
+  }
+
+  function renderGrid() {
+    $("#grid").innerHTML = PRODUCTS.map((p) => `
+      <article class="card">
+        <div class="pic">${p.art()}<span class="tag">Diseño</span>${p.soon ? '<span class="soon">Próximamente</span>' : ""}</div>
+        <div class="body">
+          <div class="code">${p.code}</div><h3>${p.name}</h3><p class="desc">${p.desc}</p>
+          ${p.soon ? '<p class="split" style="margin-top:auto">Catálogo sin venta</p>' : `
+          <div class="price"><b class="num">${ARS(p.price)}</b></div>
+          <div class="split num">Anticipo ${ARS(p.textil)}${p.price > p.textil ? ` · saldo al club ${ARS(p.price - p.textil)}` : " · sin saldo"}</div>
+          ${p.sample ? '<div class="split" style="font-weight:600">Muestrario disponible en el club</div>' : ""}
+          <button class="btn btn-club btn-block" data-open="${p.id}" style="margin-top:8px">Configurar</button>`}
+        </div>
+      </article>`).join("");
   }
 
   function renderCart() {
-    if (!units.length) { $("#cart").innerHTML = `<p class="empty">Todavía no agregaste prendas. Elegí un producto de la colección.</p>`; }
+    const box = $("#cart");
+    if (!lines.length) { box.innerHTML = '<h3>Prendas</h3><p class="empty">Todavía no agregaste prendas. Elegí un producto de la colección.</p>'; }
     else {
-      const groups = [...players.map(p => ({p, list: units.filter(u => u.player === p.id)})), {p:null, list: units.filter(u => !u.player)}].filter(g => g.list.length);
-      $("#cart").innerHTML = groups.map(g => `
-        <div class="player">
-          <div class="player-h"><b>${g.p ? esc(g.p.name) : "Sin jugador asociado"}</b><span>${g.p ? esc(g.p.sport + " · " + g.p.cat + (g.p.team ? " · " + g.p.team : "")) : "Socio o hincha"}</span></div>
-          ${g.list.map(u => { const p = prod(u.pid), i = units.indexOf(u);
-            return `<div class="unit"><div><div><b>${p.name}</b></div>
-              <div class="meta">${Object.entries(u.sizes).map(([c,s]) => `${p.comps.length > 1 ? c + " " : "Talle "}<b>${s}</b>`).join(" · ")}</div>
-              ${u.name || u.number ? `<span class="pz">${esc(u.name || "—")} · ${esc(u.number || "s/n")}</span>` : ""}</div>
-              <div class="amt num">${ARS(unitPrice(u))}</div>
-              <button class="x" type="button" aria-label="Quitar ${p.name}" data-rm="${i}">×</button></div>`; }).join("")}
-        </div>`).join("");
+      const groups = [...players.map((pl) => ({ pl, ls: lines.filter((l) => l.player === pl.key) })), { pl: null, ls: lines.filter((l) => !l.player) }].filter((g) => g.ls.length);
+      box.innerHTML = "<h3>Prendas</h3>" + groups.map((g) => `
+        <div class="player"><div class="player-h"><b>${g.pl ? esc(g.pl.name) : "Sin jugador asociado"}</b><span>${g.pl ? esc([g.pl.sport, g.pl.cat].filter(Boolean).join(" · ")) : "Socio o hincha"}</span></div>
+        ${g.ls.map((l) => { const p = PRODUCTS.find((x) => x.id === l.pid); const r = priceLine(p, l); return `
+          <div class="unit"><div><b>${l.qty > 1 ? l.qty + " × " : ""}${p.name}</b><div class="meta">Talle <b>${l.size}</b></div>
+            ${r.opts.map((o) => `<span class="pz">${esc(o)}</span> `).join("")}${r.noChange ? '<div class="meta" style="font-weight:600">Sin cambio de talle (personalizada)</div>' : ""}</div>
+            <div class="amt num" style="text-align:right">${ARS(r.total)}<div class="split">anticipo ${ARS(r.adv)}</div></div>
+            <button class="x" data-del="${l.id}" aria-label="Quitar ${p.name}">×</button></div>`; }).join("")}</div>`).join("");
     }
     const t = totals();
-    $("#sum").innerHTML = units.length ? `
-      <div><span>Prendas (${units.length})</span><span>${ARS(t.items)}</span></div>
-      <div><span>Personalización</span><span>${ARS(t.pers)}</span></div>
-      <div><span>Envío</span><span>${t.ship ? ARS(t.ship) : "Retiro sin costo"}</span></div>
+    $("#sum").innerHTML = lines.length ? `
+      <div><span>Prendas (${t.units})</span><span>${ARS(t.items)}</span></div>
+      <div><span>Personalización y adicionales</span><span>${ARS(t.extra)}</span></div>
       <div class="tot"><span>Total</span><span>${ARS(t.total)}</span></div>
-      <div class="now"><span>Seña a pagar ahora (50 %)</span><span>${ARS(t.deposit)}</span></div>
-      <div class="later"><span>Saldo al retirar${t.ship ? " (incluye envío)" : ""}</span><span>${ARS(t.balance)}</span></div>` : "";
-    $("#barT").textContent = units.length ? `${units.length} ${units.length === 1 ? "prenda" : "prendas"} · seña ${ARS(t.deposit)}` : "Tu pedido está vacío";
-    $("#barTotal").textContent = ARS(t.total);
+      <div class="now"><span>Anticipo ahora (Mercado Pago)</span><span>${ARS(t.adv)}</span></div>
+      <p class="who">Lo cobra la textil que fabrica las prendas.</p>
+      ${t.club > 0 ? `<div class="later"><span>Saldo a pagar al club</span><span>${ARS(t.club)}</span></div><p class="who">Lo cobra el club directamente, antes del retiro.</p>` : '<p class="who">Sin saldo a pagar al club.</p>'}` : "";
+    $("#policyRow").hidden = !lines.some((l) => priceLine(PRODUCTS.find((x) => x.id === l.pid), l).noChange);
+    $("#barT").textContent = t.units ? `${t.units} ${t.units === 1 ? "prenda" : "prendas"} · anticipo ${ARS(t.adv)}` : "Tu pedido está vacío";
+    $("#barTot").textContent = ARS(t.total);
   }
-  $("#cart").addEventListener("click", e => { const b = e.target.closest("[data-rm]"); if (b) { units.splice(+b.dataset.rm, 1); renderCart(); } });
-  document.querySelectorAll('input[name="dl"]').forEach(r => r.addEventListener("change", () => { $("#addrField").hidden = !$("#dlShip").checked; renderCart(); }));
 
-  /* ---------- Modal ---------- */
-  function openModal(html, onMount) {
-    $("#modalRoot").innerHTML = `<div class="sheet-back" id="back"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
+  function openModal(title, html, onMount) {
+    $("#modalRoot").innerHTML = `<div class="sheet-back" id="back"><div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}">${html}</div></div>`;
     document.body.style.overflow = "hidden";
-    const back = $("#back");
-    back.addEventListener("click", e => { if (e.target === back || e.target.closest("[data-close]")) closeModal(); });
-    onMount && onMount(back);
-    const f = back.querySelector("button, input, select"); f && f.focus();
+    $("#back").addEventListener("click", (e) => { if (e.target.id === "back" || e.target.closest("[data-close]")) closeModal(); });
+    onMount && onMount($("#back"));
   }
   function closeModal() { $("#modalRoot").innerHTML = ""; document.body.style.overflow = ""; }
-  document.addEventListener("keydown", e => { if (e.key === "Escape" && $("#back")) closeModal(); });
-  function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2200); }
+  document.addEventListener("keydown", (e) => e.key === "Escape" && closeModal());
+  function toast(m) { const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 2200); }
 
-  /* ---------- Hoja de producto ---------- */
-  $("#grid").addEventListener("click", e => { const b = e.target.closest("[data-add]"); if (b) productSheet(prod(b.dataset.add)); });
-
-  function productSheet(p) {
-    const sel = {}; let qty = 1;
-    const sizeBlocks = p.comps.map(([label, gk]) => { const g = GARMENTS[gk];
-      return `<div class="block"><div class="lbl">Talle ${p.comps.length > 1 ? "· " + label : ""}<span>${g.name}</span></div><div class="sizes">
-        ${g.groups.map(([gn, list]) => `<div class="g">${gn}</div><div class="chips" data-comp="${label}">${list.map(s => `<button type="button" aria-pressed="false" data-size="${s}">${s}</button>`).join("")}</div>`).join("")}
-      </div></div>`; }).join("");
-    openModal(`
-      <div class="sheet-top"><div class="pic">${p.art()}<span class="tag">${p.tag}</span></div>
-        <div style="min-width:0"><div class="code">${p.code}</div><h3>${p.name}</h3><p style="color:var(--muted);margin-top:6px">${p.desc}</p>
-        <div class="price num" style="padding-top:6px"><b>${ARS(p.price)}</b></div></div>
-        <button class="close" type="button" data-close aria-label="Cerrar">×</button></div>
-      ${sizeBlocks}
-      <div class="block"><div class="lbl">Jugador<span>¿Para quién es?</span></div>
-        <div class="field" style="margin:0"><select id="selPlayer">${players.map(pl => `<option value="${pl.id}">${esc(pl.name)} · ${esc(pl.cat)}</option>`).join("")}<option value="">Sin jugador (socio o hincha)</option><option value="__new">+ Agregar otro jugador</option></select></div>
-        <div id="newPlayer" hidden style="margin-top:10px">
-          <div class="field"><label for="npName">Nombre del jugador</label><input id="npName"></div>
-          <div class="row2"><div class="field"><label for="npSport">Deporte</label><select id="npSport"><option>Rugby</option><option>Hockey</option></select></div>
-          <div class="field"><label for="npCat">Categoría</label><select id="npCat">${CATS.map(c => `<option>${c}</option>`).join("")}</select></div></div>
-          <div class="field"><label for="npTeam">Equipo <small>(opcional)</small></label><input id="npTeam" placeholder="Ej.: B"></div>
-        </div></div>
-      ${p.pers ? `<div class="block"><div class="lbl">Personalización<span>Opcional · por unidad</span></div>
-        <div class="row2"><div class="field"><label for="pzName">Nombre estampado <small>+ ${ARS(PERS.namePrice)} · hasta ${PERS.nameMax} letras</small></label><input id="pzName" maxlength="${PERS.nameMax}" autocapitalize="characters"></div>
-        <div class="field"><label for="pzNum">Número <small>+ ${ARS(PERS.numberPrice)} · ${PERS.numMin} a ${PERS.numMax}</small></label><input id="pzNum" inputmode="numeric" maxlength="2"></div></div></div>` : ""}
-      <div class="block" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-        <div><div class="lbl" style="margin:0">Cantidad</div>${p.pers ? `<small style="color:var(--muted)">Con personalización se agrega de a una unidad.</small>` : ""}</div>
-        <div class="qty"><button type="button" id="qm" aria-label="Restar">−</button><output id="qv">1</output><button type="button" id="qp" aria-label="Sumar">+</button></div>
-      </div>
-      <div class="err" id="pErr" hidden></div>
-      <div class="block"><button class="btn btn-club btn-block" type="button" id="addBtn">Agregar al pedido</button></div>`, root => {
-        root.querySelectorAll("[data-comp]").forEach(row => row.addEventListener("click", e => {
-          const b = e.target.closest("[data-size]"); if (!b) return;
-          const comp = row.dataset.comp; sel[comp] = b.dataset.size;
-          root.querySelectorAll(`[data-comp="${comp}"] [data-size]`).forEach(x => x.setAttribute("aria-pressed", x === b && "true" || "false"));
-        }));
-        const sp = root.querySelector("#selPlayer");
-        sp.addEventListener("change", () => root.querySelector("#newPlayer").hidden = sp.value !== "__new");
-        const hasPz = () => p.pers && (root.querySelector("#pzName").value.trim() || root.querySelector("#pzNum").value.trim());
-        const setQ = n => { qty = Math.max(1, Math.min(10, n)); if (hasPz()) qty = 1; root.querySelector("#qv").textContent = qty; };
-        root.querySelector("#qm").onclick = () => setQ(qty - 1);
-        root.querySelector("#qp").onclick = () => setQ(qty + 1);
-        if (p.pers) ["#pzName","#pzNum"].forEach(s => root.querySelector(s).addEventListener("input", () => setQ(qty)));
-        root.querySelector("#addBtn").onclick = () => {
-          const err = root.querySelector("#pErr"); const fail = m => { err.textContent = m; err.hidden = false; };
-          const miss = p.comps.map(c => c[0]).filter(c => !sel[c]);
-          if (miss.length) return fail(`Elegí el talle de: ${miss.join(" y ").toLowerCase()}.`);
-          let player = sp.value;
-          if (player === "__new") {
-            const n = root.querySelector("#npName").value.trim();
-            if (n.length < 2) return fail("Escribí el nombre del jugador.");
-            player = "p" + (++pid);
-            players.push({id:player, name:n, sport:root.querySelector("#npSport").value, cat:root.querySelector("#npCat").value, team:root.querySelector("#npTeam").value.trim()});
-          }
-          let name = "", number = "";
-          if (p.pers) {
-            name = root.querySelector("#pzName").value.trim().toUpperCase();
-            number = root.querySelector("#pzNum").value.trim();
-            if (name && !/^[A-ZÁÉÍÓÚÑÜ .'-]+$/.test(name)) return fail("El nombre solo admite letras, espacios, punto, guion y apóstrofo.");
-            if (number && (!/^\d+$/.test(number) || +number < PERS.numMin || +number > PERS.numMax)) return fail(`El número debe estar entre ${PERS.numMin} y ${PERS.numMax}.`);
-          }
-          for (let i = 0; i < qty; i++) units.push({pid:p.id, player:player || null, sizes:{...sel}, name, number});
-          closeModal(); renderCart(); toast(`${qty > 1 ? qty + " unidades agregadas" : "Agregado al pedido"}: ${p.name}`);
-        };
-      });
+  function sheet(p) {
+    const st = { size: null, player: players[0]?.key ?? "__new", sel: {}, qty: 1 };
+    const render = (root) => {
+      const draft = { pid: p.id, qty: 1, sel: st.sel };
+      const r = priceLine(p, draft);
+      const single = p.groups.some((g) => g.type === "text" && visible(g, st.sel) && st.sel[g.id]);
+      if (single) st.qty = 1;
+      let n = 1;
+      root.querySelector(".sheet").innerHTML = `
+        <div class="sheet-top"><div class="pic">${p.art(st.sel.leg)}<span class="tag">Diseño</span></div>
+          <div><div class="code">${p.code}</div><h3>${p.name}</h3><p class="split">${p.desc}</p>
+          <p class="num" style="margin-top:6px"><b style="font-family:var(--f-display);font-size:1.6rem">${ARS(p.price)}</b><br><span class="split">Anticipo ${ARS(p.textil)} por Mercado Pago${p.price > p.textil ? ` · saldo ${ARS(p.price - p.textil)} al club` : ""}</span></p></div>
+          <button class="close" data-close aria-label="Cerrar">×</button></div>
+        ${p.sample ? '<div class="notice"><b>Podés probarte el muestrario en el club antes de elegir tu talle.</b></div>' : ""}
+        <div class="block"><div class="lbl"><span style="font-family:var(--f-display);font-size:1rem;color:var(--ink);text-transform:uppercase;font-weight:700;letter-spacing:.06em"><i class="stepn">${n++}</i>Talle</span></div>
+          <div class="chips">${p.sizes.map((s) => `<button type="button" data-size="${s}" aria-pressed="${st.size === s}">${s}</button>`).join("")}</div></div>
+        <div class="block"><div class="lbl"><span style="font-family:var(--f-display);font-size:1rem;color:var(--ink);text-transform:uppercase;font-weight:700;letter-spacing:.06em"><i class="stepn">${n++}</i>Jugador</span></div>
+          <div class="field"><select id="pl" aria-label="Jugador">${players.map((x) => `<option value="${x.key}" ${st.player === x.key ? "selected" : ""}>${esc(x.name)}</option>`).join("")}<option value="__new" ${st.player === "__new" ? "selected" : ""}>+ Agregar jugador</option><option value="__none" ${st.player === "__none" ? "selected" : ""}>Sin jugador (socio o hincha)</option></select></div>
+          ${st.player === "__new" ? `<div class="field"><label for="npn">Nombre del jugador</label><input id="npn" value="${esc(st.npName ?? "")}"></div>
+          <div class="row2"><div class="field"><label for="nps">Disciplina</label><select id="nps">${Object.keys(CATS).map((s) => `<option ${st.npSport === s ? "selected" : ""}>${s}</option>`).join("")}</select></div>
+          <div class="field"><label for="npc">Categoría</label><select id="npc"><option value="">Elegir</option>${CATS[st.npSport ?? "Rugby"].map((c) => `<option ${st.npCat === c ? "selected" : ""}>${c}</option>`).join("")}</select></div></div>` : ""}</div>
+        ${p.groups.length ? `<div class="block"><div class="lbl"><span style="font-family:var(--f-display);font-size:1rem;color:var(--ink);text-transform:uppercase;font-weight:700;letter-spacing:.06em"><i class="stepn">${n++}</i>Personalización</span><span>Por unidad</span></div>
+          ${p.groups.filter((g) => visible(g, st.sel)).map((g) => g.type === "choice" ? `
+            <div class="field"><label>${g.name} <small>(opcional)</small></label><div class="chips">
+              <button type="button" data-opt="${g.id}" data-val="" aria-pressed="${!st.sel[g.id]}">Sin ${g.name.toLowerCase()}</button>
+              ${g.values.map((v) => `<button type="button" data-opt="${g.id}" data-val="${v.id}" aria-pressed="${st.sel[g.id] === v.id}">${v.label} +${ARS(v.t + v.c)}</button>`).join("")}</div><small>${g.help}</small></div>` : `
+            <div class="field"><label for="opt-${g.id}">${g.name} <small>(opcional) + ${ARS(g.t + g.c)} · hasta ${g.max}</small></label>
+              <input id="opt-${g.id}" data-text="${g.id}" maxlength="${g.max}" style="text-transform:uppercase" value="${esc(st.sel[g.id] ?? "")}"><small>${g.help}</small></div>`).join("")}
+          ${r.noChange ? '<div class="notice"><b>Atención:</b> Las prendas con nombre o número estampado no admiten cambio de talle. Esto no afecta los reclamos por fallas de fabricación o errores de la textil.</div>' : ""}</div>` : ""}
+        <div class="block" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div class="lbl" style="margin:0"><span style="font-family:var(--f-display);font-size:1rem;color:var(--ink);text-transform:uppercase;font-weight:700;letter-spacing:.06em"><i class="stepn">${n++}</i>Cantidad</span></div>
+          <div class="qty"><button type="button" data-q="-1" ${single ? "disabled" : ""} aria-label="Restar">−</button><output class="num">${st.qty}</output><button type="button" data-q="1" ${single ? "disabled" : ""} aria-label="Sumar">+</button></div></div>
+        ${single ? '<p class="split">Las prendas con nombre se agregan de a una.</p>' : ""}
+        <div class="mini num"><div style="font-family:var(--f-display);font-weight:700;text-transform:uppercase"><span><i class="stepn">${n++}</i>Resumen</span></div>
+          <div><span>Precio por unidad</span><span>${ARS(r.unit)}</span></div><div><b>Total (${st.qty})</b><b>${ARS(r.unit * st.qty)}</b></div>
+          <div><span>Anticipo ahora (Mercado Pago)</span><span>${ARS(r.adv * st.qty)}</span></div><div><span>Saldo al club</span><span>${ARS(r.club * st.qty)}</span></div></div>
+        <p class="err" id="sheetErr" role="alert" hidden></p>
+        <button class="btn btn-club btn-block" id="add" style="margin-top:14px">Agregar al pedido</button>`;
+      const q = (s) => root.querySelector(s);
+      root.querySelectorAll("[data-size]").forEach((b) => b.onclick = () => { st.size = b.dataset.size; render(root); });
+      root.querySelectorAll("[data-opt]").forEach((b) => b.onclick = () => { st.sel[b.dataset.opt] = b.dataset.val; if (!b.dataset.val) for (const g of p.groups) if (g.dependsOn === b.dataset.opt) delete st.sel[g.id]; render(root); });
+      root.querySelectorAll("[data-text]").forEach((i) => i.onchange = () => { st.sel[i.dataset.text] = i.value.toUpperCase().trim(); render(root); });
+      root.querySelectorAll("[data-q]").forEach((b) => b.onclick = () => { st.qty = Math.min(30, Math.max(1, st.qty + Number(b.dataset.q))); render(root); });
+      q("#pl").onchange = (e) => { st.player = e.target.value; render(root); };
+      if (q("#npn")) { q("#npn").oninput = (e) => (st.npName = e.target.value); q("#nps").onchange = (e) => { st.npSport = e.target.value; st.npCat = ""; render(root); }; q("#npc").onchange = (e) => (st.npCat = e.target.value); }
+      q("#add").onclick = () => {
+        const err = (m) => { const e = q("#sheetErr"); e.textContent = m; e.hidden = false; };
+        for (const i of root.querySelectorAll("[data-text]")) st.sel[i.dataset.text] = i.value.toUpperCase().trim();
+        if (!st.size) return err("Elegí el talle.");
+        const name = st.sel.nom;
+        if (name && !NAME_RE.test(name)) return err("El nombre solo admite letras, espacios, punto, guion y apóstrofo.");
+        let key = st.player === "__none" ? null : st.player;
+        if (st.player === "__new") {
+          if (!st.npName || st.npName.trim().length < 2) return err("Escribí el nombre del jugador (o elegí “Sin jugador”).");
+          const pl = { key: "p" + ++seq, name: st.npName.trim(), sport: st.npSport ?? "Rugby", cat: st.npCat ?? "" };
+          players.push(pl); key = pl.key;
+        }
+        const sel = {}; for (const g of p.groups) if (visible(g, st.sel) && st.sel[g.id]) sel[g.id] = st.sel[g.id];
+        lines.push({ id: ++seq, pid: p.id, player: key, size: st.size, sel, qty: st.qty });
+        closeModal(); renderCart(); toast("Agregado al pedido: " + p.name);
+      };
+    };
+    openModal(p.name, "", render);
   }
 
-  /* ---------- Revisión y confirmación ---------- */
-  $("#checkout").addEventListener("submit", e => {
-    e.preventDefault();
-    const err = $("#formErr"); const fail = m => { err.textContent = m; err.hidden = false; };
-    err.hidden = true;
-    if (!units.length) return fail("Agregá al menos una prenda.");
-    if ($("#bName").value.trim().length < 3) return fail("Completá tu nombre y apellido.");
-    if (!/^\S+@\S+\.\S+$/.test($("#bEmail").value.trim())) return fail("Revisá el correo: lo usamos para enviarte el enlace del pedido.");
-    if ($("#bPhone").value.replace(/\D/g, "").length < 8) return fail("Completá un celular con código de área.");
-    if ($("#dlShip").checked && $("#bAddr").value.trim().length < 6) return fail("Completá la dirección de envío.");
-    if (!$("#terms").checked) return fail("Para continuar, aceptá las condiciones de la preventa.");
-    const t = totals();
-    const by = [...players.map(p => ({p, list: units.filter(u => u.player === p.id)})), {p:null, list: units.filter(u => !u.player)}].filter(g => g.list.length);
-    openModal(`
-      <div class="sheet-top"><div><div class="eyebrow">Último paso</div><h3>Revisá nombres, números y talles</h3>
-        <p style="color:var(--muted);margin-top:6px">Esto es lo que se envía a fabricar. Después del cierre no se puede cambiar.</p></div>
-        <button class="close" type="button" data-close aria-label="Volver">×</button></div>
-      ${by.map(g => `<div class="block"><div class="lbl">${g.p ? esc(g.p.name) : "Sin jugador"}<span>${g.p ? esc(g.p.cat) : "Socio o hincha"}</span></div>
-        ${g.list.map(u => { const p = prod(u.pid); return `<div class="review-unit"><b>${p.name}</b><dl class="kv">
-          ${Object.entries(u.sizes).map(([c,s]) => `<dt>Talle ${c.toLowerCase()}</dt><dd>${s}</dd>`).join("")}
-          ${p.pers ? `<dt>Nombre</dt><dd>${u.name ? esc(u.name) : "Sin nombre"}</dd><dt>Número</dt><dd>${u.number || "Sin número"}</dd>` : ""}</dl></div>`; }).join("")}</div>`).join("")}
-      <div class="block sum num">
-        <div class="tot"><span>Total</span><span>${ARS(t.total)}</span></div>
-        <div class="now"><span>Seña a pagar ahora</span><span>${ARS(t.deposit)}</span></div>
-        <div class="later"><span>Saldo al retirar</span><span>${ARS(t.balance)}</span></div>
-      </div>
-      <div class="block" style="display:grid;gap:8px">
-        <button class="btn btn-club btn-block" type="button" data-pay="mp">Confirmar y pagar con Mercado Pago</button>
-        <button class="btn btn-ghost btn-block" type="button" data-pay="tr">Confirmar y pagar por transferencia</button>
-        <button class="btn btn-ghost btn-block" type="button" data-close>Volver a editar</button>
-      </div>`, root => root.addEventListener("click", ev => { const b = ev.target.closest("[data-pay]"); if (b) done(b.dataset.pay, t); }));
+  document.addEventListener("click", (e) => {
+    const o = e.target.closest("[data-open]"); if (o) sheet(PRODUCTS.find((p) => p.id === o.dataset.open));
+    const d = e.target.closest("[data-del]"); if (d) { lines = lines.filter((l) => l.id !== Number(d.dataset.del)); renderCart(); }
   });
 
-  function done(method, t) {
-    const code = "K7Q-4MZ2";
-    openModal(`
-      <div class="sheet-top"><div><div class="eyebrow">Pedido registrado · muestra</div><h3>Reservá tu lugar con la seña</h3></div>
-        <button class="close" type="button" data-close aria-label="Cerrar">×</button></div>
-      <p style="margin-top:12px">Código de pedido</p><div class="done-code">${code}</div>
-      <dl class="kv" style="margin-top:14px">
-        <dt>Estado del pedido</dt><dd>Pendiente de seña</dd>
-        <dt>Pago confirmado</dt><dd>${ARS(0)}</dd>
-        <dt>Seña a pagar</dt><dd>${ARS(t.deposit)}</dd>
-        <dt>Saldo posterior</dt><dd>${ARS(t.balance)}</dd>
-        <dt>Entrega estimada</dt><dd>30 a 40 días desde el 31/10</dd>
-      </dl>
-      ${method === "tr" ? `<div class="block"><div class="lbl">Datos para transferir<span>Destinatario: el club</span></div>
-        <dl class="bank"><dt>Titular</dt><dd>Asoc. Civil Los Ñandúes RC</dd><dt>Banco</dt><dd>Banco de muestra</dd><dt>CBU</dt><dd>0000000000000000000000</dd><dt>Alias</dt><dd>NANDUES.PREVENTA</dd><dt>Importe</dt><dd>${ARS(t.deposit)}</dd></dl>
-        <p class="note">Después de transferir, subí el comprobante y el número de operación desde el enlace de tu pedido. Queda en revisión hasta que el club lo apruebe.</p></div>`
-      : `<p class="note" style="margin-top:14px">En la app real, este botón abre el checkout de Mercado Pago. El pedido se confirma cuando Mercado Pago notifica el pago aprobado, no al volver a esta página.</p>`}
-      <p class="note">Te enviamos un enlace privado para seguir el pedido, pagar el saldo y ver tu código de retiro.</p>
-      <div class="block"><button class="btn btn-club btn-block" type="button" data-close>Listo</button></div>`);
-  }
+  $("#checkout").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const err = (m) => { const x = $("#formErr"); x.textContent = m; x.hidden = !m; };
+    if (!lines.length) return err("Agregá al menos una prenda.");
+    if ($("#bName").value.trim().length < 3) return err("Completá tu nombre y apellido.");
+    if (!/^\S+@\S+\.\S+$/.test($("#bEmail").value.trim())) return err("Revisá el correo: ahí te enviamos el enlace del pedido.");
+    if ($("#bPhone").value.replace(/\D/g, "").length < 8) return err("Completá un celular con código de área.");
+    if (!$("#policyRow").hidden && !$("#policy").checked) return err("Confirmá que leíste la política de cambios de prendas personalizadas.");
+    if (!$("#terms").checked) return err("Para continuar, aceptá las condiciones de la preventa.");
+    err("");
+    const t = totals();
+    openModal("Revisá tu pedido", `
+      <div class="sheet-top"><h3>Revisá nombres, talles y montos</h3><button class="close" data-close aria-label="Cerrar">×</button></div>
+      ${lines.map((l) => { const p = PRODUCTS.find((x) => x.id === l.pid); const r = priceLine(p, l); const pl = players.find((x) => x.key === l.player); return `
+        <div class="review-unit"><b>${l.qty > 1 ? l.qty + " × " : ""}${p.name}</b><dl class="kv"><dt>Jugador</dt><dd>${pl ? esc(pl.name) : "Sin jugador"}</dd><dt>Talle</dt><dd>${l.size}</dd>${r.opts.map((o) => `<dt>${esc(o.split(": ")[0])}</dt><dd>${esc(o.split(": ")[1])}</dd>`).join("")}</dl></div>`; }).join("")}
+      <div class="sum num" style="margin-top:14px"><div class="tot"><span>Total</span><span>${ARS(t.total)}</span></div><div class="now"><span>Anticipo · Mercado Pago</span><span>${ARS(t.adv)}</span></div>${t.club ? `<div class="later"><span>Saldo a pagar al club</span><span>${ARS(t.club)}</span></div>` : ""}</div>
+      <p class="split" style="margin-top:10px">El pago y las opciones de financiación se gestionan mediante Mercado Pago. Consultá las condiciones disponibles al pagar.</p>
+      <button class="btn btn-club btn-block" id="confirm" style="margin-top:14px">Confirmar y pagar el anticipo</button>`, (root) => {
+      root.querySelector("#confirm").onclick = () => {
+        const code = Math.random().toString(36).slice(2, 5).toUpperCase() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
+        root.querySelector(".sheet").innerHTML = `
+          <div class="sheet-top"><h3>Pedido registrado (demo)</h3><button class="close" data-close aria-label="Cerrar">×</button></div>
+          <p style="margin-top:8px">En la tienda real te llevaríamos a Mercado Pago para pagar el anticipo. En esta demostración no se procesan pagos.</p>
+          <div class="done-code">${code}</div>
+          <div class="states"><span class="pill warn">Anticipo pendiente</span>${t.club ? '<span class="pill warn">Saldo al club pendiente</span>' : '<span class="pill ok">Sin saldo al club</span>'}<span class="pill">Fabricación: al cierre</span><span class="pill">Entrega: en el club</span></div>
+          <div class="sum num" style="margin-top:14px"><div><span>Total</span><span>${ARS(t.total)}</span></div><div><span>Anticipo (lo cobra la textil)</span><span>${ARS(t.adv)}</span></div><div><span>Saldo al club (lo cobra el club)</span><span>${ARS(t.club)}</span></div></div>
+          <p class="split" style="margin-top:10px">Con el anticipo acreditado, el pedido queda confirmado y entra a producción; nunca figura como “pagado” mientras quede saldo con el club.</p>`;
+        lines = []; players = []; renderCart();
+      };
+    });
+  });
 
-  renderCart();
+  renderGrid(); renderCart();
 })();
 </script>
+</body>
+</html>

@@ -155,4 +155,4 @@ Verificación automática: **44/44** escenarios (`docs/VERIFICACION.md`): 28 del
 - Devoluciones a través de la API de Mercado Pago (se registran a mano), facturación electrónica e integración con transportes (Via Cargo se registra como texto).
 - Firma electrónica del acuerdo (se adjunta el contrato firmado).
 - Datos oficiales del club de Virreyes (nombre, escudo, colores, precios) y su aprobación antes de mostrar la demo como propia del club.
-- La muestra HTML estática (`docs/muestra/`) es anterior y refleja el modelo de seña; la referencia vigente es la tienda demo.
+- La muestra HTML estática (`docs/muestra/index.html`) se actualizó al modelo v2 con el piloto demo (sin pagos reales).
