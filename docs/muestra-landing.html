@@ -245,7 +245,7 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px}
         <svg class="crest" viewBox="0 0 52 60" aria-hidden="true"><path d="M2 4h48v26c0 15-11 23-24 28C13 53 2 45 2 30Z" fill="var(--gold)"/><path d="M7 9h38v21c0 11.5-8.4 18.3-19 22.4C15.4 48.3 7 41.5 7 30Z" fill="var(--club-deep)"/><text x="26" y="36" text-anchor="middle" font-family="Barlow Condensed,Arial Narrow,sans-serif" font-weight="800" font-size="20" fill="var(--gold)">V</text></svg>
         <div class="clubname">Rugby de Virreyes (demo)<small>Escudo genérico y colores provisorios · Virreyes, Buenos Aires</small></div>
       </div>
-      <div class="status"><i></i>Preventa abierta (fechas de ejemplo)</div>
+      <div class="status"><i></i><span id="countdown">Preventa abierta (fechas de ejemplo)</span></div>
       <h1>Verano<br><span>demo</span></h1>
       <p class="lead">Así se vería una preventa del club: pagás el anticipo con Mercado Pago, la textil fabrica solo lo vendido, toda la producción llega a la sede y, si corresponde, el saldo se paga al club.</p>
       <div class="facts">
@@ -269,17 +269,17 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px}
       <li class="paid"><div class="n">PASO 1</div><h3>Configurás</h3><p>Producto, talle, jugador y personalización. Varios hijos en un solo pedido.</p></li>
       <li class="paid"><div class="n">PASO 2</div><h3>Anticipás</h3><p>Pagás el anticipo con Mercado Pago. El pedido se confirma al acreditarse.</p></li>
       <li><div class="n">PASO 3</div><h3>Fabricamos</h3><p>Al cierre se consolida la orden y se produce solo lo que se pidió.</p></li>
-      <li><div class="n">PASO 4</div><h3>Llega al club</h3><p>Toda la producción se entrega en la sede. Si hay saldo, se paga al club.</p></li>
-      <li><div class="n">PASO 5</div><h3>Retirás</h3><p>En la sede, con tu código de retiro, en los horarios del club.</p></li>
+      <li><div class="n">PASO 4</div><h3>Llega al club</h3><p>Toda la producción se entrega en la sede, lista para retirar. Desde acá lo gestiona el club.</p></li>
+      <li><div class="n">PASO 5</div><h3>Retirás</h3><p>En la sede, contra pago total del saldo al club, con tu código de retiro.</p></li>
     </ol>
   </section>
 
-  <div class="wrap"><div class="sample-note"><span aria-hidden="true">👕</span><div><b>Podés probarte el muestrario en el club antes de elegir tu talle.</b> <span class="split">Curvas superior e inferior en la secretaría del club (dato de ejemplo).</span></div></div></div>
+  <div class="wrap"><div class="sample-note"><span aria-hidden="true">👕</span><div><b>Podés probarte el muestrario en el club antes de elegir tu talle.</b> <span class="split">Curvas superior e inferior (1 · 2 · 3 · S a 5XL) en la secretaría del club (dato de ejemplo).</span></div></div></div>
 
   <section class="wrap" aria-labelledby="coleccion" style="padding-top:28px">
     <div class="sec-head">
       <div><div class="eyebrow">Precios de ejemplo</div><h2 id="coleccion">La colección</h2></div>
-      <p class="split" style="max-width:46ch">Cada producto muestra el precio al socio, el anticipo que se paga ahora y el saldo que se paga al club.</p>
+      <p class="split" style="max-width:46ch">Cada producto muestra el precio al socio, lo que se paga ahora y el saldo que se paga al club.</p>
     </div>
     <div class="grid" id="grid"></div>
   </section>
@@ -314,9 +314,11 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px}
   <section class="wrap" aria-labelledby="faq">
     <div class="sec-head"><div><div class="eyebrow">Preguntas frecuentes</div><h2 id="faq">Antes de comprar</h2></div></div>
     <div class="faq">
-      <details><summary>¿Qué pago ahora y qué pago después?</summary><p>Ahora pagás el anticipo (precio de la textil más la parte textil de los adicionales) con Mercado Pago. Si el precio al socio es mayor, la diferencia es un saldo que pagás directamente al club antes de retirar.</p></details>
+      <details><summary>¿Qué pago ahora y qué pago después?</summary><p>Ahora pagás el anticipo con Mercado Pago. El resto es un saldo que pagás directamente al club: el retiro en la dirección dispuesta por el club se realiza solo contra pago total de la compra.</p></details>
       <details><summary>¿Hay cuotas?</summary><p>El pago y las opciones de financiación se gestionan mediante Mercado Pago. Consultá las condiciones disponibles al pagar.</p></details>
       <details><summary>¿Hay envío a domicilio?</summary><p>No. Toda la producción se entrega en el club y la retirás en la sede con tu código.</p></details>
+      <details><summary>¿Qué talle elijo para chicos?</summary><p>La curva infantil es 1 (6-8), 2 (10-12) y 3 (14-16): un talle cada dos edades, así la prenda dura más. Podés probarte el muestrario en el club antes de elegir.</p></details>
+      <details><summary>¿Puedo comprar algo de otra disciplina?</summary><p>Cada preventa indica para quién es (todo el club, una disciplina o una categoría). El mismo artículo puede llevar la leyenda de tu disciplina.</p></details>
       <details><summary>¿Puedo cambiar el talle?</summary><p>Las prendas con nombre o número estampado no admiten cambio de talle (salvo fallas o errores de la textil). Para el resto depende de la política del club y de las unidades disponibles. Probate el muestrario antes de elegir.</p></details>
       <details><summary>¿Es una tienda real?</summary><p>No. Es una demostración con datos de ejemplo; el club no la respalda ni la aprobó todavía.</p></details>
       <details><summary>¿Cuándo se confirma mi pedido?</summary><p>Cuando se acredita el anticipo. Volver de Mercado Pago no alcanza: la confirmación llega del propio Mercado Pago.</p></details>
@@ -344,34 +346,51 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px}
   const jersey = () => `<svg viewBox="-20 -10 240 240" aria-hidden="true"><path d="M60 22 L86 13 Q100 26 114 13 L140 22 L184 48 L170 86 L150 76 L150 206 L50 206 L50 76 L30 86 L16 48 Z" fill="var(--club)"/><rect x="50" y="80" width="100" height="14" fill="var(--gold)"/><rect x="50" y="114" width="100" height="14" fill="var(--gold)"/></svg>`;
 
   // Precios de ejemplo (centavos no: pesos enteros). textil = anticipo; price = precio al socio
+  const CURVE = ["1", "2", "3", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
+  const KIDS = { "1": "6-8", "2": "10-12", "3": "14-16" };
+  const LEGEND = { id: "leg", name: "Leyenda de disciplina", type: "choice", help: "Mismo artículo, con la inscripción de tu disciplina.", values: [{ id: "RUGBY", label: "RUGBY", t: 1500 }, { id: "HOCKEY", label: "HOCKEY", t: 1500 }] };
   const PRODUCTS = [
     { id: "rem", code: "D-REM", name: "Remera uso diario", desc: "Algodón para el día a día. Leyenda de disciplina y nombre opcionales.", art: tee, textil: 10000, price: 13000,
-      sizes: ["8", "10", "12", "14", "16", "S", "M", "L", "XL", "2XL"], sample: true,
+      sizes: CURVE, sample: true,
       groups: [
-        { id: "leg", name: "Leyenda de disciplina", type: "choice", help: "Se estampa sobre la remera base.", values: [{ id: "RUGBY", label: "RUGBY", t: 1500, c: 500 }, { id: "HOCKEY", label: "HOCKEY", t: 1500, c: 500 }] },
-        { id: "nom", name: "Nombre en la espalda", type: "text", max: 12, t: 2000, c: 0, blocks: true, dependsOn: "leg", help: "Disponible con leyenda. Con nombre, la prenda no admite cambio de talle." },
+        LEGEND,
+        { id: "nom", name: "Nombre en la espalda", type: "text", max: 12, t: 2000, blocks: true, dependsOn: "leg", help: "Disponible con leyenda. Con nombre, la prenda no admite cambio de talle." },
       ] },
-    { id: "sho", code: "D-SHO", name: "Short de verano", desc: "Microfibra liviana para entrenar o usar en verano.", art: short, textil: 12000, price: 15000, sizes: ["8", "10", "12", "14", "16", "S", "M", "L", "XL", "2XL"], sample: true, groups: [] },
-    { id: "mus", code: "D-MUS", name: "Musculosa", desc: "Precio al socio igual al de la textil: sin saldo al club.", art: tank, textil: 9000, price: 9000, sizes: ["S", "M", "L", "XL", "2XL"], sample: true, groups: [] },
-    { id: "bol", code: "D-BOL", name: "Bolso", desc: "Con bolsillo para botines. Precio al socio con recargo del 30 %.", art: bag, textil: 15000, price: 19500, sizes: ["U"], groups: [] },
-    { id: "cam", code: "D-CAM", name: "Camiseta de juego", desc: "Se habilita por categoría completa.", art: jersey, soon: true },
+    { id: "sho", code: "D-SHO", name: "Short de verano", desc: "Microfibra liviana para entrenar o usar en verano.", art: short, textil: 12000, price: 15000, sizes: CURVE, sample: true, groups: [LEGEND] },
+    { id: "mus", code: "D-MUS", name: "Musculosa", desc: "Precio al socio igual al de la textil: sin saldo al club.", art: tank, textil: 9000, price: 9000, sizes: CURVE, sample: true, groups: [LEGEND] },
+    { id: "bol", code: "D-BOL", name: "Bolso", desc: "Con bolsillo para botines. Precio al socio con recargo del 30 %.", art: bag, textil: 15000, price: 19500, sizes: ["U"], groups: [LEGEND] },
+    { id: "cam", code: "D-CAM", name: "Camiseta de juego", desc: "Se habilita por categoría completa (pool de preventa del equipo).", art: jersey, soon: true },
   ];
   const CATS = { Rugby: ["M13", "M15", "M17", "M19", "Plantel superior"], Hockey: ["Sub-14", "Primera"] };
 
   let players = [], lines = [], seq = 0;
+  // Cierre de ejemplo: 20 días desde que se abre la muestra
+  const CLOSES = Date.now() + 20 * 86400000 + 5 * 3600000;
+  const tick = () => { const ms = CLOSES - Date.now(), d = Math.floor(ms / 86400000), h = Math.floor(ms % 86400000 / 3600000), m = Math.floor(ms % 3600000 / 60000), s2 = Math.floor(ms % 60000 / 1000), z = (n) => String(n).padStart(2, "0");
+    $("#countdown").textContent = `Preventa abierta · cierra en ${d} d ${z(h)}:${z(m)}:${z(s2)} (fecha de ejemplo)`; };
+  tick(); setInterval(tick, 1000);
   $("#heroArt").innerHTML = tee("RUGBY");
 
   const visible = (g, sel) => !g.dependsOn || Boolean(sel[g.dependsOn]);
+  // Cobertura impositiva sobre la diferencia del club (21 % + 3 %). Se suma al anticipo; el comprador no ve el desglose.
+  const TAX = 0.24;
+  // Los adicionales son de la textil y llevan el mismo recargo del club que el producto
+  const forBuyer = (p, t) => Math.round((t * p.price) / p.textil);
+  function split(p, extrasTextil) {
+    const final = p.price + forBuyer(p, extrasTextil), base = p.textil + extrasTextil;
+    const adv = base + Math.round((final - base) * TAX);
+    return { final, adv, club: final - adv };
+  }
   function priceLine(p, l) {
-    let t = 0, c = 0; const opts = [];
+    let t = 0; const opts = [];
     for (const g of p.groups) {
       if (!visible(g, l.sel) || !l.sel[g.id]) continue;
-      if (g.type === "choice") { const v = g.values.find((x) => x.id === l.sel[g.id]); t += v.t; c += v.c; opts.push(`${g.name}: ${v.label}`); }
-      else { t += g.t; c += g.c; opts.push(`${g.name}: ${l.sel[g.id]}`); }
+      if (g.type === "choice") { const v = g.values.find((x) => x.id === l.sel[g.id]); t += v.t; opts.push(`${g.name}: ${v.label}`); }
+      else { t += g.t; opts.push(`${g.name}: ${l.sel[g.id]}`); }
     }
-    const unit = p.price + t + c, adv = p.textil + t;
+    const r = split(p, t);
     const noChange = p.groups.some((g) => g.blocks && visible(g, l.sel) && l.sel[g.id]);
-    return { unit, total: unit * l.qty, adv: adv * l.qty, club: (unit - adv) * l.qty, extra: (t + c) * l.qty, opts, noChange };
+    return { unit: r.final, total: r.final * l.qty, adv: r.adv * l.qty, club: r.club * l.qty, extra: (r.final - p.price) * l.qty, opts, noChange };
   }
   function totals() {
     let items = 0, extra = 0, adv = 0;
@@ -382,12 +401,12 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px}
   function renderGrid() {
     $("#grid").innerHTML = PRODUCTS.map((p) => `
       <article class="card">
-        <div class="pic">${p.art()}<span class="tag">Diseño</span>${p.soon ? '<span class="soon">Próximamente</span>' : ""}</div>
+        <div class="pic">${p.art()}<span class="tag">Diseño</span>${p.soon ? '<span class="soon">Pendiente de preventa</span>' : ""}</div>
         <div class="body">
           <div class="code">${p.code}</div><h3>${p.name}</h3><p class="desc">${p.desc}</p>
           ${p.soon ? '<p class="split" style="margin-top:auto">Catálogo sin venta</p>' : `
           <div class="price"><b class="num">${ARS(p.price)}</b></div>
-          <div class="split num">Anticipo ${ARS(p.textil)}${p.price > p.textil ? ` · saldo al club ${ARS(p.price - p.textil)}` : " · sin saldo"}</div>
+          <div class="split num">Ahora ${ARS(split(p, 0).adv)}${split(p, 0).club > 0 ? ` · al club ${ARS(split(p, 0).club)}` : " · sin saldo al club"}</div>
           ${p.sample ? '<div class="split" style="font-weight:600">Muestrario disponible en el club</div>' : ""}
           <button class="btn btn-club btn-block" data-open="${p.id}" style="margin-top:8px">Configurar</button>`}
         </div>
@@ -414,7 +433,7 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px}
       <div class="tot"><span>Total</span><span>${ARS(t.total)}</span></div>
       <div class="now"><span>Anticipo ahora (Mercado Pago)</span><span>${ARS(t.adv)}</span></div>
       <p class="who">Lo cobra la textil que fabrica las prendas.</p>
-      ${t.club > 0 ? `<div class="later"><span>Saldo a pagar al club</span><span>${ARS(t.club)}</span></div><p class="who">Lo cobra el club directamente, antes del retiro.</p>` : '<p class="who">Sin saldo a pagar al club.</p>'}` : "";
+      ${t.club > 0 ? `<div class="later"><span>Saldo a pagar al club</span><span>${ARS(t.club)}</span></div><p class="who">Lo cobra el club. El retiro en la dirección dispuesta por el club se realiza solo contra pago total.</p>` : '<p class="who">Sin saldo a pagar al club.</p>'}` : "";
     $("#policyRow").hidden = !lines.some((l) => priceLine(PRODUCTS.find((x) => x.id === l.pid), l).noChange);
     $("#barT").textContent = t.units ? `${t.units} ${t.units === 1 ? "prenda" : "prendas"} · anticipo ${ARS(t.adv)}` : "Tu pedido está vacío";
     $("#barTot").textContent = ARS(t.total);
@@ -441,11 +460,12 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px}
       root.querySelector(".sheet").innerHTML = `
         <div class="sheet-top"><div class="pic">${p.art(st.sel.leg)}<span class="tag">Diseño</span></div>
           <div><div class="code">${p.code}</div><h3>${p.name}</h3><p class="split">${p.desc}</p>
-          <p class="num" style="margin-top:6px"><b style="font-family:var(--f-display);font-size:1.6rem">${ARS(p.price)}</b><br><span class="split">Anticipo ${ARS(p.textil)} por Mercado Pago${p.price > p.textil ? ` · saldo ${ARS(p.price - p.textil)} al club` : ""}</span></p></div>
+          <p class="num" style="margin-top:6px"><b style="font-family:var(--f-display);font-size:1.6rem">${ARS(p.price)}</b><br><span class="split">Anticipo ${ARS(split(p, 0).adv)} por Mercado Pago${split(p, 0).club > 0 ? ` · saldo ${ARS(split(p, 0).club)} al club` : ""}</span></p></div>
           <button class="close" data-close aria-label="Cerrar">×</button></div>
         ${p.sample ? '<div class="notice"><b>Podés probarte el muestrario en el club antes de elegir tu talle.</b></div>' : ""}
         <div class="block"><div class="lbl"><span style="font-family:var(--f-display);font-size:1rem;color:var(--ink);text-transform:uppercase;font-weight:700;letter-spacing:.06em"><i class="stepn">${n++}</i>Talle</span></div>
-          <div class="chips">${p.sizes.map((s) => `<button type="button" data-size="${s}" aria-pressed="${st.size === s}">${s}</button>`).join("")}</div></div>
+          <div class="chips">${p.sizes.map((s) => `<button type="button" data-size="${s}" aria-pressed="${st.size === s}">${s}${KIDS[s] ? `<small style="display:block;font-weight:500;font-size:.7rem">${KIDS[s]}</small>` : ""}</button>`).join("")}</div>
+          ${p.sizes.length > 1 ? '<small class="split">Infantiles: 1 = 6-8 · 2 = 10-12 · 3 = 14-16. Cada artículo tiene su propia tabla de medidas.</small>' : ""}</div>
         <div class="block"><div class="lbl"><span style="font-family:var(--f-display);font-size:1rem;color:var(--ink);text-transform:uppercase;font-weight:700;letter-spacing:.06em"><i class="stepn">${n++}</i>Jugador</span></div>
           <div class="field"><select id="pl" aria-label="Jugador">${players.map((x) => `<option value="${x.key}" ${st.player === x.key ? "selected" : ""}>${esc(x.name)}</option>`).join("")}<option value="__new" ${st.player === "__new" ? "selected" : ""}>+ Agregar jugador</option><option value="__none" ${st.player === "__none" ? "selected" : ""}>Sin jugador (socio o hincha)</option></select></div>
           ${st.player === "__new" ? `<div class="field"><label for="npn">Nombre del jugador</label><input id="npn" value="${esc(st.npName ?? "")}"></div>
@@ -455,8 +475,8 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px}
           ${p.groups.filter((g) => visible(g, st.sel)).map((g) => g.type === "choice" ? `
             <div class="field"><label>${g.name} <small>(opcional)</small></label><div class="chips">
               <button type="button" data-opt="${g.id}" data-val="" aria-pressed="${!st.sel[g.id]}">Sin ${g.name.toLowerCase()}</button>
-              ${g.values.map((v) => `<button type="button" data-opt="${g.id}" data-val="${v.id}" aria-pressed="${st.sel[g.id] === v.id}">${v.label} +${ARS(v.t + v.c)}</button>`).join("")}</div><small>${g.help}</small></div>` : `
-            <div class="field"><label for="opt-${g.id}">${g.name} <small>(opcional) + ${ARS(g.t + g.c)} · hasta ${g.max}</small></label>
+              ${g.values.map((v) => `<button type="button" data-opt="${g.id}" data-val="${v.id}" aria-pressed="${st.sel[g.id] === v.id}">${v.label} +${ARS(forBuyer(p, v.t))}</button>`).join("")}</div><small>${g.help}</small></div>` : `
+            <div class="field"><label for="opt-${g.id}">${g.name} <small>(opcional) + ${ARS(forBuyer(p, g.t))} · hasta ${g.max}</small></label>
               <input id="opt-${g.id}" data-text="${g.id}" maxlength="${g.max}" style="text-transform:uppercase" value="${esc(st.sel[g.id] ?? "")}"><small>${g.help}</small></div>`).join("")}
           ${r.noChange ? '<div class="notice"><b>Atención:</b> Las prendas con nombre o número estampado no admiten cambio de talle. Esto no afecta los reclamos por fallas de fabricación o errores de la textil.</div>' : ""}</div>` : ""}
         <div class="block" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div class="lbl" style="margin:0"><span style="font-family:var(--f-display);font-size:1rem;color:var(--ink);text-transform:uppercase;font-weight:700;letter-spacing:.06em"><i class="stepn">${n++}</i>Cantidad</span></div>
@@ -523,9 +543,9 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px}
           <div class="sheet-top"><h3>Pedido registrado (demo)</h3><button class="close" data-close aria-label="Cerrar">×</button></div>
           <p style="margin-top:8px">En la tienda real te llevaríamos a Mercado Pago para pagar el anticipo. En esta demostración no se procesan pagos.</p>
           <div class="done-code">${code}</div>
-          <div class="states"><span class="pill warn">Anticipo pendiente</span>${t.club ? '<span class="pill warn">Saldo al club pendiente</span>' : '<span class="pill ok">Sin saldo al club</span>'}<span class="pill">Fabricación: al cierre</span><span class="pill">Entrega: en el club</span></div>
+          <div class="states"><span class="pill warn">Anticipo pendiente</span>${t.club ? '<span class="pill warn">Saldo a pagar al club</span>' : '<span class="pill ok">Sin saldo al club</span>'}<span class="pill">Fabricación: al cierre</span><span class="pill">Entrega: en el club</span></div>
           <div class="sum num" style="margin-top:14px"><div><span>Total</span><span>${ARS(t.total)}</span></div><div><span>Anticipo (lo cobra la textil)</span><span>${ARS(t.adv)}</span></div><div><span>Saldo al club (lo cobra el club)</span><span>${ARS(t.club)}</span></div></div>
-          <p class="split" style="margin-top:10px">Con el anticipo acreditado, el pedido queda confirmado y entra a producción; nunca figura como “pagado” mientras quede saldo con el club.</p>`;
+          <p class="split" style="margin-top:10px">Con el anticipo acreditado, el pedido queda confirmado y entra a producción. Te avisamos cuando esté en el club, listo para retirar; desde ahí el retiro y el saldo los gestiona el club.</p>`;
         lines = []; players = []; renderCart();
       };
     });

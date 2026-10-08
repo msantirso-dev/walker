@@ -205,6 +205,7 @@ Las reglas, supuestos y definiciones pendientes están en `docs/REQUISITOS.md`. 
 - Anticipo = Σ (precio textil + parte textil de adicionales). Saldo club = total − anticipo. Ambos se guardan en el pedido; `Payment.receiver` distingue TEXTIL o CLUB y `recomputeOrder` acumula por destinatario.
 - Módulos nuevos: `campaigns/rules` (activación, precios, reglas, alcance), `catalog/options` (configurador compartido cliente/servidor) y `catalog/admin`, `agreements`, `samples` (muestrario y compras), `logistics` (envíos, remito, distribución).
 - La migración `20261008030000_modelo_comercial_v2` crea las tablas nuevas, marca todo lo anterior como `LEGACY_DEPOSIT` y convierte la personalización de cada producto en grupos de opciones.
+- Segunda revisión (`20261008200000`, `20261008200100`): `src/shared/advance.ts` calcula anticipo = total textil + `clubTaxBp` (24 %) de la diferencia del club, con el recargo aplicado también a los adicionales; `OrderUnit.advanceAmount` y `Order.clubTaxBp` guardan lo vigente al comprar. `ClubOrderSheet` (módulo `clubsheet`) es la planilla propia del club: no tiene relación de escritura con pedidos ni pagos. `assertTextilManages` impide que usuarios de club modifiquen pedidos v2.
 
 ## 7. Alcance del MVP
 

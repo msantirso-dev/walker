@@ -89,9 +89,11 @@ Los pedidos y campañas existentes conservan sus precios y reglas (modelo "seña
 
 | Supuesto | Valor usado | Dónde se cambia |
 |---|---|---|
-| Compra inicial mínima de outfit | 15 unidades, marcado "estimado" | Por producto en la campaña |
+| Mínimo de producción de outfit | 20 unidades (antes 15), marcado "estimado"; el club compra la diferencia; respaldo sugerido 5 si se llega | Por producto en la campaña |
 | Cantidad esperada en categoría completa | La que cargue la textil (ej. 11) | Por producto en la campaña |
-| Reparto textil/club de cada adicional | Se carga explícitamente; por defecto 100 % textil y marcado "a definir" | Opciones del producto |
+| Adicionales | **Confirmado**: son de la textil; el recargo del club también se aplica sobre ellos | Opciones del producto |
+| Cobertura impositiva del anticipo | 24 % (21 % + 3 %) de la diferencia del club | Por campaña (pedido: guarda la vigente) |
+| Flete textil → club | "A cargo del comprador" (no lo paga la textil); no se suma solo al precio del socio | Envío al club |
 | Marca textil en "by …" | Variable `TEXTIL_BRAND` (por defecto "Marca Textil"); la línea solo se muestra si hay un acuerdo vigente | Entorno y acuerdo del club |
 | Transferencia para el anticipo | Deshabilitada en campañas nuevas (solo Mercado Pago) | Configuración de la campaña |
 | Exclusividad | 12 meses desde el inicio | Acuerdo del club |
@@ -102,10 +104,10 @@ Los pedidos y campañas existentes conservan sus precios y reglas (modelo "seña
 
 ## 4. Definiciones pendientes
 
-1. Quién paga el transporte textil → club y su costo (no se asume envío gratuito).
-2. Reparto textil/club del precio de cada adicional (nombre, número, leyenda).
+1. ~~Quién paga el transporte~~ → a cargo del comprador. Pendiente: si se traslada al socio dentro del precio o lo cobra el club aparte.
+2. ~~Reparto de adicionales~~ → resuelto: son de la textil, con el recargo del club.
 3. Política de cambio para prendas con leyenda de disciplina y para prendas no personalizadas.
-4. Confirmación del mínimo de compra inicial de outfit (15 es estimado).
+4. Confirmación del mínimo de outfit (20, estimado) y del respaldo sugerido (5).
 5. Relación entre sublimado/no sublimado y prenda de juego/outfit.
 6. Compra de respaldo: compromiso de cantidad antes de abrir y distribución por talle al cerrar.
 7. Si una misma compra puede cumplir funciones de muestrario, compra inicial y respaldo.
@@ -126,12 +128,12 @@ Los pedidos y campañas existentes conservan sus precios y reglas (modelo "seña
 
 ## 6. Estado de implementación (08/10/2026)
 
-Verificación automática: **44/44** escenarios (`docs/VERIFICACION.md`): 28 del modelo anterior, que siguen funcionando para campañas con seña, y 16 del modelo v2.
+Verificación automática: **45/45** escenarios (`docs/VERIFICACION.md`): 28 del modelo anterior, que siguen funcionando para campañas con seña, y 17 del modelo v2 (incluida la segunda revisión del cliente, sección 7).
 
 **Implementado**
 
 - Precio textil y precio al socio por producto de campaña (directo o recargo %), validación final ≥ textil, bloqueo de cambios con la campaña publicada y nueva autorización si el club cambia precios ya autorizados.
-- Anticipo = precio textil + parte textil de los adicionales, cobrado online por Mercado Pago a la cuenta de la textil; saldo club = final − anticipo, registrado a mano por el club o la textil (fecha, medio, referencia). Sin reparto automático.
+- Anticipo = total textil (producto + adicionales) + 24 % de la diferencia del club, cobrado online por Mercado Pago a la cuenta de la textil; saldo club = final − anticipo, cobrado por el club fuera del sistema (planilla propia opcional). Sin reparto automático.
 - Estados separados de anticipo y saldo al club en la tienda, el pedido, el panel, los correos y los reportes; un pedido nunca figura como "pagado" con saldo al club pendiente; precio final = textil → saldo 0.
 - Texto exacto de financiación de Mercado Pago; sin promesas de cuotas. Conciliación guardada por pago: importe de la operación, total pagado por el comprador (incluye intereses), neto acreditado, cargos y cuotas. El anticipo se acredita por el importe de la operación.
 - Sin envío a domicilio en campañas v2: envío consolidado textil → club (dirección, responsable, transporte, referencia, fechas, costo y quién lo paga "a definir"), remito consolidado imprimible, recepción por el club, lista de distribución por comprador y jugador con saldo (Excel/CSV), registro de retiros. Retiro bloqueado con saldo al club pendiente salvo excepción con motivo.
@@ -156,3 +158,22 @@ Verificación automática: **44/44** escenarios (`docs/VERIFICACION.md`): 28 del
 - Firma electrónica del acuerdo (se adjunta el contrato firmado).
 - Datos oficiales del club de Virreyes (nombre, escudo, colores, precios) y su aprobación antes de mostrar la demo como propia del club.
 - La muestra HTML estática (`docs/muestra/index.html`) se actualizó al modelo v2 con el piloto demo (sin pagos reales).
+
+## 7. Ajustes del cliente (segunda revisión, 08/10/2026)
+
+| Pedido del cliente | Cómo quedó |
+|---|---|
+| El club desarrolla su propia marca "by [marca textil]" | Línea de marca por acuerdo (pública) y en la propuesta comercial. La marca textil es configurable (`TEXTIL_BRAND`). |
+| Al saldo del club se le descuenta 21 % + 3 % (facturación total del fabricante) | Anticipo = total textil + 24 % de la diferencia del club. Ej.: 10.000 / 13.000 → anticipo **10.720**, saldo **2.280**. El comprador ve solo anticipo y saldo. El % es configurable por campaña y queda guardado en cada pedido. |
+| Los adicionales son de la textil y llevan el recargo | Ej.: 10.000 + 2.000 con 30 % → final 15.600, anticipo 12.000 + 24 % de 3.600 = **12.864**. Con precio directo (sin %), se usa la misma proporción precio/precio textil. |
+| Retiro solo contra pago total; lo cobra el club | Texto en tienda, carrito, pedido y correos. |
+| El seguimiento termina "en poder del club, listo para retirar" | El sistema sigue hasta la recepción en el club. Saldo, refinanciación y retiros los lleva el club en su **planilla de gestión** (servicio adicional por club). Lo que carga el club no modifica pedidos, pagos ni estados; el club ya no edita, cancela ni registra pagos en pedidos v2. Los retiros del sistema (Entregas) quedan solo para pedidos del modelo anterior. |
+| Cualquier transporte; envío a cargo del comprador | Transporte libre (texto); costo "a cargo del comprador" por defecto. ⚠️ Interpretación: no lo paga la textil y no se suma automáticamente al precio. |
+| Talles 1 (6-8), 2 (10-12), 3 (14-16), S a 5XL | Curva estándar del piloto, del muestrario y de las prendas nuevas. Cada prenda conserva sus medidas propias en la ficha. Los Ñandúes (club de prueba histórico) conservan su curva. |
+| Sugerir dónde distribuir la compra mínima al cerrar | Al cerrar, el sistema sugiere talles proporcionales a lo vendido; la textil registra la compra con esa sugerencia y la aprueba (nada automático). |
+| Hasta 48 artículos; bocetos iniciales de 10 a 15 | Sin límite en el catálogo. |
+| Productos visibles con "pendiente de preventa" u ocultos; activos con vencimiento y cuenta regresiva | "Catálogo sin venta" se muestra como **Pendiente de preventa**; "En preparación" no se muestra. Productos en preventa enlazan a su campaña con fecha de cierre; campañas con cuenta regresiva. Todas las preventas abiertas se listan con su alcance ("Exclusivo para Rugby M15"). |
+| Leyenda de disciplina en cada artículo | Grupo de opciones por producto; en el piloto, los cuatro productos la tienen. |
+| Prendas de juego: pool de preventa sin compra del club | Categoría completa sin compra inicial (ya implementado). |
+| Outfit: mínimo 20, el club compra la diferencia; si llega a 20, sugerir 5 | Regla "mínimo con compra de la diferencia": para abrir, compromiso del club + aprobación de la textil; al cerrar, diferencia = 20 − vendidas (o respaldo de 5) con talles sugeridos; la producción se retiene hasta aprobar esa compra o una excepción. |
+| Landing de muestra para reunión con Virreyes | `docs/muestra/index.html` actualizado con todas estas reglas. |

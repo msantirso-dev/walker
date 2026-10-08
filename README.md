@@ -1,6 +1,6 @@
 # Camada · Preventa de indumentaria para clubes
 
-Plataforma para una textil que ofrece a cada club su tienda de preventa: socios y familias configuran prendas, talles, jugadores y personalización; pagan el **anticipo** (precio textil) con Mercado Pago a la textil; la textil consolida los pedidos y entrega toda la producción en el club; el club cobra su **saldo** (precio al socio − anticipo), lo registra y entrega a cada socio.
+Plataforma para una textil que ofrece a cada club su tienda de preventa: socios y familias configuran prendas, talles, jugadores y personalización; pagan el **anticipo** (precio textil + cobertura impositiva sobre la diferencia del club) con Mercado Pago a la textil; la textil consolida los pedidos y entrega toda la producción en el club; desde ahí el club cobra su **saldo** y entrega a cada socio, con una planilla de gestión propia opcional que no modifica los datos del sistema.
 
 Las reglas comerciales vigentes, los supuestos y lo pendiente están en [`docs/REQUISITOS.md`](docs/REQUISITOS.md). Las campañas creadas antes del 08/10/2026 conservan el modelo anterior de seña.
 
@@ -35,7 +35,8 @@ Las reglas comerciales vigentes, los supuestos y lo pendiente están en [`docs/R
 | Reglas por producto: categoría completa y compra inicial, con aprobaciones explícitas | Implementado |
 | Configurador guiado con opciones condicionales y reparto textil/club por adicional | Implementado |
 | Acuerdos privados con alertas, muestrario de talles, compras del club | Implementado |
-| Envío consolidado al club, remito, lista de distribución y retiros | Implementado |
+| Envío consolidado al club, remito, lista de distribución | Implementado |
+| Planilla de gestión del club (servicio adicional, no afecta los datos del sistema) | Implementado |
 | Piloto demostrativo "Rugby de Virreyes (demo)" | Implementado, con datos de ejemplo |
 | Devoluciones vía API de Mercado Pago, facturación electrónica, integración con transportes | Pendiente (las devoluciones se registran manualmente) |
 
@@ -108,7 +109,7 @@ MP_API_BASE=http://127.0.0.1:4010 ORDER_RATE_LIMIT=1000 PAYMENT_SIMULATOR=enable
 MOCK_MP_TOKEN=TEST-0000000000000000000000-mock npm run verify
 ```
 
-44 escenarios. Modelo v2: anticipo $10.000 / final $13.000 / saldo $3.000, varios ítems con adicionales, anticipo aprobado con saldo pendiente, final = textil, categoría completa de 11 con aprobación excepcional, compra inicial de 15 editable, personalización condicional por unidad, consolidación de prendas base y trabajos de personalización, envío consolidado y recepción en el club, saldo al club y retiro, conciliación de Mercado Pago, conservación de pedidos anteriores, acuerdos y páginas por rol. Modelo anterior: varios jugadores y talles, conjuntos con talles independientes, personalización por unidad, seña y saldo, comprobantes rechazados y reemplazados, eventos de pago duplicados y concurrentes, rechazo y reintento, firma inválida, reembolso, cierre de campaña, mínimo no alcanzado, consolidación sin duplicar componentes, lotes de ajuste, entregas parcial y con excepción, aislamiento entre clubes y roles, cupos concurrentes (40 compras simultáneas, cupo 25), edición de prendas antes y después de fabricar, recuperación del enlace del pedido y gestión de contraseñas. Resultado en `docs/VERIFICACION.md`.
+45 escenarios. Modelo v2: textil $10.000 / final $13.000 → anticipo $10.720 / saldo $2.280, fórmula de adicionales con recargo, varios ítems con adicionales, anticipo aprobado con saldo pendiente, final = textil, categoría completa de 11 con aprobación excepcional, compra inicial de 15 editable, personalización condicional por unidad, consolidación de prendas base y trabajos de personalización, envío consolidado y recepción en el club, saldo al club y retiro, conciliación de Mercado Pago, conservación de pedidos anteriores, acuerdos y páginas por rol. Modelo anterior: varios jugadores y talles, conjuntos con talles independientes, personalización por unidad, seña y saldo, comprobantes rechazados y reemplazados, eventos de pago duplicados y concurrentes, rechazo y reintento, firma inválida, reembolso, cierre de campaña, mínimo no alcanzado, consolidación sin duplicar componentes, lotes de ajuste, entregas parcial y con excepción, aislamiento entre clubes y roles, cupos concurrentes (40 compras simultáneas, cupo 25), edición de prendas antes y después de fabricar, recuperación del enlace del pedido y gestión de contraseñas. Resultado en `docs/VERIFICACION.md`.
 
 ## Decisiones comerciales pendientes
 
