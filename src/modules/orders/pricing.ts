@@ -4,10 +4,13 @@ import { UserError } from "@/shared/errors";
 import { percentOf } from "@/shared/money";
 import type { CartInput } from "./cart-schema";
 import { MAX_UNITS_PER_ORDER } from "./cart-schema";
+import { NAME_RE, OptionError, optionsSummary, resolveOptions, type OptionGroupT, type ResolvedOption } from "@/modules/catalog/options";
 
 export class OrderError extends UserError {}
 
-export const PERS_NAME_RE = /^[A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ .'-]*$/;
+export const PERS_NAME_RE = NAME_RE;
+
+export const optionGroupsInclude = { orderBy: { sort: "asc" }, include: { values: { orderBy: { sort: "asc" } } } } as const;
 
 export async function loadCampaignForSale(campaignId: string, tx: Tx = db) {
   return tx.campaign.findUnique({
@@ -16,12 +19,15 @@ export async function loadCampaignForSale(campaignId: string, tx: Tx = db) {
       club: true,
       paymentAccount: true,
       benefitRule: true,
+      audienceSports: true,
+      audienceCategories: { include: { sport: true } },
       products: {
         where: { active: true },
         include: {
           product: {
             include: {
               components: { orderBy: { sort: "asc" }, include: { garment: { include: { sizes: { where: { enabled: true }, orderBy: { sort: "asc" } } } } } },
+              optionGroups: optionGroupsInclude,
             },
           },
         },
@@ -44,9 +50,15 @@ export type PricedUnit = {
   productDesc: string | null;
   unitPrice: number;
   listPrice: number | null;
+  textilPrice: number | null;
   persName: string | null;
   persNumber: string | null;
   persPrice: number;
+  optionsTextil: number;
+  optionsClub: number;
+  legend: string | null;
+  noSizeChange: boolean;
+  options: ResolvedOption[];
   playerKey: string | null;
   components: { garmentId: string; garmentCode: string; garmentName: string; variant: string | null; label: string; sizeLabel: string; printTarget: boolean }[];
 };
@@ -58,6 +70,8 @@ export type Priced = {
   shippingTotal: number;
   total: number;
   depositRequired: number;
+  advanceRequired: number;
+  clubBalanceRequired: number;
 };
 
 /** Calcula precios en el servidor a partir del carrito. Ignora cualquier importe del navegador. */
@@ -89,27 +103,38 @@ export function priceCart(c: SaleCampaign, cart: Pick<CartInput, "items" | "play
     const extra = Object.keys(item.sizes).filter((k) => !p.components.some((c2) => c2.label === k));
     if (extra.length) throw new OrderError("El carrito tiene componentes que no corresponden al producto.");
 
-    let persName: string | null = null;
-    let persNumber: string | null = null;
-    let persPrice = 0;
-    const rawName = item.persName?.trim().toUpperCase();
-    const rawNum = item.persNumber?.trim();
-    if (rawName) {
-      if (!p.persNameEnabled) throw new OrderError(`${p.name} no admite nombre estampado.`);
-      if (rawName.length > p.persNameMaxLen) throw new OrderError(`El nombre estampado admite hasta ${p.persNameMaxLen} caracteres.`);
-      if (!PERS_NAME_RE.test(rawName)) throw new OrderError("El nombre estampado solo admite letras, espacios, punto, guion y apóstrofo.");
-      persName = rawName;
-      persPrice += p.persNamePrice;
+    // Opciones del configurador (y compatibilidad con nombre/número directos)
+    const raw: Record<string, string | undefined> = { ...(item.options ?? {}) };
+    const nameGroup = p.optionGroups.find((g) => g.role === "NAME" && g.type === "TEXT");
+    const numberGroup = p.optionGroups.find((g) => g.role === "NUMBER" && g.type === "NUMBER");
+    if (item.persName?.trim()) {
+      if (!nameGroup) throw new OrderError(`${p.name} no admite nombre estampado.`);
+      raw[nameGroup.id] = item.persName;
     }
-    if (rawNum) {
-      if (!p.persNumberEnabled) throw new OrderError(`${p.name} no admite número.`);
-      if (!/^\d{1,3}$/.test(rawNum)) throw new OrderError("El número debe tener solo dígitos.");
-      const n = Number(rawNum);
-      if (n < p.persNumberMin || n > p.persNumberMax) throw new OrderError(`El número debe estar entre ${p.persNumberMin} y ${p.persNumberMax}.`);
-      persNumber = String(n);
-      persPrice += p.persNumberPrice;
+    if (item.persNumber?.trim()) {
+      if (!numberGroup) throw new OrderError(`${p.name} no admite número.`);
+      raw[numberGroup.id] = item.persNumber;
     }
-    if ((persName || persNumber) && item.quantity !== 1) throw new OrderError("Las prendas personalizadas se agregan de a una unidad.");
+    let options: ResolvedOption[];
+    try {
+      options = resolveOptions(p.optionGroups as unknown as OptionGroupT[], raw, p.name);
+    } catch (e) {
+      if (e instanceof OptionError) throw new OrderError(e.message);
+      throw e;
+    }
+    const sum = optionsSummary(options);
+    if (sum.freeText && item.quantity !== 1) throw new OrderError("Las prendas con nombre o número se agregan de a una unidad.");
+    if (c.pricingModel === "TEXTIL_ADVANCE" && cp.textilPrice == null) throw new OrderError(`${p.name} no tiene precio textil cargado. Avisá al club.`);
+
+    // Alcance de la campaña: disciplina o categoría del jugador
+    if (c.audience !== "ALL") {
+      const pl = cart.players.find((x) => x.key === item.playerKey);
+      if (!pl) throw new OrderError(`${p.name}: esta preventa es para ${audienceText(c)}. Elegí el jugador.`);
+      if (c.audience === "SPORTS" && !c.audienceSports.some((s2) => s2.name === pl.sport))
+        throw new OrderError(`Esta preventa es para ${audienceText(c)}. Revisá la disciplina de ${pl.name}.`);
+      if (c.audience === "CATEGORIES" && !c.audienceCategories.some((cat) => cat.name === pl.category && (!cat.sport || cat.sport.name === pl.sport)))
+        throw new OrderError(`Esta preventa es para ${audienceText(c)}. Revisá la categoría de ${pl.name}.`);
+    }
 
     for (let i = 0; i < item.quantity; i++) {
       units.push({
@@ -120,9 +145,15 @@ export function priceCart(c: SaleCampaign, cart: Pick<CartInput, "items" | "play
         productDesc: p.description,
         unitPrice: cp.price,
         listPrice: cp.listPrice,
-        persName,
-        persNumber,
-        persPrice,
+        textilPrice: cp.textilPrice,
+        persName: sum.name,
+        persNumber: sum.number,
+        persPrice: sum.textil + sum.club,
+        optionsTextil: sum.textil,
+        optionsClub: sum.club,
+        legend: sum.legend,
+        noSizeChange: sum.noSizeChange,
+        options,
         playerKey: item.playerKey,
         components,
       });
@@ -130,7 +161,7 @@ export function priceCart(c: SaleCampaign, cart: Pick<CartInput, "items" | "play
   }
   if (units.length > MAX_UNITS_PER_ORDER) throw new OrderError(`Un pedido admite hasta ${MAX_UNITS_PER_ORDER} prendas.`);
 
-  if (cart.delivery.method === "SHIPPING" && !c.shippingEnabled) throw new OrderError("Esta campaña no ofrece envío.");
+  if (cart.delivery.method === "SHIPPING" && (c.pricingModel === "TEXTIL_ADVANCE" || !c.shippingEnabled)) throw new OrderError("Esta campaña no ofrece envío: la producción se entrega al club.");
   if (cart.delivery.method === "PICKUP" && !c.pickupEnabled) throw new OrderError("Esta campaña no ofrece retiro.");
   if (cart.delivery.method === "SHIPPING" && (cart.delivery.address?.trim().length ?? 0) < 6) throw new OrderError("Completá la dirección de envío.");
 
@@ -138,7 +169,24 @@ export function priceCart(c: SaleCampaign, cart: Pick<CartInput, "items" | "play
   const persTotal = units.reduce((a, u) => a + u.persPrice, 0);
   const shippingTotal = cart.delivery.method === "SHIPPING" ? c.shippingPrice : 0;
   const total = itemsTotal + persTotal + shippingTotal;
-  return { units, itemsTotal, persTotal, shippingTotal, total, depositRequired: depositFor(c, itemsTotal + persTotal, total) };
+  if (c.pricingModel === "TEXTIL_ADVANCE") {
+    // Anticipo = precio textil + parte textil de los adicionales; el resto es saldo del club
+    const advanceRequired = units.reduce((a, u) => a + (u.textilPrice ?? 0) + u.optionsTextil, 0);
+    return { units, itemsTotal, persTotal, shippingTotal, total, depositRequired: advanceRequired, advanceRequired, clubBalanceRequired: total - advanceRequired };
+  }
+  const dep = depositFor(c, itemsTotal + persTotal, total);
+  return { units, itemsTotal, persTotal, shippingTotal, total, depositRequired: dep, advanceRequired: 0, clubBalanceRequired: 0 };
+}
+
+export function audienceText(c: { audience: string; audienceSports: { name: string }[]; audienceCategories: { name: string; sport?: { name: string } | null }[] }) {
+  if (c.audience === "SPORTS") return c.audienceSports.map((s) => s.name).join(", ");
+  if (c.audience === "CATEGORIES") return c.audienceCategories.map((x) => (x.sport ? `${x.sport.name} ${x.name}` : x.name)).join(", ");
+  return "todo el club";
+}
+
+/** Precio al socio a partir del precio textil y un recargo en centésimas de % (3000 = 30 %). */
+export function priceWithMarkup(textilPrice: number, markupBp: number) {
+  return Math.round(textilPrice + (textilPrice * markupBp) / 10000);
 }
 
 /** Seña requerida: sobre prendas + personalización; el envío se cobra con el saldo. */

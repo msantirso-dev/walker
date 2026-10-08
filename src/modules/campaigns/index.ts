@@ -3,9 +3,14 @@ import { db } from "@/shared/db";
 import { audit, SYSTEM, type Actor } from "@/modules/audit";
 import { OrderError } from "@/modules/orders/pricing";
 import type { CampaignStatus, MinDecision } from "@/generated/prisma/client";
+import { activationProblems, syncCatalogStatus, campaignProductIds } from "./rules";
+
+export * from "./rules";
 
 export const CAMPAIGN_STATUS_LABEL: Record<CampaignStatus, string> = {
   DRAFT: "Borrador",
+  ACTIVATION_REQUESTED: "Activación solicitada",
+  ACTIVATION_APPROVED: "Activación aprobada",
   PUBLISHED: "Publicada",
   CLOSED: "Cerrada",
   IN_PRODUCTION: "En producción",
@@ -29,6 +34,7 @@ export async function closeExpiredCampaigns() {
   const due = await db.campaign.findMany({ where: { status: "PUBLISHED", closesAt: { lte: now } }, select: { id: true, clubId: true } });
   for (const c of due) {
     await db.campaign.update({ where: { id: c.id }, data: { status: "CLOSED" } });
+    await syncCatalogStatus(await campaignProductIds(c.id));
     await audit(SYSTEM, { entity: "Campaign", entityId: c.id, clubId: c.clubId, action: "campaign.closed_by_date" });
   }
   return due.length;
@@ -36,12 +42,17 @@ export async function closeExpiredCampaigns() {
 
 export async function publishCampaign(actor: Actor, id: string) {
   const c = await db.campaign.findUniqueOrThrow({ where: { id }, include: { products: { where: { active: true } } } });
-  if (c.status !== "DRAFT") throw new OrderError("Solo se publica una campaña en borrador.");
+  if (c.pricingModel === "TEXTIL_ADVANCE") {
+    if (c.status !== "ACTIVATION_APPROVED") throw new OrderError("La campaña necesita la autorización de la textil antes de publicarse.");
+    const problems = await activationProblems(id);
+    if (problems.length) throw new OrderError(`No se puede publicar: ${problems[0]}`);
+  } else if (c.status !== "DRAFT") throw new OrderError("Solo se publica una campaña en borrador.");
   if (!c.products.length) throw new OrderError("Agregá al menos un producto a la colección antes de publicar.");
   if (c.closesAt <= c.opensAt) throw new OrderError("La fecha de cierre debe ser posterior a la apertura.");
   if (c.closesAt <= new Date()) throw new OrderError("La fecha de cierre ya pasó.");
   if (!c.allowMercadoPago && !c.allowTransfer) throw new OrderError("Habilitá al menos un medio de pago.");
   await db.campaign.update({ where: { id }, data: { status: "PUBLISHED" } });
+  await syncCatalogStatus(c.products.map((p) => p.productId));
   await audit(actor, { entity: "Campaign", entityId: id, clubId: c.clubId, action: "campaign.published" });
 }
 
@@ -50,6 +61,7 @@ export async function closeCampaign(actor: Actor, id: string) {
   if (c.status !== "PUBLISHED") throw new OrderError("La campaña no está publicada.");
   const now = new Date();
   await db.campaign.update({ where: { id }, data: { status: "CLOSED", closesAt: c.closesAt > now ? now : c.closesAt } });
+  await syncCatalogStatus(await campaignProductIds(id));
   await audit(actor, { entity: "Campaign", entityId: id, clubId: c.clubId, action: "campaign.closed" });
 }
 
@@ -66,6 +78,7 @@ export async function cancelCampaign(actor: Actor, id: string, reason: string) {
   const c = await db.campaign.findUniqueOrThrow({ where: { id } });
   if (["FINISHED", "CANCELLED"].includes(c.status)) throw new OrderError("La campaña ya está finalizada o cancelada.");
   await db.campaign.update({ where: { id }, data: { status: "CANCELLED" } });
+  await syncCatalogStatus(await campaignProductIds(id));
   await audit(actor, { entity: "Campaign", entityId: id, clubId: c.clubId, action: "campaign.cancelled", data: { reason: reason.trim() } });
 }
 
@@ -91,7 +104,7 @@ export async function campaignMetrics(campaignId: string) {
   const [orders, units, components, players, inLots, settlements, cancelledUnits] = await Promise.all([
     db.order.findMany({
       where: { campaignId },
-      select: { status: true, total: true, paidAmount: true, inReviewAmount: true, depositRequired: true, deliveryStatus: true, refundedAmount: true },
+      select: { status: true, total: true, paidAmount: true, inReviewAmount: true, depositRequired: true, deliveryStatus: true, refundedAmount: true, pricingModel: true, advanceRequired: true, advancePaid: true, clubBalanceRequired: true, clubPaid: true },
     }),
     db.orderUnit.findMany({
       where: { status: "ACTIVE", order: { campaignId, status: { in: ["CONFIRMED", "PENDING_PAYMENT"] } } },
@@ -148,6 +161,10 @@ export async function campaignMetrics(campaignId: string) {
     inReview: orders.reduce((a, o) => a + o.inReviewAmount, 0),
     balanceDue: confirmed.reduce((a, o) => a + Math.max(0, o.total - o.paidAmount), 0),
     salesConfirmed: confirmed.reduce((a, o) => a + o.total, 0),
+    advanceCollected: orders.reduce((a, o) => a + o.advancePaid, 0),
+    clubCollected: orders.reduce((a, o) => a + o.clubPaid, 0),
+    clubBalanceDue: confirmed.filter((o) => o.pricingModel === "TEXTIL_ADVANCE").reduce((a, o) => a + Math.max(0, o.clubBalanceRequired - o.clubPaid), 0),
+    ordersClubPending: confirmed.filter((o) => o.pricingModel === "TEXTIL_ADVANCE" && o.clubPaid < o.clubBalanceRequired).length,
     refundPending: orders.filter((o) => o.status === "CANCELLED").reduce((a, o) => a + o.paidAmount, 0),
     byProduct: [...byProduct.values()].sort((a, b) => b.confirmed - a.confirmed),
     bySize: [...bySize.values()].sort((a, b) => a.code.localeCompare(b.code) || a.sort - b.sort),

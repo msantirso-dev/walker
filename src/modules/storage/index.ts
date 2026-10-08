@@ -95,3 +95,18 @@ export async function savePublicRaw(rel: string, data: Buffer): Promise<string> 
   await writeFile(abs, data);
   return "/files/" + rel;
 }
+
+export const CONTRACT_MAX_BYTES = 15 * 1024 * 1024;
+
+/** Contrato o anexo del acuerdo con el club: privado, PDF o imagen, sin recodificar. Nunca se sirve en público. */
+export async function saveContract(buf: Buffer, clubId: string): Promise<{ key: string; mime: string }> {
+  if (buf.length > CONTRACT_MAX_BYTES) throw new UploadError("El archivo supera 15 MB.");
+  const kind = sniff(buf);
+  if (!kind) throw new UploadError("Formato no admitido. Subí un PDF o una imagen.");
+  const ext = kind === "jpeg" ? "jpg" : kind;
+  const key = path.posix.join("private", "acuerdos", clubId.replace(/[^a-zA-Z0-9]/g, ""), `${randomToken(12)}.${ext}`);
+  const abs = safeJoin(root(), key);
+  await mkdir(path.dirname(abs), { recursive: true });
+  await writeFile(abs, buf);
+  return { key, mime: kind === "pdf" ? "application/pdf" : `image/${kind}` };
+}

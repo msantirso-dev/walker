@@ -6,6 +6,8 @@ const schema = z.object({
   DATABASE_URL: z.string().url(),
   APP_URL: z.string().url(),
   PLATFORM_NAME: z.string().default("Camada"),
+  /** Marca de la textil para la línea "Club by Marca" (configurable, no se inventa). */
+  TEXTIL_BRAND: z.string().min(1).default("Marca Textil"),
   /** 32 bytes en base64. Cifra credenciales de cobro. */
   APP_ENCRYPTION_KEY: z
     .string()

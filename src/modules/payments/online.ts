@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "@/shared/db";
-import { env } from "@/shared/env";
+import { env, simulatorEnabled } from "@/shared/env";
 import { decryptSecret } from "@/shared/crypto";
 import { audit, BUYER, PROVIDER, type Actor } from "@/modules/audit";
 import { lockOrder, recomputeOrder, renewReservation, notifyConfirmedPayment } from "@/modules/orders/recompute";
@@ -19,14 +19,17 @@ export async function startOnlinePayment(orderId: string, kind: PaymentKind, act
   const order = await db.order.findUniqueOrThrow({ where: { id: orderId }, include: { campaign: { include: { paymentAccount: true, club: true } } } });
   const c = order.campaign;
   if (!c.allowMercadoPago) throw new OrderError("Esta campaña no acepta pagos con Mercado Pago.");
-  const provider = providerFor(c.paymentAccount);
-  if (!provider) throw new OrderError("El pago con Mercado Pago todavía no está habilitado para esta campaña. Usá transferencia.");
+  const advance = order.pricingModel === "TEXTIL_ADVANCE";
+  if (advance && c.paymentAccount.owner !== "TEXTIL") throw new OrderError("El anticipo se cobra en la cuenta de la textil. Revisá la configuración de la campaña.");
+  // Club de demostración: nunca se cobra dinero real
+  const provider = c.club.isDemo ? (simulatorEnabled() ? new SimulatorProvider() : null) : providerFor(c.paymentAccount);
+  if (!provider) throw new OrderError(c.club.isDemo ? "Tienda de demostración: no admite pagos." : "El pago con Mercado Pago todavía no está habilitado para esta campaña.");
   if (order.inReviewAmount > 0) throw new OrderError("Tenés un comprobante de transferencia en revisión. Esperá la respuesta antes de pagar de otra forma.");
 
   const payment = await db.$transaction(async (tx) => {
     await lockOrder(tx, orderId);
     const fresh = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
-    const due = amountFor(fresh, c, fresh.status === "CONFIRMED" ? "BALANCE" : kind);
+    const due = amountFor(fresh, c, advance ? "ADVANCE" : fresh.status === "CONFIRMED" ? "BALANCE" : kind);
     if (!due) throw new OrderError("No hay importes pendientes para ese tipo de pago.");
     if (fresh.status !== "CONFIRMED") await renewReservation(tx, orderId, "MERCADOPAGO", actor);
     const after = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
@@ -44,7 +47,7 @@ export async function startOnlinePayment(orderId: string, kind: PaymentKind, act
 
     const expiresAt = due.kind === "BALANCE" || !after.reservedUntil ? new Date(Date.now() + 24 * 3600_000) : after.reservedUntil;
     const p = await tx.payment.create({
-      data: { orderId, kind: due.kind, method: "MERCADOPAGO", amount: due.amount, status: "CREATED", expiresAt, simulated: provider.simulated },
+      data: { orderId, kind: due.kind, method: "MERCADOPAGO", amount: due.amount, status: "CREATED", expiresAt, simulated: provider.simulated, receiver: advance ? "TEXTIL" : c.paymentAccount.owner },
     });
     await audit(actor, { entity: "Order", entityId: orderId, clubId: order.clubId, action: "payment.created", data: { paymentId: p.id, kind: due.kind, amount: due.amount, simulated: provider.simulated } }, tx);
     return p;
@@ -55,7 +58,7 @@ export async function startOnlinePayment(orderId: string, kind: PaymentKind, act
   const res = await provider.createCheckout({
     paymentId: payment.id,
     orderCode: order.code,
-    title: `${payment.kind === "BALANCE" ? "Saldo" : payment.kind === "DEPOSIT" ? "Seña" : "Pago"} pedido ${order.code} · ${c.club.name}`,
+    title: `${payment.kind === "ADVANCE" ? "Anticipo" : payment.kind === "BALANCE" ? "Saldo" : payment.kind === "DEPOSIT" ? "Seña" : "Pago"} pedido ${order.code} · ${c.club.name}`,
     amount: payment.amount,
     payerEmail: order.buyerEmail,
     payerName: order.buyerName,
@@ -109,7 +112,7 @@ export async function processProviderPayment(
         ? // Mercado Pago permite reintentar dentro del mismo checkout: cada intento es un pago distinto.
           await tx.payment.create({
             data: {
-              orderId: row.orderId, kind: row.kind, method: row.method, amount: row.amount, status: "CREATED",
+              orderId: row.orderId, kind: row.kind, method: row.method, amount: row.amount, status: "CREATED", receiver: row.receiver,
               providerPreferenceId: row.providerPreferenceId, providerPaymentId: pp.id, simulated: row.simulated, expiresAt: row.expiresAt,
             },
           })
@@ -122,6 +125,11 @@ export async function processProviderPayment(
       return "amount_mismatch" as const;
     }
 
+    // Conciliación: importe de la operación, pagado por el comprador (con financiación) y neto acreditado
+    await tx.payment.update({
+      where: { id: target.id },
+      data: { providerGross: pp.amount, providerTotalPaid: pp.totalPaid, providerNet: pp.net, providerFees: (pp.fees ?? undefined) as never, installments: pp.installments },
+    });
     const next = pp.status as ProviderStatus as PaymentStatus;
     if (target.status === next || RANK[next] < RANK[target.status]) {
       await recomputeOrder(tx, target.orderId, PROVIDER);

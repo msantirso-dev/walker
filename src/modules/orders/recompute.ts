@@ -20,23 +20,34 @@ export async function recomputeOrder(tx: Tx, orderId: string, actor: Actor = SYS
     include: { payments: true, campaign: { include: { benefitRule: true } }, units: { where: { status: "ACTIVE" } } },
   });
   let approvedIn = 0, refundedProvider = 0, refundManual = 0, inReview = 0;
+  // Por destinatario: anticipo de la textil y saldo del club se concilian por separado
+  const byReceiver = { TEXTIL: 0, CLUB: 0 };
   for (const p of order.payments) {
     if (p.kind === "REFUND") {
-      if (p.status === "APPROVED") refundManual += p.amount;
+      if (p.status === "APPROVED") {
+        refundManual += p.amount;
+        byReceiver[p.receiver] -= p.amount;
+      }
       continue;
     }
-    if (p.status === "APPROVED") approvedIn += p.amount;
+    if (p.status === "APPROVED") {
+      approvedIn += p.amount;
+      byReceiver[p.receiver] += p.amount;
+    }
     if (p.status === "REFUNDED") refundedProvider += p.amount;
     if (p.status === "IN_REVIEW") inReview += p.amount;
   }
   const paidAmount = approvedIn - refundManual;
   const refundedAmount = refundedProvider + refundManual;
 
-  const data: Record<string, unknown> = { paidAmount, refundedAmount, inReviewAmount: inReview };
+  const data: Record<string, unknown> = { paidAmount, refundedAmount, inReviewAmount: inReview, advancePaid: byReceiver.TEXTIL, clubPaid: byReceiver.CLUB };
   let newlyConfirmed = false;
 
   const confirmable = order.status === "PENDING_PAYMENT" || order.status === "EXPIRED";
-  if (confirmable && paidAmount >= order.depositRequired && paidAmount > 0) {
+  // Anticipo textil: confirma solo lo cobrado por la textil. Seña heredada: confirma lo cobrado total.
+  const covered =
+    order.pricingModel === "TEXTIL_ADVANCE" ? byReceiver.TEXTIL >= order.advanceRequired && byReceiver.TEXTIL > 0 : paidAmount >= order.depositRequired && paidAmount > 0;
+  if (confirmable && covered) {
     newlyConfirmed = true;
     data.status = "CONFIRMED";
     data.confirmedAt = new Date();
@@ -55,7 +66,10 @@ export async function recomputeOrder(tx: Tx, orderId: string, actor: Actor = SYS
     }
     // Fijar el beneficio del club con la regla vigente al confirmar
     for (const u of order.units) {
-      await tx.orderUnit.update({ where: { id: u.id }, data: { benefitAmount: benefitFor(order.campaign.benefitRule, u.unitPrice) } });
+      await tx.orderUnit.update({ where: { id: u.id }, data: {
+          // Anticipo textil: el ingreso del club es su saldo (precio al socio − precio textil + parte club de adicionales)
+          benefitAmount: order.pricingModel === "TEXTIL_ADVANCE" ? u.unitPrice - (u.textilPrice ?? u.unitPrice) + u.optionsClub : benefitFor(order.campaign.benefitRule, u.unitPrice),
+        } });
     }
     await audit(actor, { entity: "Order", entityId: order.id, clubId: order.clubId, action: "order.confirmed", data: { paidAmount } }, tx);
   }

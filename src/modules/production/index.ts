@@ -3,6 +3,7 @@ import { db, type Tx } from "@/shared/db";
 import { audit, type Actor } from "@/modules/audit";
 import { queueEmail, orderMailSelect } from "@/modules/notifications";
 import { OrderError } from "@/modules/orders/pricing";
+import { productionRuleStatus } from "@/modules/campaigns/rules";
 import type { LotStatus, Prisma } from "@/generated/prisma/client";
 
 export const LOT_STATUS_LABEL: Record<LotStatus, string> = {
@@ -43,7 +44,7 @@ export async function generateLot(actor: Actor & { id: string }, campaignId: str
   return db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Campaign" WHERE id = ${campaignId} FOR UPDATE`;
     const c = await tx.campaign.findUniqueOrThrow({ where: { id: campaignId } });
-    if (["DRAFT", "CANCELLED"].includes(c.status)) throw new OrderError("La campaña no está en condiciones de generar un lote.");
+    if (["DRAFT", "ACTIVATION_REQUESTED", "ACTIVATION_APPROVED", "CANCELLED"].includes(c.status)) throw new OrderError("La campaña no está en condiciones de generar un lote.");
     if (c.status === "PUBLISHED" && c.closesAt > new Date()) throw new OrderError("La ventana de compra sigue abierta. Cerrá la campaña antes de consolidar.");
 
     const confirmedUnits = await tx.orderUnit.count({ where: { status: "ACTIVE", order: { campaignId, status: "CONFIRMED" } } });
@@ -51,12 +52,18 @@ export async function generateLot(actor: Actor & { id: string }, campaignId: str
       throw new OrderError(`No se alcanzó el mínimo (${confirmedUnits} de ${c.minUnits}). Registrá la decisión "continuar" antes de consolidar.`);
     }
 
+    // Reglas por producto: categoría completa sin la cantidad esperada ni excepción aprobada → no se produce.
+    const rules = await productionRuleStatus(campaignId);
+    const held = rules.filter((r) => !r.canProduce);
+    const heldIds = held.map((r) => r.productId);
+
     const committed = await netInclusion(tx, campaignId);
+    // Con anticipo textil, el pedido entra a producción con el anticipo aprobado: el saldo del club no lo frena.
     const payWhere: Prisma.OrderWhereInput =
-      c.lotCondition === "FULLY_PAID"
+      c.pricingModel === "LEGACY_DEPOSIT" && c.lotCondition === "FULLY_PAID"
         ? { campaignId, status: "CONFIRMED", paidAmount: { gte: tx.order.fields.total } }
         : { campaignId, status: "CONFIRMED" };
-    const eligible = await tx.orderUnit.findMany({ where: { status: "ACTIVE", order: payWhere }, select: { id: true } });
+    const eligible = await tx.orderUnit.findMany({ where: { status: "ACTIVE", order: payWhere, ...(heldIds.length ? { productId: { notIn: heldIds } } : {}) }, select: { id: true } });
     const adds = eligible.filter((u) => (committed.get(u.id) ?? 0) === 0).map((u) => ({ unitId: u.id, delta: 1 }));
     const eligibleSet = new Set(eligible.map((u) => u.id));
     const removes = [...committed.entries()].filter(([id, n]) => n > 0 && !eligibleSet.has(id)).map(([unitId]) => ({ unitId, delta: -1 }));
@@ -64,7 +71,11 @@ export async function generateLot(actor: Actor & { id: string }, campaignId: str
     const pending = await tx.productionLot.findFirst({ where: { campaignId, status: "PENDING_APPROVAL" } });
     if (!adds.length && !removes.length) {
       if (pending) await tx.productionLot.delete({ where: { id: pending.id } });
-      throw new OrderError("No hay unidades nuevas ni bajas respecto de los lotes aprobados.");
+      throw new OrderError(
+        held.length
+          ? `No hay unidades para producir. Retenidos por regla: ${held.map((h) => `${h.product} (${h.confirmed}${h.expectedQty ? ` de ${h.expectedQty}` : ""})`).join(", ")}.`
+          : "No hay unidades nuevas ni bajas respecto de los lotes aprobados.",
+      );
     }
     const anyApproved = await tx.productionLot.count({ where: { campaignId, status: { not: "PENDING_APPROVAL" } } });
     let lot = pending;
@@ -78,15 +89,17 @@ export async function generateLot(actor: Actor & { id: string }, campaignId: str
     }
     await tx.productionLotUnit.createMany({ data: [...adds, ...removes].map((r) => ({ ...r, lotId: lot!.id })) });
     if (c.status === "PUBLISHED") await tx.campaign.update({ where: { id: c.id }, data: { status: "CLOSED" } });
-    await audit(actor, { entity: "ProductionLot", entityId: lot.id, clubId: c.clubId, action: "lot.generated", data: { number: lot.number, adds: adds.length, removes: removes.length } }, tx);
-    return lot;
+    await audit(actor, { entity: "ProductionLot", entityId: lot.id, clubId: c.clubId, action: "lot.generated", data: { number: lot.number, adds: adds.length, removes: removes.length, heldByRule: held.map((h) => h.product) } }, tx);
+    return Object.assign(lot, { heldByRule: held.map((h) => ({ product: h.product, confirmed: h.confirmed, expected: h.expectedQty })) });
   });
 }
 
 export type LotLine = { garmentCode: string; garmentName: string; variant: string | null; component: string; product: string; size: string; sizeSort: number; quantity: number };
-export type LotPers = { unitRef: string; productCode: string; garmentCode: string; size: string; name: string | null; number: string | null; delta: number };
+export type LotPers = { unitRef: string; productCode: string; garmentCode: string; size: string; name: string | null; number: string | null; legend?: string | null; extras?: string; player?: string | null; delta: number };
+/** Trabajo de personalización agrupado (estampa de nombre, número, leyenda): se hace sobre las prendas base, sin fragmentar el lote. */
+export type LotPersJob = { kind: string; value: string; garmentCode: string; quantity: number };
 export type LotBreakdown = { productCode: string; productName: string; component: string; garmentCode: string; size: string; sizeSort: number; quantity: number };
-export type LotReport = { club: string; campaign: string; lotNumber: number; kind: string; status: string; generatedAt: string; lines: LotLine[]; breakdown: LotBreakdown[]; garments: { code: string; name: string; variant: string | null; total: number }[]; personalization: LotPers[]; totalUnits: number };
+export type LotReport = { club: string; campaign: string; lotNumber: number; kind: string; status: string; generatedAt: string; lines: LotLine[]; breakdown: LotBreakdown[]; garments: { code: string; name: string; variant: string | null; total: number }[]; personalization: LotPers[]; persJobs?: LotPersJob[]; totalUnits: number };
 
 /** Consolidado por prenda fabricable y talle. Los componentes de conjuntos y combos se suman con las prendas sueltas del mismo código. */
 export async function computeLotReport(lotId: string, tx: Tx = db): Promise<LotReport> {
@@ -94,7 +107,7 @@ export async function computeLotReport(lotId: string, tx: Tx = db): Promise<LotR
     where: { id: lotId },
     include: {
       campaign: { include: { club: true } },
-      units: { include: { unit: { include: { components: true } } } },
+      units: { include: { unit: { include: { components: true, options: { orderBy: { sort: "asc" } }, player: { select: { name: true } } } } } },
     },
   });
   const garmentIds = [...new Set(lot.units.flatMap((u) => u.unit.components.map((c) => c.garmentId)))];
@@ -103,6 +116,7 @@ export async function computeLotReport(lotId: string, tx: Tx = db): Promise<LotR
 
   const lines = new Map<string, LotLine>();
   const pers: LotPers[] = [];
+  const jobs = new Map<string, LotPersJob>();
   const breakdown = new Map<string, LotBreakdown>();
   for (const lu of lot.units) {
     for (const comp of lu.unit.components) {
@@ -118,9 +132,23 @@ export async function computeLotReport(lotId: string, tx: Tx = db): Promise<LotR
       cur.quantity += lu.delta;
       lines.set(key, cur);
     }
-    if (lu.unit.persName || lu.unit.persNumber) {
+    const extras = lu.unit.options.filter((o) => o.role === "OTHER").map((o) => `${o.groupName}: ${o.value}`);
+    if (lu.unit.persName || lu.unit.persNumber || lu.unit.legend || extras.length) {
       const target = lu.unit.components.find((c) => c.printTarget) ?? lu.unit.components[0];
-      pers.push({ unitRef: lu.unit.ref, productCode: lu.unit.productCode, garmentCode: target.garmentCode, size: target.sizeLabel, name: lu.unit.persName, number: lu.unit.persNumber, delta: lu.delta });
+      pers.push({
+        unitRef: lu.unit.ref, productCode: lu.unit.productCode, garmentCode: target.garmentCode, size: target.sizeLabel,
+        name: lu.unit.persName, number: lu.unit.persNumber, legend: lu.unit.legend, extras: extras.join(" · "), player: lu.unit.player?.name ?? null, delta: lu.delta,
+      });
+      const add = (kind: string, value: string) => {
+        const k = `${kind}|${value}|${target.garmentCode}`;
+        const j = jobs.get(k) ?? { kind, value, garmentCode: target.garmentCode, quantity: 0 };
+        j.quantity += lu.delta;
+        jobs.set(k, j);
+      };
+      if (lu.unit.legend) add("Leyenda", lu.unit.legend);
+      if (lu.unit.persName) add("Nombre", "(individual)");
+      if (lu.unit.persNumber) add("Número", "(individual)");
+      for (const e of lu.unit.options.filter((o) => o.role === "OTHER")) add(e.groupName, e.value);
     }
   }
   const sorted = [...lines.values()].filter((l) => l.quantity !== 0).sort((a, b) => a.garmentCode.localeCompare(b.garmentCode) || a.sizeSort - b.sizeSort);
@@ -142,6 +170,7 @@ export async function computeLotReport(lotId: string, tx: Tx = db): Promise<LotR
     breakdown: [...breakdown.values()].filter((b) => b.quantity !== 0).sort((a, b) => a.productCode.localeCompare(b.productCode) || a.component.localeCompare(b.component) || a.sizeSort - b.sizeSort),
     garments: [...garments.values()],
     personalization: pers,
+    persJobs: [...jobs.values()].filter((j) => j.quantity !== 0).sort((a, b) => a.kind.localeCompare(b.kind) || a.value.localeCompare(b.value)),
     totalUnits: lot.units.reduce((a, u) => a + u.delta, 0),
   };
 }
@@ -191,7 +220,8 @@ export async function advanceLot(actor: Actor, lotId: string, to: LotStatus) {
         if (o.status !== "CONFIRMED") continue;
         if (o.deliveryStatus === "NOT_READY") await tx.order.update({ where: { id }, data: { deliveryStatus: "READY" } });
         await queueEmail("READY_FOR_PICKUP", o, undefined, tx);
-        if (o.total > o.paidAmount) await queueEmail("BALANCE_REQUESTED", o, undefined, tx);
+        const due = o.pricingModel === "TEXTIL_ADVANCE" ? o.clubBalanceRequired - o.clubPaid : o.total - o.paidAmount;
+        if (due > 0) await queueEmail("BALANCE_REQUESTED", o, undefined, tx);
       }
       const open = await tx.productionLot.count({ where: { campaignId: lot.campaignId, status: { not: "RECEIVED_BY_CLUB" } } });
       if (!open && lot.campaign.status !== "FINISHED") await tx.campaign.update({ where: { id: lot.campaignId }, data: { status: "READY_FOR_PICKUP" } });

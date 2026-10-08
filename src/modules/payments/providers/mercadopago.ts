@@ -64,9 +64,15 @@ export class MercadoPagoProvider implements PaymentProvider {
       amount: Math.round(Number(b.transaction_amount) * 100),
       currency: String(b.currency_id ?? ""),
       externalReference: b.external_reference ? String(b.external_reference) : null,
+      totalPaid: cents(b.transaction_details?.total_paid_amount),
+      net: cents(b.transaction_details?.net_received_amount),
+      fees: Array.isArray(b.fee_details) ? b.fee_details : null,
+      installments: Number.isFinite(Number(b.installments)) ? Number(b.installments) : null,
     };
   }
 }
+
+const cents = (v: unknown) => (v == null || !Number.isFinite(Number(v)) ? null : Math.round(Number(v) * 100));
 
 export function mapStatus(s: string): ProviderStatus {
   switch (s) {

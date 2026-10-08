@@ -15,8 +15,9 @@ const MAX_TRANSFERS_PER_ORDER = 12;
 export async function submitTransfer(orderId: string, input: { kind: PaymentKind; operationRef: string; file: Buffer; fileName?: string }) {
   const ref = input.operationRef.trim();
   if (ref.length < 3 || ref.length > 60) throw new OrderError("Ingresá el número de operación de la transferencia (3 a 60 caracteres).");
-  const order = await db.order.findUniqueOrThrow({ where: { id: orderId }, include: { campaign: true } });
+  const order = await db.order.findUniqueOrThrow({ where: { id: orderId }, include: { campaign: { include: { paymentAccount: true } } } });
   if (!order.campaign.allowTransfer) throw new OrderError("Esta campaña no acepta transferencias.");
+  const advance = order.pricingModel === "TEXTIL_ADVANCE";
   const count = await db.payment.count({ where: { orderId, method: "TRANSFER" } });
   if (count >= MAX_TRANSFERS_PER_ORDER) throw new OrderError("Alcanzaste el máximo de comprobantes para este pedido. Escribí al club.");
 
@@ -25,13 +26,14 @@ export async function submitTransfer(orderId: string, input: { kind: PaymentKind
     await lockOrder(tx, orderId);
     const fresh = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
     if (fresh.inReviewAmount > 0) throw new OrderError("Ya hay un comprobante en revisión. Esperá la respuesta del club.");
-    const due = amountFor(fresh, order.campaign, fresh.status === "CONFIRMED" ? "BALANCE" : input.kind);
+    const due = amountFor(fresh, order.campaign, advance ? "ADVANCE" : fresh.status === "CONFIRMED" ? "BALANCE" : input.kind);
     if (!due) throw new OrderError("No hay importes pendientes para ese tipo de pago.");
     if (fresh.status !== "CONFIRMED") await renewReservation(tx, orderId, "TRANSFER", BUYER);
     const rejected = await tx.payment.findFirst({ where: { orderId, method: "TRANSFER", status: "REJECTED" }, orderBy: { createdAt: "desc" } });
     const p = await tx.payment.create({
       data: {
         orderId, kind: due.kind, method: "TRANSFER", amount: due.amount, status: "IN_REVIEW", operationRef: ref,
+        receiver: advance ? "TEXTIL" : order.campaign.paymentAccount.owner,
         replacesPaymentId: rejected?.id ?? null,
         receipts: { create: { fileKey: stored.key, mime: stored.mime, size: stored.size, originalName: input.fileName?.slice(0, 120) } },
       },
@@ -96,6 +98,7 @@ export async function registerManualPayment(
     const p = await tx.payment.create({
       data: {
         orderId, kind: input.kind, method: input.method, amount: input.amount, status: "APPROVED", operationRef: input.reference || null,
+        receiver: order.pricingModel === "TEXTIL_ADVANCE" ? "TEXTIL" : order.campaign.paymentAccount.owner,
         reviewNote: input.note || null, reviewedById: user.id, reviewedAt: new Date(), createdById: user.id,
       },
     });
@@ -106,7 +109,7 @@ export async function registerManualPayment(
 }
 
 /** Registra una devolución ya realizada fuera del sistema. No mueve dinero. */
-export async function registerRefund(user: SessionUser, actor: Actor, orderId: string, input: { amount: number; reference: string; note?: string }) {
+export async function registerRefund(user: SessionUser, actor: Actor, orderId: string, input: { amount: number; reference: string; note?: string; receiver?: "TEXTIL" | "CLUB" }) {
   const order = await db.order.findUniqueOrThrow({ where: { id: orderId }, include: { campaign: { include: { paymentAccount: true } } } });
   if (!canReviewPayments(user, order.clubId, order.campaign.paymentAccount.owner)) throw new OrderError("No tenés permiso para registrar devoluciones de esta campaña.");
   if (!Number.isInteger(input.amount) || input.amount <= 0) throw new OrderError("Importe inválido.");
@@ -115,9 +118,43 @@ export async function registerRefund(user: SessionUser, actor: Actor, orderId: s
   await db.$transaction(async (tx) => {
     await lockOrder(tx, orderId);
     const p = await tx.payment.create({
-      data: { orderId, kind: "REFUND", method: "TRANSFER", amount: input.amount, status: "APPROVED", operationRef: input.reference.trim(), reviewNote: input.note || null, reviewedById: user.id, reviewedAt: new Date(), createdById: user.id },
+      data: { orderId, kind: "REFUND", method: "TRANSFER", amount: input.amount, status: "APPROVED", receiver: input.receiver ?? (order.pricingModel === "TEXTIL_ADVANCE" ? "TEXTIL" : order.campaign.paymentAccount.owner), operationRef: input.reference.trim(), reviewNote: input.note || null, reviewedById: user.id, reviewedAt: new Date(), createdById: user.id },
     });
     await audit(actor, { entity: "Order", entityId: orderId, clubId: order.clubId, action: "payment.refund", data: { paymentId: p.id, amount: input.amount, reference: input.reference } }, tx);
+    await recomputeOrder(tx, orderId, actor);
+  });
+}
+
+
+/**
+ * Saldo cobrado por el club (modelo de anticipo textil). Lo registra el club o la textil,
+ * con fecha, medio y referencia. No pasa por Mercado Pago ni por la cuenta de la textil.
+ */
+export async function registerClubBalance(
+  user: SessionUser,
+  actor: Actor,
+  orderId: string,
+  input: { amount: number; method: "CASH" | "TRANSFER" | "OTHER"; paidAt: Date; reference: string; note?: string },
+) {
+  const order = await db.order.findUniqueOrThrow({ where: { id: orderId } });
+  const allowed = user.role === "TEXTIL_ADMIN" || (user.role === "CLUB_ADMIN" && user.clubId === order.clubId);
+  if (!allowed) throw new OrderError("No tenés permiso para registrar el saldo de este club.");
+  if (order.pricingModel !== "TEXTIL_ADVANCE") throw new OrderError("Este pedido usa el modelo de seña anterior: registrá el pago desde \"Registrar pago manual\".");
+  if (order.status === "CANCELLED") throw new OrderError("El pedido está cancelado.");
+  if (!Number.isInteger(input.amount) || input.amount <= 0) throw new OrderError("Importe inválido.");
+  const due = order.clubBalanceRequired - order.clubPaid;
+  if (input.amount > due) throw new OrderError(due <= 0 ? "El saldo del club ya está cobrado." : "El importe supera el saldo pendiente con el club.");
+  if (input.reference.trim().length < 2) throw new OrderError("Indicá una referencia (recibo, operación o nota).");
+  if (input.paidAt > new Date(Date.now() + 86400_000)) throw new OrderError("La fecha del cobro no puede ser futura.");
+  await db.$transaction(async (tx) => {
+    await lockOrder(tx, orderId);
+    const p = await tx.payment.create({
+      data: {
+        orderId, kind: "CLUB_BALANCE", method: input.method, receiver: "CLUB", amount: input.amount, status: "APPROVED", paidAt: input.paidAt,
+        operationRef: input.reference.trim(), reviewNote: input.note || null, reviewedById: user.id, reviewedAt: new Date(), createdById: user.id,
+      },
+    });
+    await audit(actor, { entity: "Order", entityId: orderId, clubId: order.clubId, action: "payment.club_balance", data: { paymentId: p.id, amount: input.amount, method: input.method, paidAt: input.paidAt.toISOString(), reference: input.reference.trim() } }, tx);
     await recomputeOrder(tx, orderId, actor);
   });
 }

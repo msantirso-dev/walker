@@ -36,10 +36,11 @@ export async function registerDelivery(
     if (o.status !== "CONFIRMED") throw new OrderError("Solo se entregan pedidos confirmados.");
     if (o.deliveryStatus === "NOT_READY") throw new OrderError("Las prendas de este pedido todavía no están disponibles en el club.");
 
-    const balance = o.total - o.paidAmount;
+    // Con anticipo textil, lo pendiente es el saldo que cobra el club.
+    const balance = o.pricingModel === "TEXTIL_ADVANCE" ? o.clubBalanceRequired - o.clubPaid : o.total - o.paidAmount;
     let exception: string | null = null;
     if (balance > 0) {
-      if (!can(user, "deliveries.exception", o.clubId)) throw new OrderError("El pedido tiene saldo pendiente. Solo un administrador puede autorizar la entrega.");
+      if (!can(user, "deliveries.exception", o.clubId)) throw new OrderError("El pedido tiene saldo pendiente con el club. Solo un administrador puede autorizar la entrega.");
       if ((input.exceptionReason?.trim().length ?? 0) < 5) throw new OrderError("El pedido tiene saldo pendiente. Para entregar igual, escribí el motivo de la excepción.");
       exception = input.exceptionReason!.trim();
     }

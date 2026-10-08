@@ -52,4 +52,8 @@ export const ACTION_LABELS: Record<string, string> = {
   "delivery.exception": "Entrega con saldo pendiente (excepción)",
   "order.links_resent": "Enlace del pedido reenviado al comprador",
   "order.unit_edited": "Prenda modificada",
+  "payment.club_balance": "Saldo cobrado por el club",
+  "shipment.created": "Despacho al club creado",
+  "shipment.dispatched": "Despacho enviado al club",
+  "shipment.received": "Producción recibida por el club",
 };

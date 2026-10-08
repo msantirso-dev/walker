@@ -5,5 +5,5 @@ export { recomputeOrder, expireReservations, renewReservation, lockOrder } from 
 export { heldUnits } from "./capacity";
 export { requestOrderLinks, resendOrderLink } from "./links";
 export { cancelOrder, cancelUnit } from "./manage";
-export { editUnit, unitLockedByLot, type UnitEdit } from "./edit";
+export { editUnit, unitLockedByLot, EDIT_REASON_LABEL, type UnitEdit, type EditReason } from "./edit";
 export { orderByToken, orderById, orderWhere, paymentStateLabel, ORDER_STATUS_LABEL, DELIVERY_STATUS_LABEL, type FullOrder, type OrderFilters } from "./queries";

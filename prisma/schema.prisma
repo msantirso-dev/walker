@@ -71,6 +71,7 @@ model Sport {
   clubs      ClubSport[]
   categories Category[]
   products   Product[]
+  campaigns  Campaign[]   @relation("CampaignSports")
 }
 
 model Club {
@@ -96,6 +97,8 @@ model Club {
   facebook       String?
   website        String?
   active         Boolean   @default(true)
+  /// Club de demostración: la tienda muestra un aviso y solo admite pagos simulados.
+  isDemo         Boolean   @default(false)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -109,6 +112,10 @@ model Club {
   paymentAccounts PaymentAccount[]
   buyers          Buyer[]
   orders          Order[]
+  agreements      ClubAgreement[]
+  sampleSets      SizeSampleSet[]
+  purchases       ClubPurchase[]
+  shipments       ClubShipment[]
 }
 
 model ClubSport {
@@ -129,6 +136,8 @@ model Category {
   name    String
   sort    Int     @default(0)
   active  Boolean @default(true)
+  campaigns Campaign[] @relation("CampaignCategories")
+  ruleProducts CampaignProduct[]
 
   @@unique([clubId, sportId, name])
   @@index([clubId])
@@ -198,6 +207,7 @@ model Garment {
   createdAt   DateTime      @default(now())
   sizes       GarmentSize[]
   components  ProductComponent[]
+  sampleSets  SizeSampleSet[]
 
   @@unique([clubId, code])
 }
@@ -214,6 +224,46 @@ model GarmentSize {
   enabled   Boolean   @default(true)
 
   @@unique([garmentId, label])
+}
+
+enum CatalogStatus {
+  PREPARATION // en preparación
+  CATALOG // disponible en catálogo, sin venta
+  PRESALE // en preventa activa
+  PRESALE_CLOSED // con preventa cerrada
+  ARCHIVED
+}
+
+/// Familia comercial (define reglas de activación). No se deduce del nombre.
+enum ProductFamily {
+  GAME_KIT // prenda de juego
+  OUTFIT // outfit y prendas generales
+  ACCESSORY
+  OTHER
+}
+
+/// Técnica de fabricación, independiente de la familia.
+enum FabricTechnique {
+  PENDING
+  SUBLIMATED
+  NON_SUBLIMATED
+  EMBROIDERED
+  PRINTED
+  OTHER
+}
+
+enum OptionGroupType {
+  CHOICE // valores a elegir
+  TEXT // texto libre (nombre)
+  NUMBER
+}
+
+/// Rol de la opción para producción y política de cambios.
+enum OptionRole {
+  NAME
+  NUMBER
+  LEGEND // leyenda de disciplina
+  OTHER
 }
 
 enum ProductKind {
@@ -244,14 +294,60 @@ model Product {
   persNumberPrice   Int                @default(0)
   persNumberMin     Int                @default(0)
   persNumberMax     Int                @default(99)
+  catalogStatus     CatalogStatus      @default(PREPARATION)
+  family            ProductFamily      @default(OTHER)
+  technique         FabricTechnique    @default(PENDING)
   active            Boolean            @default(true)
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   components        ProductComponent[]
   images            ProductImage[]
   campaigns         CampaignProduct[]
+  optionGroups      ProductOptionGroup[]
+  sampleLinks       ProductSampleLink[]
+  purchases         ClubPurchase[]
 
   @@unique([clubId, code])
+}
+
+/// Grupo de opciones del configurador (personalización, leyenda, etc.).
+model ProductOptionGroup {
+  id              String            @id @default(cuid())
+  productId       String
+  product         Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name            String
+  type            OptionGroupType
+  role            OptionRole        @default(OTHER)
+  required        Boolean           @default(false)
+  sort            Int               @default(0)
+  help            String?
+  // Dependencia: el grupo se muestra (y aplica "required") solo si otro grupo CHOICE tiene alguno de estos valores
+  dependsOnGroupId String?
+  dependsOnGroup  ProductOptionGroup?  @relation("OptionDependency", fields: [dependsOnGroupId], references: [id], onDelete: SetNull)
+  dependents      ProductOptionGroup[] @relation("OptionDependency")
+  dependsOnValueIds String[]        @default([])
+  // TEXT / NUMBER
+  maxLength       Int?
+  numberMin       Int?
+  numberMax       Int?
+  // Precio de TEXT / NUMBER cuando se completa (centavos), separado en textil y club
+  priceTextil     Int               @default(0)
+  priceClub       Int               @default(0)
+  splitConfirmed  Boolean           @default(false) // reparto textil/club definido comercialmente
+  /// Si es true, la prenda con esta opción completada no admite cambio de talle voluntario
+  blocksSizeChange Boolean          @default(false)
+  values          ProductOptionValue[]
+}
+
+model ProductOptionValue {
+  id          String             @id @default(cuid())
+  groupId     String
+  group       ProductOptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  label       String
+  sort        Int                @default(0)
+  priceTextil Int                @default(0)
+  priceClub   Int                @default(0)
+  active      Boolean            @default(true)
 }
 
 model ProductComponent {
@@ -295,12 +391,32 @@ model ProductImage {
 
 enum CampaignStatus {
   DRAFT
+  ACTIVATION_REQUESTED // el club solicitó activar
+  ACTIVATION_APPROVED // la textil verificó condiciones y aprobó
   PUBLISHED
   CLOSED
   IN_PRODUCTION
   READY_FOR_PICKUP
   FINISHED
   CANCELLED
+}
+
+/// LEGACY_DEPOSIT: seña configurable (campañas anteriores). TEXTIL_ADVANCE: anticipo = precio textil, saldo al club.
+enum PricingModel {
+  LEGACY_DEPOSIT
+  TEXTIL_ADVANCE
+}
+
+enum CampaignAudience {
+  ALL // todo el club
+  SPORTS // una o varias disciplinas
+  CATEGORIES // una o varias categorías
+}
+
+enum ProductionRuleType {
+  NONE
+  FULL_CATEGORY // prenda de juego para una categoría completa
+  INITIAL_PURCHASE // compra inicial del club (outfit)
 }
 
 enum PaymentMode {
@@ -333,6 +449,15 @@ model Campaign {
   description         String?
   season              String?
   status              CampaignStatus  @default(DRAFT)
+  pricingModel        PricingModel    @default(TEXTIL_ADVANCE)
+  audience            CampaignAudience @default(ALL)
+  audienceSports      Sport[]         @relation("CampaignSports")
+  audienceCategories  Category[]      @relation("CampaignCategories")
+  activationRequestedAt DateTime?
+  activationRequestedById String?
+  activationApprovedAt DateTime?
+  activationApprovedById String?
+  activationNote      String?
   opensAt             DateTime
   closesAt            DateTime
   deliveryDaysMin     Int             @default(30)
@@ -378,6 +503,8 @@ model Campaign {
   products            CampaignProduct[]
   orders              Order[]
   lots                ProductionLot[]
+  shipments           ClubShipment[]
+  purchases           ClubPurchase[]
   benefitRule         BenefitRule?
   settlements         BenefitSettlement[]
 
@@ -390,11 +517,29 @@ model CampaignProduct {
   campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   productId  String
   product    Product  @relation(fields: [productId], references: [id])
-  price      Int // precio de preventa (centavos)
+  price      Int // precio al socio (centavos)
   listPrice  Int? // precio de lista, para mostrar el descuento real
+  /// Precio textil (anticipo). Null en campañas con modelo de seña heredado.
+  textilPrice Int?
+  /// Recargo del club sobre el precio textil, en centésimas de % (3000 = 30 %), si el precio se calculó así
+  markupBp   Int?
   maxUnits   Int?
   sort       Int      @default(0)
   active     Boolean  @default(true)
+  // Regla de producción del producto en esta campaña
+  ruleType   ProductionRuleType @default(NONE)
+  ruleCategoryId String?
+  ruleCategory Category? @relation(fields: [ruleCategoryId], references: [id])
+  expectedQty Int? // categoría completa: cantidad esperada
+  initialPurchaseMin Int? // outfit: compra inicial mínima (editable)
+  initialPurchaseEstimated Boolean @default(true) // el mínimo es estimado, no confirmado
+  initialPurchaseWaived Boolean @default(false) // excepción a la compra inicial
+  ruleApprovedAt DateTime? // aprobación de la textil para abrir
+  ruleApprovedById String?
+  productionApprovedAt DateTime? // aprobación para producir (categoría completa con menos de lo esperado)
+  ruleNote   String?
+  clubPurchaseId String?
+  clubPurchase ClubPurchase? @relation(fields: [clubPurchaseId], references: [id])
 
   @@unique([campaignId, productId])
 }
@@ -483,13 +628,18 @@ model Order {
   deliveryMethod   DeliveryMethod @default(PICKUP)
   shippingAddress  String?
   notes            String?
+  pricingModel     PricingModel   @default(LEGACY_DEPOSIT)
   // Totales (centavos), calculados en el servidor
   itemsTotal       Int
   persTotal        Int
   shippingTotal    Int
   discountTotal    Int            @default(0)
   total            Int
-  depositRequired  Int // importe necesario para confirmar
+  depositRequired  Int // importe necesario para confirmar (en TEXTIL_ADVANCE = anticipo)
+  advanceRequired  Int            @default(0) // anticipo textil (TEXTIL_ADVANCE)
+  clubBalanceRequired Int         @default(0) // saldo a cobrar por el club
+  advancePaid      Int            @default(0)
+  clubPaid         Int            @default(0)
   // Estado
   status           OrderStatus    @default(PENDING_PAYMENT)
   confirmedAt      DateTime?
@@ -503,6 +653,7 @@ model Order {
   // Snapshot de condiciones aceptadas
   termsSnapshot    Json
   termsHash        String
+  policyVersion    String?
   termsAcceptedAt  DateTime
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
@@ -546,13 +697,18 @@ model OrderUnit {
   productCode      String
   productName      String
   productDesc      String?
-  unitPrice        Int
+  unitPrice        Int // precio al socio
   listPrice        Int?
+  textilPrice      Int?  // anticipo por la prenda (TEXTIL_ADVANCE)
   playerId         String?
   player           Player?      @relation(fields: [playerId], references: [id])
   persName         String?
   persNumber       String?
-  persPrice        Int          @default(0)
+  persPrice        Int          @default(0) // total de adicionales de la unidad
+  optionsTextil    Int          @default(0) // parte textil de los adicionales
+  optionsClub      Int          @default(0) // parte club de los adicionales
+  legend           String?      // leyenda de disciplina elegida, si aplica
+  noSizeChange     Boolean      @default(false) // personalizada: sin cambio de talle voluntario
   benefitAmount    Int          @default(0) // fijado al confirmar
   status           UnitStatus   @default(ACTIVE)
   cancelledAt      DateTime?
@@ -560,9 +716,24 @@ model OrderUnit {
   delivery         Delivery?    @relation(fields: [deliveryId], references: [id])
   sort             Int          @default(0)
   components       OrderUnitComponent[]
+  options          OrderUnitOption[]
   lotUnits         ProductionLotUnit[]
 
   @@index([orderId])
+}
+
+/// Copia de cada opción elegida en la unidad.
+model OrderUnitOption {
+  id          String     @id @default(cuid())
+  unitId      String
+  unit        OrderUnit  @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  groupId     String?
+  groupName   String
+  role        OptionRole
+  value       String
+  priceTextil Int        @default(0)
+  priceClub   Int        @default(0)
+  sort        Int        @default(0)
 }
 
 model OrderUnitComponent {
@@ -585,12 +756,20 @@ enum PaymentKind {
   BALANCE
   FULL
   REFUND
+  ADVANCE // anticipo textil
+  CLUB_BALANCE // saldo cobrado por el club
+}
+
+enum PaymentReceiver {
+  TEXTIL
+  CLUB
 }
 
 enum PaymentMethod {
   TRANSFER
   MERCADOPAGO
   CASH // registrado manualmente por usuario autorizado
+  OTHER
 }
 
 enum PaymentStatus {
@@ -611,6 +790,8 @@ model Payment {
   kind                PaymentKind
   method              PaymentMethod
   amount              Int
+  receiver            PaymentReceiver @default(TEXTIL)
+  paidAt              DateTime? // fecha informada del cobro (registro manual)
   status              PaymentStatus @default(CREATED)
   statusDetail        String?
   // Transferencia
@@ -622,6 +803,12 @@ model Payment {
   initPoint           String?
   expiresAt           DateTime?
   simulated           Boolean       @default(false)
+  // Conciliación con el proveedor (centavos)
+  providerGross       Int? // importe de la operación
+  providerTotalPaid   Int? // pagado por el comprador, con intereses de financiación
+  providerNet         Int? // neto acreditado
+  providerFees        Json? // detalle de cargos informado por el proveedor
+  installments        Int?
   // Revisión
   reviewedById        String?
   reviewedAt          DateTime?
@@ -698,6 +885,8 @@ model ProductionLot {
   approvedAt  DateTime?
   approvedById String?
   updatedAt   DateTime            @updatedAt
+  shipmentId  String?
+  shipment    ClubShipment?       @relation(fields: [shipmentId], references: [id])
   units       ProductionLotUnit[]
 
   @@unique([campaignId, number])
@@ -768,4 +957,182 @@ model AuditLog {
 
   @@index([entity, entityId])
   @@index([clubId, createdAt])
+}
+
+
+// ───────────────────────── Acuerdo, muestrario y compras del club ─────────────────────────
+
+enum AgreementStatus {
+  DRAFT
+  ACTIVE
+  EXPIRED
+  TERMINATED
+}
+
+/// Acuerdo comercial privado con el club. Nunca se publica en la tienda.
+model ClubAgreement {
+  id                   String          @id @default(cuid())
+  clubId               String
+  club                 Club            @relation(fields: [clubId], references: [id])
+  status               AgreementStatus @default(DRAFT)
+  startsAt             DateTime
+  endsAt               DateTime
+  exclusive            Boolean         @default(true)
+  brandLine            String? // ej. "Club X by Marca"
+  samplesCommitted     String?
+  catalogAgreed        String?
+  activationConditions String?
+  initialPurchases     String?
+  pricingRules         String?
+  notes                String?
+  contractFileKey      String?
+  contractFileName     String?
+  alertDaysBefore      Int             @default(60)
+  lastAlertAt          DateTime?
+  createdById          String
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  @@index([clubId])
+}
+
+enum SampleKind {
+  TOP // prendas superiores
+  BOTTOM // prendas inferiores
+  OTHER
+}
+
+enum SampleAvailability {
+  PENDING_DELIVERY
+  AVAILABLE
+  NOT_AVAILABLE
+}
+
+/// Curva de talles del muestrario para que los socios se prueben.
+model SizeSampleSet {
+  id                 String             @id @default(cuid())
+  clubId             String
+  club               Club               @relation(fields: [clubId], references: [id])
+  kind               SampleKind
+  name               String
+  referenceGarmentId String?
+  referenceGarment   Garment?           @relation(fields: [referenceGarmentId], references: [id])
+  deliveredAt        DateTime?
+  availability       SampleAvailability @default(PENDING_DELIVERY)
+  location           String? // lugar de prueba
+  notes              String?
+  purchaseId         String? // compra que lo originó, si se registró
+  purchase           ClubPurchase?      @relation(fields: [purchaseId], references: [id])
+  createdAt          DateTime           @default(now())
+  items              SizeSampleItem[]
+  productLinks       ProductSampleLink[]
+}
+
+model SizeSampleItem {
+  id        String        @id @default(cuid())
+  setId     String
+  set       SizeSampleSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+  sizeLabel String
+  quantity  Int           @default(1)
+  sort      Int           @default(0)
+}
+
+/// Equivalencia de calce producto–curva, aprobada por la textil.
+model ProductSampleLink {
+  id           String        @id @default(cuid())
+  productId    String
+  product      Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  setId        String
+  set          SizeSampleSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+  approved     Boolean       @default(false)
+  approvedAt   DateTime?
+  approvedById String?
+  notes        String?
+
+  @@unique([productId, setId])
+}
+
+enum PurchasePurpose {
+  SAMPLE // muestrario para probar talles
+  INITIAL // compra inicial para garantizar producción
+  BACKUP // unidades de respaldo para cambios
+}
+
+enum SizeDistributionStatus {
+  PENDING
+  DEFINED
+}
+
+/// Compra del club a la textil. Una compra puede cumplir más de una función si se confirma.
+model ClubPurchase {
+  id                 String                 @id @default(cuid())
+  clubId             String
+  club               Club                   @relation(fields: [clubId], references: [id])
+  campaignId         String?
+  campaign           Campaign?              @relation(fields: [campaignId], references: [id])
+  productId          String?
+  product            Product?               @relation(fields: [productId], references: [id])
+  purposes           PurchasePurpose[]
+  committedQty       Int
+  paidQty            Int                    @default(0)
+  paidAmount         Int? // centavos, si corresponde
+  sizeStatus         SizeDistributionStatus @default(PENDING)
+  approvedAt         DateTime?
+  approvedById       String?
+  notes              String?
+  createdById        String
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  items              ClubPurchaseItem[]
+  sampleSets         SizeSampleSet[]
+  campaignProducts   CampaignProduct[]
+}
+
+model ClubPurchaseItem {
+  id         String       @id @default(cuid())
+  purchaseId String
+  purchase   ClubPurchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  sizeLabel  String
+  quantity   Int
+}
+
+// ───────────────────────── Entrega consolidada al club ─────────────────────────
+
+enum ShipmentStatus {
+  PREPARING
+  DISPATCHED
+  RECEIVED
+}
+
+enum CostBearer {
+  PENDING // a definir
+  TEXTIL
+  CLUB
+}
+
+/// Despacho de la producción de la textil al club.
+model ClubShipment {
+  id            String         @id @default(cuid())
+  number        Int
+  clubId        String
+  club          Club           @relation(fields: [clubId], references: [id])
+  campaignId    String
+  campaign      Campaign       @relation(fields: [campaignId], references: [id])
+  status        ShipmentStatus @default(PREPARING)
+  address       String
+  receiverName  String // responsable de recepción
+  receiverPhone String?
+  carrier       String? // transporte o modalidad (ej. Via Cargo)
+  trackingRef   String?
+  cost          Int? // centavos, si se conoce
+  costBearer    CostBearer     @default(PENDING)
+  dispatchedAt  DateTime?
+  receivedAt    DateTime?
+  receivedBy    String?
+  notes         String?
+  createdById   String
+  createdAt     DateTime       @default(now())
+  lots          ProductionLot[]
+
+  @@unique([campaignId, number])
 }

@@ -12,6 +12,15 @@ export async function recalcTotals(tx: Tx, orderId: string) {
   const persTotal = o.units.reduce((a, u) => a + u.persPrice, 0);
   const shippingTotal = o.units.length ? o.shippingTotal : 0;
   const total = itemsTotal + persTotal + shippingTotal;
+  if (o.pricingModel === "TEXTIL_ADVANCE") {
+    // Con los precios guardados en cada unidad: anticipo = textil + parte textil de adicionales
+    const advanceRequired = o.units.reduce((a, u) => a + (u.textilPrice ?? 0) + u.optionsTextil, 0);
+    await tx.order.update({
+      where: { id: orderId },
+      data: { itemsTotal, persTotal, shippingTotal, total, advanceRequired, depositRequired: advanceRequired, clubBalanceRequired: total - advanceRequired },
+    });
+    return;
+  }
   // La seña requerida no aumenta por una cancelación parcial
   const depositRequired = Math.min(o.depositRequired, depositFor(o.campaign, itemsTotal + persTotal, total));
   await tx.order.update({ where: { id: orderId }, data: { itemsTotal, persTotal, shippingTotal, total, depositRequired } });

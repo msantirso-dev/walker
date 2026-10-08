@@ -27,6 +27,10 @@ export class SimulatorProvider implements PaymentProvider {
       amount: sp.amount,
       currency: "ARS",
       externalReference: sp.paymentId,
+      totalPaid: sp.amount,
+      net: sp.amount,
+      fees: [],
+      installments: 1,
     };
   }
 }

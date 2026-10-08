@@ -19,9 +19,13 @@ export type ProviderPayment = {
   id: string;
   status: ProviderStatus;
   statusDetail: string;
-  amount: number; // centavos
+  amount: number; // centavos: importe de la operación (transaction_amount)
   currency: string;
   externalReference: string | null;
+  totalPaid: number | null; // pagado por el comprador, incluye intereses de financiación
+  net: number | null; // neto acreditado al vendedor
+  fees: unknown; // detalle de cargos tal como lo informa el proveedor
+  installments: number | null;
 };
 
 export interface PaymentProvider {

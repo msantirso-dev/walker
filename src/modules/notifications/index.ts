@@ -29,6 +29,7 @@ export const TEMPLATE_LABELS: Record<Template, string> = {
 export const SYSTEM_TEMPLATE_LABELS: Record<string, string> = {
   ORDER_LINKS: "Reenvío de enlaces de pedido",
   PASSWORD_RESET: "Restablecer contraseña",
+  AGREEMENT_EXPIRING: "Vencimiento de acuerdo con club",
 };
 
 type OrderForMail = {
@@ -39,6 +40,11 @@ type OrderForMail = {
   accessTokenEnc: string;
   total: number;
   paidAmount: number;
+  pricingModel?: string;
+  advanceRequired?: number;
+  advancePaid?: number;
+  clubBalanceRequired?: number;
+  clubPaid?: number;
   club: { name: string; pickupAddress: string | null; pickupHours: string | null; whatsapp: string | null };
   campaign: { title: string; pickupInstructions: string | null };
 };
@@ -49,7 +55,9 @@ export function orderLink(accessTokenEnc: string) {
 
 function compose(t: Template, o: OrderForMail, extra: { amount?: number; reason?: string; units?: number } = {}) {
   const link = orderLink(o.accessTokenEnc);
-  const balance = Math.max(0, o.total - o.paidAmount);
+  const adv = o.pricingModel === "TEXTIL_ADVANCE";
+  // Con anticipo textil, el saldo pendiente es el del club: se paga en el club, no por la plataforma.
+  const balance = adv ? Math.max(0, (o.clubBalanceRequired ?? 0) - (o.clubPaid ?? 0)) : Math.max(0, o.total - o.paidAmount);
   const hi = `Hola ${o.buyerName.split(" ")[0]}:`;
   const foot = `\n\nSeguí tu pedido ${o.code} en este enlace privado (no lo compartas):\n${link}\n\n${o.club.name} · ${o.campaign.title}`;
   const pickup = [o.club.pickupAddress && `Dirección: ${o.club.pickupAddress}`, o.club.pickupHours && `Horarios: ${o.club.pickupHours}`, o.campaign.pickupInstructions]
@@ -58,11 +66,13 @@ function compose(t: Template, o: OrderForMail, extra: { amount?: number; reason?
   const map: Record<Template, [string, string]> = {
     ORDER_RECEIVED: [
       `Recibimos tu pedido ${o.code}`,
-      `${hi}\n\nRegistramos tu pedido de ${o.campaign.title} por ${ars(o.total)}. Para confirmarlo, pagá la seña desde el enlace. Hasta que el pago se acredite, el pedido no está confirmado.`,
+      `${hi}\n\nRegistramos tu pedido de ${o.campaign.title} por ${ars(o.total)}. ${adv ? `Para confirmarlo, pagá el anticipo de ${ars(o.advanceRequired ?? 0)} con Mercado Pago desde el enlace.${(o.clubBalanceRequired ?? 0) > 0 ? ` El saldo de ${ars(o.clubBalanceRequired ?? 0)} se paga al club.` : ""}` : "Para confirmarlo, pagá la seña desde el enlace."} Hasta que el pago se acredite, el pedido no está confirmado.`,
     ],
     PAYMENT_CONFIRMED: [
       `Pago confirmado · pedido ${o.code}`,
-      `${hi}\n\nConfirmamos un pago de ${ars(extra.amount ?? 0)}. Total pagado: ${ars(o.paidAmount)}. Saldo: ${ars(balance)}.`,
+      adv
+        ? `${hi}\n\nConfirmamos un pago de ${ars(extra.amount ?? 0)}. Anticipo acreditado: ${ars(o.advancePaid ?? 0)}.${balance > 0 ? ` Saldo a pagar al club: ${ars(balance)}.` : ""}`
+        : `${hi}\n\nConfirmamos un pago de ${ars(extra.amount ?? 0)}. Total pagado: ${ars(o.paidAmount)}. Saldo: ${ars(balance)}.`,
     ],
     RECEIPT_REJECTED: [
       `Revisá tu comprobante · pedido ${o.code}`,
@@ -74,11 +84,13 @@ function compose(t: Template, o: OrderForMail, extra: { amount?: number; reason?
     ],
     BALANCE_REQUESTED: [
       `Saldo a pagar · pedido ${o.code}`,
-      `${hi}\n\nTus prendas están listas. Para retirarlas, completá el saldo de ${ars(balance)} desde el enlace.`,
+      adv
+        ? `${hi}\n\nTus prendas están en el club. Para retirarlas, pagá al club el saldo de ${ars(balance)}.\n${pickup}`
+        : `${hi}\n\nTus prendas están listas. Para retirarlas, completá el saldo de ${ars(balance)} desde el enlace.`,
     ],
     READY_FOR_PICKUP: [
       `Tu pedido ${o.code} está listo para retirar`,
-      `${hi}\n\nYa podés retirar tu pedido en el club.\n${pickup}\n\nPresentá el código QR de retiro que figura en el enlace.${balance > 0 ? `\nAntes de retirar, completá el saldo de ${ars(balance)}.` : ""}`,
+      `${hi}\n\nYa podés retirar tu pedido en el club.\n${pickup}\n\nPresentá el código QR de retiro que figura en el enlace.${balance > 0 ? `\nAntes de retirar, ${adv ? "pagá al club" : "completá"} el saldo de ${ars(balance)}.` : ""}`,
     ],
     DELIVERED: [
       `Entrega registrada · pedido ${o.code}`,
@@ -101,6 +113,7 @@ export async function queueEmail(t: Template, o: OrderForMail, extra?: { amount?
 
 export const orderMailSelect = {
   id: true, code: true, buyerName: true, buyerEmail: true, accessTokenEnc: true, total: true, paidAmount: true,
+  pricingModel: true, advanceRequired: true, advancePaid: true, clubBalanceRequired: true, clubPaid: true,
   club: { select: { name: true, pickupAddress: true, pickupHours: true, whatsapp: true } },
   campaign: { select: { title: true, pickupInstructions: true } },
 } as const;

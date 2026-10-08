@@ -7,6 +7,8 @@ import { queueEmail, orderMailSelect } from "@/modules/notifications";
 import { cartSchema, type CartInput } from "./cart-schema";
 import { loadCampaignForSale, priceCart, isWindowOpen, OrderError, type SaleCampaign } from "./pricing";
 import { assertCapacity, lockCampaign } from "./capacity";
+import { CHANGE_POLICY_TEXT, CHANGE_POLICY_UNPERSONALIZED, CHANGE_POLICY_VERSION } from "@/modules/catalog/options";
+import { simulatorEnabled } from "@/shared/env";
 
 export function termsOf(c: SaleCampaign) {
   return {
@@ -23,6 +25,12 @@ export function termsOf(c: SaleCampaign) {
     minUnits: c.minUnits,
     minPolicy: c.minPolicyText,
     policies: { changes: c.policyChanges, cancellation: c.policyCancellation, refunds: c.policyRefunds },
+    pricingModel: c.pricingModel,
+    payments:
+      c.pricingModel === "TEXTIL_ADVANCE"
+        ? "El anticipo se paga ahora por Mercado Pago a la textil. El saldo, si lo hay, se paga al club antes del retiro."
+        : null,
+    changePolicy: { version: CHANGE_POLICY_VERSION, personalized: CHANGE_POLICY_TEXT, other: CHANGE_POLICY_UNPERSONALIZED },
     clubConditions: c.club.conditions,
     pickup: c.pickupEnabled ? { address: c.club.pickupAddress, hours: c.club.pickupHours } : null,
     shipping: c.shippingEnabled ? { price: c.shippingPrice, notes: c.shippingNotes } : null,
@@ -50,10 +58,13 @@ export async function createOrder(campaignId: string, raw: unknown): Promise<Cre
         if (!isWindowOpen(c)) throw new OrderError("La ventana de compra está cerrada.", "closed");
         if (cart.payMethod === "MERCADOPAGO" && !c.allowMercadoPago) throw new OrderError("Esta campaña no acepta Mercado Pago.");
         if (cart.payMethod === "TRANSFER" && !c.allowTransfer) throw new OrderError("Esta campaña no acepta transferencias.");
-        if (cart.payKind === "DEPOSIT" && c.paymentMode === "FULL") throw new OrderError("Esta campaña requiere el pago total.");
+        if (c.pricingModel === "LEGACY_DEPOSIT" && cart.payKind === "DEPOSIT" && c.paymentMode === "FULL") throw new OrderError("Esta campaña requiere el pago total.");
+        if (c.club.isDemo && !simulatorEnabled()) throw new OrderError("Esta es una tienda de demostración: no admite compras.");
         if (c.memberNumberMode === "REQUIRED" && !cart.buyer.memberNumber) throw new OrderError("Completá tu número de socio.");
 
         const priced = priceCart(c, cart);
+        if (priced.units.some((u) => u.noSizeChange) && cart.policyVersion !== CHANGE_POLICY_VERSION)
+          throw new OrderError("Aceptá la condición de cambios: las prendas con nombre o número no admiten cambio de talle.", "policy");
         const capErr = await assertCapacity(tx, c, priced.units);
         if (capErr) throw new OrderError(capErr, "capacity");
 
@@ -89,6 +100,10 @@ export async function createOrder(campaignId: string, raw: unknown): Promise<Cre
             shippingTotal: priced.shippingTotal,
             total: priced.total,
             depositRequired: priced.depositRequired,
+            pricingModel: c.pricingModel,
+            advanceRequired: priced.advanceRequired,
+            clubBalanceRequired: priced.clubBalanceRequired,
+            policyVersion: priced.units.some((u) => u.noSizeChange) ? CHANGE_POLICY_VERSION : null,
             reservedUntil: new Date(now.getTime() + holdMs),
             termsSnapshot: terms,
             termsHash: sha256(JSON.stringify(terms)),
@@ -119,14 +134,20 @@ export async function createOrder(campaignId: string, raw: unknown): Promise<Cre
               persName: u.persName,
               persNumber: u.persNumber,
               persPrice: u.persPrice,
+              textilPrice: u.textilPrice,
+              optionsTextil: u.optionsTextil,
+              optionsClub: u.optionsClub,
+              legend: u.legend,
+              noSizeChange: u.noSizeChange,
               sort: i,
               components: { create: u.components },
+              options: { create: u.options.map((o) => ({ groupId: o.groupId, groupName: o.groupName, role: o.role, value: o.value, priceTextil: o.priceTextil, priceClub: o.priceClub, sort: o.sort })) },
             },
           });
         }
         await audit(BUYER, {
           entity: "Order", entityId: order.id, clubId: c.clubId, action: "order.created",
-          data: { units: priced.units.length, total: priced.total, deposit: priced.depositRequired, payMethod: cart.payMethod },
+          data: { units: priced.units.length, total: priced.total, deposit: priced.depositRequired, advance: priced.advanceRequired, clubBalance: priced.clubBalanceRequired, model: c.pricingModel, payMethod: cart.payMethod },
         }, tx);
         const forMail = await tx.order.findUniqueOrThrow({ where: { id: order.id }, select: orderMailSelect });
         await queueEmail("ORDER_RECEIVED", forMail, undefined, tx);
