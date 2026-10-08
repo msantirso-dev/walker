@@ -63,7 +63,8 @@ export async function createOrder(campaignId: string, raw: unknown): Promise<Cre
         if (c.memberNumberMode === "REQUIRED" && !cart.buyer.memberNumber) throw new OrderError("Completá tu número de socio.");
 
         const priced = priceCart(c, cart);
-        if (priced.units.some((u) => u.noSizeChange) && cart.policyVersion !== CHANGE_POLICY_VERSION)
+        // Política de cambios de prendas personalizadas: rige para las campañas del modelo v2
+        if (c.pricingModel === "TEXTIL_ADVANCE" && priced.units.some((u) => u.noSizeChange) && cart.policyVersion !== CHANGE_POLICY_VERSION)
           throw new OrderError("Aceptá la condición de cambios: las prendas con nombre o número no admiten cambio de talle.", "policy");
         const capErr = await assertCapacity(tx, c, priced.units);
         if (capErr) throw new OrderError(capErr, "capacity");
@@ -103,7 +104,7 @@ export async function createOrder(campaignId: string, raw: unknown): Promise<Cre
             pricingModel: c.pricingModel,
             advanceRequired: priced.advanceRequired,
             clubBalanceRequired: priced.clubBalanceRequired,
-            policyVersion: priced.units.some((u) => u.noSizeChange) ? CHANGE_POLICY_VERSION : null,
+            policyVersion: c.pricingModel === "TEXTIL_ADVANCE" && priced.units.some((u) => u.noSizeChange) ? CHANGE_POLICY_VERSION : null,
             reservedUntil: new Date(now.getTime() + holdMs),
             termsSnapshot: terms,
             termsHash: sha256(JSON.stringify(terms)),

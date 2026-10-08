@@ -115,6 +115,15 @@ export function priceCart(c: SaleCampaign, cart: Pick<CartInput, "items" | "play
       if (!numberGroup) throw new OrderError(`${p.name} no admite número.`);
       raw[numberGroup.id] = item.persNumber;
     }
+    // Compatibilidad: si el nombre o número dependen de una elección (ej. "Nombre y número"), se elige la que los habilita
+    // (solo para los campos directos persName/persNumber; las opciones del configurador se validan tal como llegan)
+    const legacy = [item.persName?.trim() ? nameGroup : null, item.persNumber?.trim() ? numberGroup : null];
+    for (const g of legacy) {
+      if (!g || !raw[g.id] || !g.dependsOnGroupId || raw[g.dependsOnGroupId]) continue;
+      const other = g === nameGroup ? numberGroup : nameGroup;
+      const both = other && raw[other.id] && other.dependsOnGroupId === g.dependsOnGroupId ? g.dependsOnValueIds.find((v) => other.dependsOnValueIds.includes(v)) : undefined;
+      raw[g.dependsOnGroupId] = both ?? g.dependsOnValueIds[0];
+    }
     let options: ResolvedOption[];
     try {
       options = resolveOptions(p.optionGroups as unknown as OptionGroupT[], raw, p.name);

@@ -53,7 +53,7 @@ export default async function Dashboard() {
           ))}
           {expiring.map((a) => (
             <Link key={a.id} href={`/admin/clubes/${a.clubId}/acuerdo`} className="notice notice-warn font-semibold">
-              El acuerdo con {a.club.name} {a.daysLeft > 0 ? `vence en ${a.daysLeft} días (${fmtDate(a.endsAt)})` : "está vencido"} →
+              {`El acuerdo con ${a.club.name} ${a.daysLeft > 0 ? `vence en ${a.daysLeft} días (${fmtDate(a.endsAt)})` : "está vencido"} →`}
             </Link>
           ))}
           {clubPending > 0 && <Link href="/admin/pedidos?pay=club" className="notice notice-warn font-semibold">{clubPending} pedido(s) listos para retirar con saldo al club pendiente →</Link>}

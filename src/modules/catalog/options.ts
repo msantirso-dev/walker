@@ -67,7 +67,11 @@ export function resolveOptions(groups: OptionGroupT[], raw: Record<string, strin
   for (const k of Object.keys(raw)) if (raw[k] && !known.has(k)) throw new OptionError(`Hay una opción que no corresponde a ${productName}. Actualizá la página.`);
   const out: ResolvedOption[] = [];
   for (const g of sortGroups(groups)) {
-    if (!isVisible(g, raw)) continue;
+    if (!isVisible(g, raw)) {
+      // Un valor cargado en un grupo que no corresponde no se descarta en silencio
+      if (raw[g.id]?.trim()) throw new OptionError(`"${g.name}" no corresponde con las opciones elegidas en ${productName}.`);
+      continue;
+    }
     const v = raw[g.id]?.trim();
     if (!v) {
       if (g.required) throw new OptionError(`Completá "${g.name}" en ${productName}.`);

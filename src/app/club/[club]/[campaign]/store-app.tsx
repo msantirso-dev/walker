@@ -767,7 +767,7 @@ function ProductSheet({ p, cfg, players, canBuy, onClose, onAdd }: { p: StorePro
                       {g.type === "CHOICE" ? (
                         <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={g.name}>
                           {!g.required && (
-                            <button type="button" className="chip-size" aria-pressed={!sel[g.id]} onClick={() => setSel({ ...sel, [g.id]: "" })}>Ninguna</button>
+                            <button type="button" className="chip-size" aria-pressed={!sel[g.id]} onClick={() => setSel({ ...sel, [g.id]: "" })}>Sin {g.name.toLowerCase()}</button>
                           )}
                           {g.values.map((v) => (
                             <button key={v.id} type="button" className="chip-size" aria-pressed={sel[g.id] === v.id} onClick={() => setSel({ ...sel, [g.id]: v.id })}>

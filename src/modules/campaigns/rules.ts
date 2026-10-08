@@ -79,6 +79,7 @@ export function ruleOpenProblems(cp: RuleCp, name: string): string[] {
         if (p.sizeStatus !== "DEFINED") out.push(`${name}: falta la distribución de talles de la compra inicial.`);
         if (!p.approvedAt) out.push(`${name}: la compra inicial no está aprobada por la textil.`);
       }
+      if (!cp.initialPurchaseWaived && !cp.ruleApprovedAt) out.push(`${name}: falta la aprobación de la textil para abrir con compra inicial.`);
     }
   }
   return out;

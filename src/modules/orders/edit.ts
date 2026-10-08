@@ -49,7 +49,7 @@ export async function editUnit(actor: Actor, unitId: string, input: UnitEdit) {
     where: { id: unit.productId },
     include: {
       components: { orderBy: { sort: "asc" }, include: { garment: { include: { sizes: { where: { enabled: true } } } } } },
-      optionGroups: true,
+      optionGroups: { include: { values: true } },
     },
   });
   if (!product) throw new OrderError("El producto ya no existe en el catálogo.");
@@ -95,6 +95,18 @@ export async function editUnit(actor: Actor, unitId: string, input: UnitEdit) {
     const prevNumber = unit.options.find((o) => o.role === "NUMBER");
     if (name) keep.push(prevName ? { ...prevName, value: name } : { groupId: nameGroup!.id, groupName: nameGroup!.name, role: "NAME", value: name, priceTextil: nameGroup!.priceTextil, priceClub: nameGroup!.priceClub, sort: nameGroup!.sort });
     if (normNumber) keep.push(prevNumber ? { ...prevNumber, value: normNumber } : { groupId: numberGroup!.id, groupName: numberGroup!.name, role: "NUMBER", value: normNumber, priceTextil: numberGroup!.priceTextil, priceClub: numberGroup!.priceClub, sort: numberGroup!.sort });
+    // La elección que habilita nombre/número (ej. "Nombre y número" / "Solo número") acompaña el cambio
+    const parentId = nameGroup?.dependsOnGroupId ?? numberGroup?.dependsOnGroupId ?? null;
+    const parent = parentId ? product.optionGroups.find((g) => g.id === parentId) : null;
+    if (parent) {
+      const idx = keep.findIndex((o) => o.groupId === parent.id);
+      const fits = (vid: string) =>
+        (name ? nameGroup?.dependsOnValueIds.includes(vid) : !nameGroup?.dependsOnValueIds.includes(vid)) &&
+        (normNumber ? numberGroup?.dependsOnValueIds.includes(vid) : !numberGroup?.dependsOnValueIds.includes(vid));
+      const v = name || normNumber ? parent.values.find((x) => x.active && fits(x.id)) : null;
+      if (idx >= 0) keep.splice(idx, 1);
+      if (v) keep.push({ groupId: parent.id, groupName: parent.name, role: "OTHER", value: v.label, priceTextil: v.priceTextil, priceClub: v.priceClub, sort: parent.sort });
+    }
     options = keep.sort((a, b) => a.sort - b.sort);
     optionsTextil = options.reduce((a, o) => a + o.priceTextil, 0);
     optionsClub = options.reduce((a, o) => a + o.priceClub, 0);

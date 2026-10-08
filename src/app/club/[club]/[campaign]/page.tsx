@@ -6,7 +6,7 @@ import { ars } from "@/shared/money";
 import { Bar } from "@/shared/ui";
 import { ClubBar, Contact, DemoBanner, Faq, PlatformFooter, Steps, WindowLine } from "../../_ui/parts";
 import { CHANGE_POLICY_TEXT, CHANGE_POLICY_UNPERSONALIZED } from "@/modules/catalog/options";
-import { MP_FINANCING_TEXT } from "@/shared/copy";
+import { MP_FINANCING_TEXT, SAMPLE_TEXT } from "@/shared/copy";
 import { StoreApp, type StoreConfig } from "./store-app";
 
 export const dynamic = "force-dynamic";
@@ -117,6 +117,13 @@ export default async function CampaignPage({ params }: P) {
             </div>
           </section>
         ) : null}
+
+        {products.some((p) => p.samples.length > 0) && (
+          <section className="notice notice-info mt-10">
+            <b>{SAMPLE_TEXT}</b>{" "}
+            {[...new Set(products.flatMap((p) => p.samples.map((x) => x.location)).filter(Boolean))].join(" · ")}
+          </section>
+        )}
 
         {showCatalog ? (
           <StoreApp products={products} cfg={cfg} />
