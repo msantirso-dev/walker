@@ -69,7 +69,7 @@ const NUM = ["1", "2", "3"];
 const ALPHA = ["S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
 const TOP: Record<string, [number, number]> = { "4": [34, 46], "6": [36, 49], "8": [38, 52], "10": [41, 55], "12": [44, 58], "14": [47, 62], "16": [49, 65], "1": [50, 68], "2": [53, 70], "3": [56, 72], S: [50, 70], M: [53, 72], L: [56, 74], XL: [59, 76], "2XL": [62, 78], "3XL": [65, 80], "4XL": [68, 82], "5XL": [71, 84] };
 const HOOD: Record<string, [number, number]> = { "4": [36, 44], "6": [38, 47], "8": [40, 50], "10": [43, 53], "12": [46, 56], "14": [49, 60], "16": [51, 63], S: [54, 68], M: [57, 70], L: [60, 72], XL: [63, 74], "2XL": [66, 76], "3XL": [69, 78] };
-const SHORT: Record<string, [number, number]> = { "4": [25, 28], "6": [26, 30], "8": [28, 32], "10": [30, 34], "12": [32, 36], "14": [34, 38], "16": [36, 40], S: [38, 42], M: [41, 44], L: [44, 46], XL: [47, 48], "2XL": [50, 50], "3XL": [53, 52] };
+const SHORT: Record<string, [number, number]> = { "1": [27, 31], "2": [31, 35], "3": [35, 39], "4XL": [56, 54], "5XL": [59, 56], "4": [25, 28], "6": [26, 30], "8": [28, 32], "10": [30, 34], "12": [32, 36], "14": [34, 38], "16": [36, 40], S: [38, 42], M: [41, 44], L: [44, 46], XL: [47, 48], "2XL": [50, 50], "3XL": [53, 52] };
 
 function sizes(groups: [SizeGroup, string[]][], chart: Record<string, [number, number]>) {
   let sort = 0;
@@ -126,7 +126,7 @@ async function main() {
   const G = "#0F4D3A", Y = "#D9A520";
   const club = await db.club.create({
     data: {
-      slug: "los-nandues-rugby", name: "Los Ñandúes Rugby Club", shortName: "LNRC",
+      slug: "los-nandues-rugby", name: "Los Ñandúes Rugby Club", shortName: "LNRC", managementPanel: true,
       description: "Club de rugby y hockey de Benavídez, fundado por familias del barrio. Más de 400 jugadores en infantiles, juveniles, plantel superior y femenino.",
       colorPrimary: G, colorSecondary: Y, city: "Benavídez", province: "Buenos Aires", venue: "Sede Benavídez",
       pickupAddress: "Av. Los Ñandúes 1450, Benavídez, Tigre", pickupHours: "Martes y jueves de 18 a 21 h; sábados de 9 a 13 h",
@@ -320,7 +320,7 @@ async function main() {
   const VA = "#1D3557", VB = "#A8DADC";
   const demo = await db.club.create({
     data: {
-      slug: "demo-virreyes-rugby", name: "Rugby de Virreyes (demo)", shortName: "Virreyes demo", isDemo: true,
+      slug: "demo-virreyes-rugby", name: "Rugby de Virreyes (demo)", shortName: "Virreyes demo", isDemo: true, managementPanel: true,
       description: "Demostración del modelo de preventa para el club. Escudo, colores y precios son de ejemplo y no representan al club.",
       colorPrimary: VA, colorSecondary: VB, city: "Virreyes", province: "Buenos Aires", venue: "Sede (dato de ejemplo)",
       pickupAddress: "Dirección de retiro a confirmar con el club", pickupHours: "Horarios a confirmar con el club", officeHours: "A confirmar",
@@ -337,11 +337,13 @@ async function main() {
     ],
   });
   await db.user.create({ data: { email: "club@virreyes-demo.test", name: "Usuario demo (club)", passwordHash: hash, role: "CLUB_ADMIN", clubId: demo.id } });
+  // Curva estándar de la textil: 1 (6-8), 2 (10-12), 3 (14-16), S a 5XL. Menos stock de muestrario y prendas que duran más.
+  const STD_CURVE: [SizeGroup, string[]][] = [["NUMERIC", NUM], ["ALPHA", ALPHA]];
   const vg = (code: string, name: string, sz: ReturnType<typeof sizes>, material: string, measureA = "Ancho de pecho") =>
     db.garment.create({ data: { clubId: demo.id, code, name, variant: "Verano (demo)", material, care: "Lavar con agua fría, del revés.", measureA, measureB: "Largo", measureNote: "Medidas de ejemplo.", sizes: { create: sz } } });
-  const gRem = await vg("REM-VER-D", "Remera uso diario", sizes([["KIDS", KIDS.slice(2)], ["ALPHA", ALPHA.slice(0, 6)]], TOP), "Algodón peinado 24/1 (dato de ejemplo)");
-  const gSho = await vg("SHO-VER-D", "Short de verano", sizes([["KIDS", KIDS.slice(2)], ["ALPHA", ALPHA.slice(0, 6)]], SHORT), "Microfibra liviana (dato de ejemplo)", "Medio contorno de cintura");
-  const gMus = await vg("MUS-VER-D", "Musculosa", sizes([["ALPHA", ALPHA.slice(0, 5)]], TOP), "Poliéster con microperforado (dato de ejemplo)");
+  const gRem = await vg("REM-VER-D", "Remera uso diario", sizes(STD_CURVE, TOP), "Algodón peinado 24/1 (dato de ejemplo)");
+  const gSho = await vg("SHO-VER-D", "Short de verano", sizes(STD_CURVE, SHORT), "Microfibra liviana (dato de ejemplo)", "Medio contorno de cintura");
+  const gMus = await vg("MUS-VER-D", "Musculosa", sizes(STD_CURVE, TOP), "Poliéster con microperforado (dato de ejemplo)");
   const gBol = await db.garment.create({ data: { clubId: demo.id, code: "BOL-D", name: "Bolso", variant: "Único", material: "Lona impermeable (dato de ejemplo)", measureA: "Ancho", measureB: "Alto", sizes: { create: [{ label: "U", group: "OTHER", sort: 0 }] } } });
   const vbg = "#E8EEF3";
   const vImg = {
@@ -353,7 +355,7 @@ async function main() {
   };
   const dRem = await prod({
     clubId: demo.id, code: "D-REM", name: "Remera uso diario", kind: "SIMPLE", family: "OUTFIT", technique: "PENDING", catalogStatus: "PRESALE",
-    description: "Remera de algodón para uso diario, con leyenda de disciplina opcional. Producto y precio de ejemplo.", basePrice: pesos(13000),
+    description: "Remera de algodón para uso diario, con leyenda de disciplina y nombre opcionales. Producto y precio de ejemplo.", basePrice: pesos(13000),
     components: { create: [{ garmentId: gRem.id, label: "Remera", printTarget: true }] },
     images: { create: [{ url: vImg.rem, view: "FRONT", tag: "DESIGN", alt: "Remera (diseño de ejemplo)" }, { url: vImg.remLeg, view: "DETAIL", tag: "DESIGN", alt: "Remera con leyenda de disciplina (ejemplo)", sort: 1 }] },
   });
@@ -383,14 +385,17 @@ async function main() {
     images: { create: [{ url: await asset("demo/virreyes-camiseta.webp", jerseySvg({ base: VA, hoop: VB, hoops: 3, collar: VB, bg: vbg })), view: "FRONT", tag: "DESIGN", alt: "Camiseta (diseño de ejemplo)" }] },
   });
 
-  // Leyenda de disciplina (elección) + nombre condicional en la remera; los adicionales separan parte textil y club (reparto a definir)
-  const legend = await db.productOptionGroup.create({
-    data: {
-      productId: dRem.id, name: "Leyenda de disciplina", type: "CHOICE", role: "LEGEND", required: false, sort: 1, help: "Se estampa sobre la remera base.",
-      values: { create: [{ label: "RUGBY", sort: 0, priceTextil: pesos(1500), priceClub: pesos(500) }, { label: "HOCKEY", sort: 1, priceTextil: pesos(1500), priceClub: pesos(500) }] },
-    },
-    include: { values: true },
-  });
+  // Cada artículo admite la leyenda de disciplina (mismo artículo, distinta inscripción). Los adicionales son de la textil.
+  const legendFor = (productId: string) =>
+    db.productOptionGroup.create({
+      data: {
+        productId, name: "Leyenda de disciplina", type: "CHOICE", role: "LEGEND", required: false, sort: 1, help: "Se estampa sobre la prenda base.",
+        values: { create: ["RUGBY", "HOCKEY"].map((label, i) => ({ label, sort: i, priceTextil: pesos(1500), priceClub: 0 })) },
+      },
+      include: { values: true },
+    });
+  const legend = await legendFor(dRem.id);
+  for (const p of [dSho, dMus, dBol]) await legendFor(p.id);
   await db.productOptionGroup.create({
     data: {
       productId: dRem.id, name: "Nombre en la espalda", type: "TEXT", role: "NAME", required: false, sort: 2, maxLength: 12, priceTextil: pesos(2000), priceClub: 0,
@@ -398,24 +403,25 @@ async function main() {
     },
   });
 
-  // Compra inicial del outfit (15 estimadas), pagada, con talles definidos y aprobada; también sirve de muestrario (confirmado)
+  // Muestrario comprado por el club: una curva superior (remera) y una inferior (short), 11 talles cada una
+  const CURVE = [...NUM, ...ALPHA];
   const initial = await db.clubPurchase.create({
     data: {
-      clubId: demo.id, productId: dRem.id, purposes: ["INITIAL", "SAMPLE"], committedQty: 15, paidQty: 15, sizeStatus: "DEFINED", approvedAt: days(-6), approvedById: textilUser.id,
-      notes: "Ejemplo: 15 remeras compradas por el club. Mínimo estimado, a confirmar.", createdById: textilUser.id,
-      items: { create: [{ sizeLabel: "S", quantity: 3 }, { sizeLabel: "M", quantity: 5 }, { sizeLabel: "L", quantity: 4 }, { sizeLabel: "XL", quantity: 3 }] },
+      clubId: demo.id, purposes: ["SAMPLE"], committedQty: CURVE.length * 2, paidQty: CURVE.length * 2, sizeStatus: "DEFINED", approvedAt: days(-6), approvedById: textilUser.id,
+      notes: "Ejemplo: curva superior (remera) e inferior (short) para probarse en el club.", createdById: textilUser.id,
+      items: { create: CURVE.map((l) => ({ sizeLabel: l, quantity: 2 })) },
     },
   });
   const top = await db.sizeSampleSet.create({
     data: {
       clubId: demo.id, kind: "TOP", name: "Curva superior", referenceGarmentId: gRem.id, availability: "AVAILABLE", deliveredAt: days(-5), location: "Secretaría del club (ejemplo)",
-      purchaseId: initial.id, items: { create: ["S", "M", "L", "XL"].map((l, i) => ({ sizeLabel: l, quantity: 1, sort: i })) },
+      purchaseId: initial.id, items: { create: CURVE.map((l, i) => ({ sizeLabel: l, quantity: 1, sort: i })) },
     },
   });
   const bottom = await db.sizeSampleSet.create({
     data: {
       clubId: demo.id, kind: "BOTTOM", name: "Curva inferior", referenceGarmentId: gSho.id, availability: "AVAILABLE", deliveredAt: days(-5), location: "Secretaría del club (ejemplo)",
-      items: { create: ["S", "M", "L", "XL"].map((l, i) => ({ sizeLabel: l, quantity: 1, sort: i })) },
+      purchaseId: initial.id, items: { create: CURVE.map((l, i) => ({ sizeLabel: l, quantity: 1, sort: i })) },
     },
   });
   await db.productSampleLink.createMany({
@@ -442,7 +448,7 @@ async function main() {
       faq: [{ q: "¿Es una tienda real?", a: "No. Es una demostración con datos de ejemplo. Los pagos son simulados." }],
       products: {
         create: [
-          { productId: dRem.id, textilPrice: pesos(10000), price: pesos(13000), sort: 0, ruleType: "INITIAL_PURCHASE", initialPurchaseMin: 15, initialPurchaseEstimated: true, clubPurchaseId: initial.id, ruleApprovedAt: days(-2), ruleApprovedById: textilUser.id },
+          { productId: dRem.id, textilPrice: pesos(10000), price: pesos(13000), sort: 0, ruleType: "INITIAL_PURCHASE", initialPurchaseMin: 20, initialPurchaseEstimated: true, clubCommitAt: days(-3), ruleApprovedAt: days(-2), ruleApprovedById: textilUser.id, ruleNote: "Mínimo 20; el club compra la diferencia." },
           { productId: dSho.id, textilPrice: pesos(12000), price: pesos(15000), sort: 1 },
           { productId: dMus.id, textilPrice: pesos(9000), price: pesos(9000), sort: 2 },
           { productId: dBol.id, textilPrice: pesos(15000), price: pesos(19500), markupBp: 3000, sort: 3 },
