@@ -31,6 +31,8 @@ export default async function ClubDetail({ params, searchParams }: { params: Pro
     { key: "deportes", label: "Deportes y categorías", href: `/admin/clubes/${id}?tab=deportes` },
     { key: "fotos", label: "Fotos", href: `/admin/clubes/${id}?tab=fotos` },
     ...(textil ? [{ key: "catalogo", label: "Catálogo", href: `/admin/clubes/${id}/catalogo` }, { key: "usuarios", label: "Usuarios", href: `/admin/clubes/${id}?tab=usuarios` }] : []),
+    ...(can(u, "samples.view", id) ? [{ key: "muestrario", label: "Muestrario y compras", href: `/admin/clubes/${id}/muestrario` }] : []),
+    ...(can(u, "agreements.manage") ? [{ key: "acuerdo", label: "Acuerdo", href: `/admin/clubes/${id}/acuerdo` }] : []),
   ];
 
   return (

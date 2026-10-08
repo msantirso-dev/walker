@@ -5,8 +5,9 @@ import { run, str, type FormState } from "@/shared/actions";
 import { UserError } from "@/shared/errors";
 import { parsePesos } from "@/shared/money";
 import { requireUser, assertCan, actorOf, clientIp } from "@/modules/auth";
-import { reviewTransfer, registerManualPayment, registerRefund } from "@/modules/payments";
-import { cancelOrder, cancelUnit, editUnit, resendOrderLink } from "@/modules/orders";
+import { reviewTransfer, registerManualPayment, registerRefund, registerClubBalance } from "@/modules/payments";
+import { cancelOrder, cancelUnit, editUnit, resendOrderLink, type EditReason } from "@/modules/orders";
+import { parseArLocal } from "@/shared/dates";
 import { deliverPending } from "@/modules/notifications";
 import type { PaymentKind } from "@/generated/prisma/client";
 
@@ -91,7 +92,11 @@ export async function editUnitAction(orderId: string, unitId: string, _p: FormSt
     if (!unit) throw new UserError("Prenda inexistente.");
     const sizes = Object.fromEntries(unit.components.map((c) => [c.label, str(fd, `size_${c.label}`)]));
     const player = str(fd, "playerId");
-    const r = await editUnit(actor, unitId, { sizes, persName: str(fd, "persName") || null, persNumber: str(fd, "persNumber") || null, playerId: player === "__none" ? null : player || undefined });
+    const reason = (["VOLUNTARY", "DATA_ERROR", "TEXTIL_ERROR", "DEFECT"].includes(str(fd, "reason")) ? str(fd, "reason") : "DATA_ERROR") as EditReason;
+    const r = await editUnit(actor, unitId, {
+      sizes, persName: str(fd, "persName") || null, persNumber: str(fd, "persNumber") || null, playerId: player === "__none" ? null : player || undefined,
+      reason, note: str(fd, "note") || undefined,
+    });
     after(orderId);
     return r.persPriceChanged ? "Prenda actualizada. Cambió la personalización: se recalculó el total del pedido." : "Prenda actualizada.";
   });
@@ -103,5 +108,21 @@ export async function resendLinkAction(orderId: string, _p: FormState, _fd: Form
     await resendOrderLink(actor, orderId);
     after(orderId);
     return "Enlace reenviado al correo del comprador.";
+  });
+}
+
+/** Saldo cobrado por el club (modelo de anticipo textil): fecha, medio y referencia. */
+export async function clubBalanceAction(orderId: string, _p: FormState, fd: FormData): Promise<FormState> {
+  return run(async () => {
+    const { u, actor } = await ctx(orderId, "orders.view");
+    const amount = parsePesos(str(fd, "amount"));
+    if (!amount) throw new UserError("Indicá el importe cobrado.");
+    const paidAt = parseArLocal(`${str(fd, "date")}T12:00`);
+    if (!paidAt) throw new UserError("Indicá la fecha del cobro.");
+    const m = str(fd, "method");
+    const method = m === "TRANSFER" ? "TRANSFER" : m === "OTHER" ? "OTHER" : "CASH";
+    await registerClubBalance(u, actor, orderId, { amount, method, paidAt, reference: str(fd, "reference"), note: str(fd, "note") || undefined });
+    after(orderId);
+    return "Saldo al club registrado.";
   });
 }

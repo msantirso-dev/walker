@@ -17,7 +17,8 @@ export default async function DeliverOrder({ params }: { params: Promise<{ order
   const o = await orderById(orderId);
   if (!o || !can(u, "deliveries.register", o.clubId)) notFound();
   const ready = await readyUnitIds(orderId);
-  const balance = Math.max(0, o.total - o.paidAmount);
+  // Con anticipo textil, lo pendiente es el saldo con el club
+  const balance = o.pricingModel === "TEXTIL_ADVANCE" ? Math.max(0, o.clubBalanceRequired - o.clubPaid) : Math.max(0, o.total - o.paidAmount);
   const canException = can(u, "deliveries.exception", o.clubId);
   const users = await db.user.findMany({ where: { id: { in: o.deliveries.map((d) => d.deliveredById) } }, select: { id: true, name: true } });
   const pending = o.units.filter((x) => x.status === "ACTIVE" && !x.deliveryId);
@@ -32,7 +33,7 @@ export default async function DeliverOrder({ params }: { params: Promise<{ order
       {o.status !== "CONFIRMED" && <p className="notice notice-danger">El pedido no está confirmado: no se puede entregar.</p>}
       {balance > 0 && (
         <p className={`notice ${canException ? "notice-warn" : "notice-danger"} mb-4`}>
-          Saldo pendiente: <b><Money cents={balance} /></b>. {canException ? "Para entregar igual, completá el motivo de la excepción (queda registrado)." : "La entrega está bloqueada hasta que se registre el pago del saldo. Pedile a un administrador del club."}
+          {o.pricingModel === "TEXTIL_ADVANCE" ? "Saldo al club pendiente" : "Saldo pendiente"}: <b><Money cents={balance} /></b>. {o.pricingModel === "TEXTIL_ADVANCE" && <Link href={`/admin/pedidos/${o.id}`} className="underline">Registrar el cobro del saldo</Link>}{" "} {canException ? "Para entregar igual, completá el motivo de la excepción (queda registrado)." : "La entrega está bloqueada hasta que se registre el pago del saldo. Pedile a un administrador del club."}
         </p>
       )}
 

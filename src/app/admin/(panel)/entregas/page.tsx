@@ -54,7 +54,7 @@ export default async function Deliveries({ searchParams }: { searchParams: Promi
                     <td>{o.buyerName}</td>
                     <td className="text-sm">{o.players.map((p) => `${p.name}${p.category ? ` (${p.category})` : ""}`).join(", ") || "—"}</td>
                     <td className="num">{o._count.units}</td>
-                    <td className="num">{o.total > o.paidAmount ? <span className="font-bold text-danger"><Money cents={o.total - o.paidAmount} /></span> : "Pagado"}</td>
+                    <td className="num">{(() => { const due = o.pricingModel === "TEXTIL_ADVANCE" ? o.clubBalanceRequired - o.clubPaid : o.total - o.paidAmount; return due > 0 ? <span className="font-bold text-danger"><Money cents={due} />{o.pricingModel === "TEXTIL_ADVANCE" ? " (club)" : ""}</span> : "Sin saldo"; })()}</td>
                     <td><Badge tone={o.deliveryStatus === "DELIVERED" ? "ok" : o.deliveryStatus === "PARTIAL" ? "warn" : "info"}>{DELIVERY_STATUS_LABEL[o.deliveryStatus]}</Badge></td>
                   </tr>
                 ))}

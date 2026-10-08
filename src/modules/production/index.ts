@@ -95,7 +95,7 @@ export async function generateLot(actor: Actor & { id: string }, campaignId: str
 }
 
 export type LotLine = { garmentCode: string; garmentName: string; variant: string | null; component: string; product: string; size: string; sizeSort: number; quantity: number };
-export type LotPers = { unitRef: string; productCode: string; garmentCode: string; size: string; name: string | null; number: string | null; legend?: string | null; extras?: string; player?: string | null; delta: number };
+export type LotPers = { unitRef: string; productCode: string; garmentCode: string; size: string; name: string | null; number: string | null; legend?: string | null; extras?: string; delta: number };
 /** Trabajo de personalización agrupado (estampa de nombre, número, leyenda): se hace sobre las prendas base, sin fragmentar el lote. */
 export type LotPersJob = { kind: string; value: string; garmentCode: string; quantity: number };
 export type LotBreakdown = { productCode: string; productName: string; component: string; garmentCode: string; size: string; sizeSort: number; quantity: number };
@@ -107,7 +107,7 @@ export async function computeLotReport(lotId: string, tx: Tx = db): Promise<LotR
     where: { id: lotId },
     include: {
       campaign: { include: { club: true } },
-      units: { include: { unit: { include: { components: true, options: { orderBy: { sort: "asc" } }, player: { select: { name: true } } } } } },
+      units: { include: { unit: { include: { components: true, options: { orderBy: { sort: "asc" } } } } } },
     },
   });
   const garmentIds = [...new Set(lot.units.flatMap((u) => u.unit.components.map((c) => c.garmentId)))];
@@ -137,7 +137,7 @@ export async function computeLotReport(lotId: string, tx: Tx = db): Promise<LotR
       const target = lu.unit.components.find((c) => c.printTarget) ?? lu.unit.components[0];
       pers.push({
         unitRef: lu.unit.ref, productCode: lu.unit.productCode, garmentCode: target.garmentCode, size: target.sizeLabel,
-        name: lu.unit.persName, number: lu.unit.persNumber, legend: lu.unit.legend, extras: extras.join(" · "), player: lu.unit.player?.name ?? null, delta: lu.delta,
+        name: lu.unit.persName, number: lu.unit.persNumber, legend: lu.unit.legend, extras: extras.join(" · "), delta: lu.delta,
       });
       const add = (kind: string, value: string) => {
         const k = `${kind}|${value}|${target.garmentCode}`;

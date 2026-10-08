@@ -2,14 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import QRCode from "qrcode";
 import { requireUser, assertCan, can } from "@/modules/auth";
-import { campaignMetrics, CAMPAIGN_STATUS_LABEL, MIN_DECISION_LABEL, effectiveStatus } from "@/modules/campaigns";
+import { campaignMetrics, CAMPAIGN_STATUS_LABEL, MIN_DECISION_LABEL, effectiveStatus, activationProblems, AUDIENCE_LABEL } from "@/modules/campaigns";
 import { LOT_STATUS_LABEL } from "@/modules/production";
 import { db } from "@/shared/db";
 import { env } from "@/shared/env";
 import { fmtDate, fmtDateTime, toArLocal, addDays } from "@/shared/dates";
 import { Badge, Bar, Money, PageHeader, Section, Stat } from "@/shared/ui";
 import { ActionForm, ConfirmAction, CopyButton, SubmitButton } from "@/shared/ui/client";
-import { campaignAction, cancelCampaignAction, generateLotAction, minDecisionAction, productionNoticeAction, settlementAction } from "../actions";
+import { activationAction, campaignAction, cancelCampaignAction, generateLotAction, minDecisionAction, productionNoticeAction, settlementAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +23,10 @@ export default async function CampaignOverview({ params }: { params: Promise<{ i
   if (!c) notFound();
   assertCan(u, "campaign.view", c.clubId);
   const manage = can(u, "campaign.manage");
+  const requester = manage || can(u, "campaign.request", c.clubId);
+  const advance = c.pricingModel === "TEXTIL_ADVANCE";
+  const pendingActivation = advance && ["DRAFT", "ACTIVATION_REQUESTED", "ACTIVATION_APPROVED"].includes(c.status);
+  const problems = pendingActivation ? await activationProblems(id) : [];
   const m = await campaignMetrics(id);
   const st = effectiveStatus(c);
   const url = `${env().APP_URL}/club/${c.club.slug}/${c.slug}`;
@@ -38,7 +42,9 @@ export default async function CampaignOverview({ params }: { params: Promise<{ i
         actions={
           <>
             <Badge tone={st === "PUBLISHED" ? "ok" : st === "CANCELLED" ? "danger" : "info"}>{st === "SCHEDULED" ? "Programada" : CAMPAIGN_STATUS_LABEL[st]}</Badge>
-            {manage && <Link href={`/admin/campanas/${id}/editar`} className="btn btn-ghost">Configurar</Link>}
+            {requester && <Link href={`/admin/campanas/${id}/editar`} className="btn btn-ghost">{manage ? "Configurar" : "Precios y alcance"}</Link>}
+            {manage && advance && <Link href={`/admin/campanas/${id}/logistica`} className="btn btn-ghost">Logística</Link>}
+            {!manage && advance && can(u, "lot.receive", c.clubId) && <Link href={`/admin/campanas/${id}/logistica`} className="btn btn-ghost">Recepción y retiros</Link>}
             <Link href={`/admin/pedidos?campana=${id}`} className="btn btn-primary">Pedidos</Link>
           </>
         }
@@ -46,9 +52,46 @@ export default async function CampaignOverview({ params }: { params: Promise<{ i
         {fmtDateTime(c.opensAt)} → {fmtDateTime(c.closesAt)} · Cobra: {c.paymentAccount.owner === "TEXTIL" ? "la textil" : "el club"} ({c.paymentAccount.label})
       </PageHeader>
 
+      {pendingActivation && (
+        <section className="card mb-6 p-5">
+          <div className="eyebrow">Activación de la campaña</div>
+          <p className="mt-1 text-sm text-muted">
+            El club arma la campaña (productos, precio al socio, alcance: {AUDIENCE_LABEL[c.audience]}) y solicita la activación. La textil la autoriza por separado. Con la autorización, se publica.
+          </p>
+          {c.activationNote && <p className="notice notice-info mt-3 text-sm">Nota: {c.activationNote}</p>}
+          {problems.length > 0 ? (
+            <ul className="mt-3 list-disc pl-5 text-sm text-warn">{problems.map((p) => <li key={p}>{p}</li>)}</ul>
+          ) : (
+            <p className="mt-3 text-sm text-ok">Precios y reglas completos.</p>
+          )}
+          <div className="mt-4 flex flex-wrap gap-2">
+            {c.status === "DRAFT" && requester && (
+              <ActionForm action={activationAction.bind(null, id, "request")} className="flex flex-wrap items-end gap-2">
+                <input name="note" className="input w-64" placeholder="Comentario para la textil (opcional)" aria-label="Comentario" />
+                <SubmitButton className="btn btn-primary">Solicitar activación</SubmitButton>
+              </ActionForm>
+            )}
+            {manage && ["DRAFT", "ACTIVATION_REQUESTED"].includes(c.status) && (
+              <ActionForm action={activationAction.bind(null, id, "approve")} className=""><SubmitButton className="btn btn-primary">Autorizar activación</SubmitButton></ActionForm>
+            )}
+            {manage && ["ACTIVATION_REQUESTED", "ACTIVATION_APPROVED"].includes(c.status) && (
+              <ConfirmAction label="Devolver al club" confirmLabel="La campaña vuelve a borrador con el motivo.">
+                <ActionForm action={activationAction.bind(null, id, "reject")} className="grid gap-2">
+                  <input name="reason" className="input" placeholder="Motivo" aria-label="Motivo" />
+                  <SubmitButton className="btn btn-danger">Devolver</SubmitButton>
+                </ActionForm>
+              </ConfirmAction>
+            )}
+            {requester && c.status === "ACTIVATION_APPROVED" && (
+              <ActionForm action={campaignAction.bind(null, id, "publish")} className=""><SubmitButton className="btn btn-primary">Publicar</SubmitButton></ActionForm>
+            )}
+          </div>
+        </section>
+      )}
+
       {manage && (
         <div className="mb-6 flex flex-wrap gap-2">
-          {c.status === "DRAFT" && <ActionForm action={campaignAction.bind(null, id, "publish")} className=""><SubmitButton className="btn btn-primary">Publicar</SubmitButton></ActionForm>}
+          {c.status === "DRAFT" && !advance && <ActionForm action={campaignAction.bind(null, id, "publish")} className=""><SubmitButton className="btn btn-primary">Publicar</SubmitButton></ActionForm>}
           {c.status === "PUBLISHED" && <ActionForm action={campaignAction.bind(null, id, "close")} className=""><SubmitButton className="btn btn-ghost">Cerrar ventana ahora</SubmitButton></ActionForm>}
           {c.status === "READY_FOR_PICKUP" && <ActionForm action={campaignAction.bind(null, id, "finish")} className=""><SubmitButton className="btn btn-ghost">Finalizar campaña</SubmitButton></ActionForm>}
           {!["FINISHED", "CANCELLED"].includes(c.status) && (
@@ -77,9 +120,18 @@ export default async function CampaignOverview({ params }: { params: Promise<{ i
 
       <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Prendas" value={`${m.unitsConfirmed} / ${m.unitsRequested}`} hint="Confirmadas / solicitadas (incluye reservas sin pago)" />
-        <Stat label="Pedidos con seña o pago" value={m.ordersConfirmed} hint={`${m.ordersPending} pendientes · ${m.ordersInReview} en revisión`} />
-        <Stat label="Cobrado" value={<Money cents={m.collected} />} hint={m.inReview ? <>En revisión: <Money cents={m.inReview} /></> : "Neto de devoluciones"} />
-        <Stat label="Saldo pendiente" value={<Money cents={m.balanceDue} />} hint={`${m.ordersDepositOnly} pedidos con saldo`} />
+        <Stat label={advance ? "Pedidos con anticipo" : "Pedidos con seña o pago"} value={m.ordersConfirmed} hint={`${m.ordersPending} pendientes · ${m.ordersInReview} en revisión`} />
+        {advance ? (
+          <>
+            <Stat label="Anticipos cobrados (textil)" value={<Money cents={m.advanceCollected} />} hint={m.inReview ? <>En revisión: <Money cents={m.inReview} /></> : "Por Mercado Pago"} />
+            <Stat label="Saldo al club pendiente" value={<Money cents={m.clubBalanceDue} />} hint={<>{m.ordersClubPending} pedidos · cobrado <Money cents={m.clubCollected} /></>} tone={m.clubBalanceDue ? "warn" : undefined} />
+          </>
+        ) : (
+          <>
+            <Stat label="Cobrado" value={<Money cents={m.collected} />} hint={m.inReview ? <>En revisión: <Money cents={m.inReview} /></> : "Neto de devoluciones"} />
+            <Stat label="Saldo pendiente" value={<Money cents={m.balanceDue} />} hint={`${m.ordersDepositOnly} pedidos con saldo`} />
+          </>
+        )}
         <Stat label="Listos para retirar" value={m.ordersReady} />
         <Stat label="Entregados" value={m.ordersDelivered} />
         <Stat label="En lotes aprobados" value={m.unitsInLots} hint="Prendas enviadas a fábrica" />

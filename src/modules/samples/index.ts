@@ -16,7 +16,7 @@ export const SAMPLE_KIND_LABEL: Record<SampleKind, string> = { TOP: "Prendas sup
 export const SAMPLE_AVAILABILITY_LABEL: Record<SampleAvailability, string> = { PENDING_DELIVERY: "Pendiente de entrega", AVAILABLE: "Disponible en el club", NOT_AVAILABLE: "No disponible" };
 export const PURPOSE_LABEL: Record<PurchasePurpose, string> = { SAMPLE: "Muestrario", INITIAL: "Compra inicial", BACKUP: "Respaldo para cambios" };
 /** Texto público, solo si el producto tiene una curva aprobada y disponible. */
-export const SAMPLE_PUBLIC_TEXT = "Podés probarte el muestrario en el club antes de elegir tu talle.";
+export { SAMPLE_TEXT as SAMPLE_PUBLIC_TEXT } from "@/shared/copy";
 
 type SizeQty = { sizeLabel: string; quantity: number };
 function cleanSizes(items: SizeQty[]) {

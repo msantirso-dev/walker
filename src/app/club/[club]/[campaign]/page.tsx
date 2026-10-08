@@ -4,7 +4,9 @@ import { getCampaignStore, clubTheme } from "@/modules/clubs/public";
 import { fmtDate } from "@/shared/dates";
 import { ars } from "@/shared/money";
 import { Bar } from "@/shared/ui";
-import { ClubBar, Contact, Faq, PlatformFooter, Steps, WindowLine } from "../../_ui/parts";
+import { ClubBar, Contact, DemoBanner, Faq, PlatformFooter, Steps, WindowLine } from "../../_ui/parts";
+import { CHANGE_POLICY_TEXT, CHANGE_POLICY_UNPERSONALIZED } from "@/modules/catalog/options";
+import { MP_FINANCING_TEXT } from "@/shared/copy";
 import { StoreApp, type StoreConfig } from "./store-app";
 
 export const dynamic = "force-dynamic";
@@ -23,14 +25,22 @@ export default async function CampaignPage({ params }: P) {
   if (!d) notFound();
   const { club, campaign: c, open, products, payments } = d;
   const showCatalog = open || c.showCatalogWhenClosed || (c.status === "PUBLISHED" && c.opensAt > new Date());
+  const advance = c.pricingModel === "TEXTIL_ADVANCE";
   const deposit = c.paymentMode === "DEPOSIT";
-  const depositText = !deposit ? "Pago total" : c.depositType === "PERCENT" ? `${c.depositValue} %` : ars(c.depositValue);
+  const depositText = advance ? "Anticipo" : !deposit ? "Pago total" : c.depositType === "PERCENT" ? `${c.depositValue} %` : ars(c.depositValue);
+  const anyPersonalized = products.some((p) => p.optionGroups.some((g) => g.blocksSizeChange));
+  const audSports = c.audience === "SPORTS" ? c.audienceSports.map((s) => s.name) : club.sports.map((s) => s.sport.name);
+  const audCats =
+    c.audience === "CATEGORIES"
+      ? c.audienceCategories.map((x) => ({ name: x.name, sport: x.sport?.name ?? null }))
+      : club.categories.filter((x) => c.audience !== "SPORTS" || !x.sport || audSports.includes(x.sport.name)).map((x) => ({ name: x.name, sport: x.sport?.name ?? null }));
   const faq = (c.faq as { q: string; a: string }[] | null) ?? [];
   const hero = products[0]?.images[0];
 
   const cfg: StoreConfig = {
     campaignId: c.id,
     open,
+    model: c.pricingModel,
     paymentMode: c.paymentMode,
     depositType: c.depositType,
     depositValue: c.depositType === "FIXED" ? c.depositValue : c.depositValue,
@@ -44,13 +54,18 @@ export default async function CampaignPage({ params }: P) {
     simulated: payments.simulated,
     transfer: payments.transfer,
     receiver: payments.receiver,
-    sports: club.sports.map((s) => s.sport.name),
-    categories: club.categories.map((x) => ({ name: x.name, sport: x.sport?.name ?? null })),
+    clubName: club.name,
+    sports: audSports,
+    categories: audCats,
+    audience: c.audience,
+    audienceText: d.audience,
+    demo: club.isDemo,
     policiesAnchor: "#condiciones",
   };
 
   return (
     <div style={clubTheme(club)} className={open ? "pb-24" : ""}>
+      {club.isDemo && <DemoBanner />}
       <header className="relative overflow-hidden bg-club text-on-club">
         <div className="hoops pointer-events-none absolute inset-0" aria-hidden />
         <div className="relative mx-auto grid max-w-6xl items-center gap-6 px-4 pb-10 pt-6 md:grid-cols-[1.25fr_1fr]">
@@ -65,7 +80,7 @@ export default async function CampaignPage({ params }: P) {
             <dl className="mt-6 flex flex-wrap gap-x-8 gap-y-3">
               <div><dt className="text-sm opacity-80">Cierre</dt><dd className="font-display text-2xl font-bold uppercase">{fmtDate(c.closesAt)}</dd></div>
               <div><dt className="text-sm opacity-80">Entrega estimada</dt><dd className="font-display text-2xl font-bold">{c.deliveryDaysMin} a {c.deliveryDaysMax} días del cierre</dd></div>
-              <div><dt className="text-sm opacity-80">Para reservar</dt><dd className="font-display text-2xl font-bold">{depositText}</dd></div>
+              <div><dt className="text-sm opacity-80">{advance ? "Entrega" : "Para reservar"}</dt><dd className="font-display text-2xl font-bold">{advance ? "En el club" : depositText}</dd></div>
             </dl>
           </div>
           {hero && (
@@ -82,8 +97,8 @@ export default async function CampaignPage({ params }: P) {
       <main className="mx-auto max-w-6xl px-4">
         <section className="mt-12">
           <div className="eyebrow">Cómo funciona</div>
-          <h2 className="mb-6 mt-1 text-4xl font-extrabold">{deposit ? "Elegís, reservás, fabricamos, completás y retirás" : "Elegís, pagás, fabricamos y retirás"}</h2>
-          <Steps deposit={deposit} />
+          <h2 className="mb-6 mt-1 text-4xl font-extrabold">{advance ? "Configurás, anticipás, fabricamos y retirás en el club" : deposit ? "Elegís, reservás, fabricamos, completás y retirás" : "Elegís, pagás, fabricamos y retirás"}</h2>
+          <Steps deposit={deposit} advance={advance} />
         </section>
 
         {c.minUnits ? (
@@ -97,7 +112,7 @@ export default async function CampaignPage({ params }: P) {
             <div>
               <Bar value={d.confirmedUnits} max={c.minUnits} label="Avance hacia el mínimo de producción" />
               <p className="mt-2 text-sm text-muted">
-                Contamos solo prendas de pedidos con seña o pago acreditado. {c.minPolicyText}
+                Contamos solo prendas de pedidos con seña, anticipo o pago acreditado. {c.minPolicyText}
               </p>
             </div>
           </section>
@@ -116,9 +131,11 @@ export default async function CampaignPage({ params }: P) {
           <h2 className="mb-5 mt-1 text-3xl font-extrabold">Lo que aceptás al comprar</h2>
           <div className="grid gap-4 md:grid-cols-2">
             {[
-              ["Pagos", `${deposit ? `Seña de ${depositText} para confirmar; el saldo ${c.balanceDueText ?? "se paga antes del retiro"}` : "Pago total al comprar"}. Los pagos se acreditan a: ${payments.receiver}. Un comprobante cargado queda en revisión hasta su aprobación.`],
-              ["Fabricación y entrega", `Se fabrica solo lo pedido en la ventana. Entrega estimada entre ${c.deliveryDaysMin} y ${c.deliveryDaysMax} días desde el cierre.${c.pickupEnabled && club.pickupAddress ? ` Retiro en ${club.pickupAddress}.` : ""}`],
-              ["Cambios", c.policyChanges],
+              ["Pagos", advance
+                ? `Para confirmar el pedido pagás el anticipo con Mercado Pago; lo cobra ${payments.receiver}. Si el precio al socio es mayor que el anticipo, la diferencia es un saldo que pagás directamente a ${club.name}, antes del retiro. ${MP_FINANCING_TEXT}`
+                : `${deposit ? `Seña de ${depositText} para confirmar; el saldo ${c.balanceDueText ?? "se paga antes del retiro"}` : "Pago total al comprar"}. Los pagos se acreditan a: ${payments.receiver}. Un comprobante cargado queda en revisión hasta su aprobación.`],
+              ["Fabricación y entrega", `Se fabrica solo lo pedido en la ventana. Entrega estimada entre ${c.deliveryDaysMin} y ${c.deliveryDaysMax} días desde el cierre.${advance ? ` La producción completa se entrega en ${club.name}; no hay envío a domicilio.` : ""}${(advance || c.pickupEnabled) && club.pickupAddress ? ` Retiro en ${club.pickupAddress}.` : ""}`],
+              ["Cambios", [anyPersonalized ? `${CHANGE_POLICY_TEXT} ${CHANGE_POLICY_UNPERSONALIZED}` : null, c.policyChanges].filter(Boolean).join(" ") || null],
               ["Cancelación", c.policyCancellation],
               ["Devoluciones", c.policyRefunds],
               ["Mínimo de producción", c.minPolicyText],
@@ -147,7 +164,7 @@ export default async function CampaignPage({ params }: P) {
           <Contact club={club} message={`Hola, tengo una consulta sobre la preventa "${c.title}".`} />
         </section>
       </main>
-      <PlatformFooter name={club.name} />
+      <PlatformFooter name={club.name} brandLine={d.brandLine} demo={club.isDemo} />
     </div>
   );
 }

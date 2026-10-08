@@ -1,11 +1,11 @@
 import { ActionForm, SubmitButton } from "@/shared/ui/client";
 import { pesosInput } from "@/shared/money";
 import type { FormState } from "@/shared/actions-types";
-import { KIND_LABEL } from "./presets";
+import { KIND_LABEL, FAMILY_LABEL, TECHNIQUE_LABEL, CATALOG_STATUS_LABEL } from "./presets";
 
 type Prod = {
   code: string; name: string; kind: "SIMPLE" | "SET" | "COMBO"; description: string | null; audience: string | null; sportId: string | null; basePrice: number; manufacturingTerms: string | null;
-  persNameEnabled: boolean; persNamePrice: number; persNameMaxLen: number; persNumberEnabled: boolean; persNumberPrice: number; persNumberMin: number; persNumberMax: number; active: boolean;
+  active: boolean; family: string; technique: string; catalogStatus: string;
   components: { label: string; garmentId: string; printTarget: boolean }[];
 };
 
@@ -55,24 +55,30 @@ export function ProductForm({ action, garments, sports, product }: { action: (p:
         ))}
       </fieldset>
 
-      <fieldset className="card grid gap-4 p-5 md:grid-cols-2">
-        <legend className="px-1 font-display text-lg font-bold uppercase">Personalización por unidad</legend>
-        <div className="grid gap-3">
-          <label className="flex items-center gap-2 font-semibold"><input type="checkbox" name="persNameEnabled" defaultChecked={product?.persNameEnabled} className="h-5 w-5" /> Nombre estampado</label>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="field"><label htmlFor="persNamePrice">Adicional (ARS)</label><input id="persNamePrice" name="persNamePrice" className="input" inputMode="decimal" defaultValue={pesosInput(product?.persNamePrice ?? 0)} /></div>
-            <div className="field"><label htmlFor="persNameMaxLen">Máx. caracteres</label><input id="persNameMaxLen" name="persNameMaxLen" type="number" min={1} max={20} className="input" defaultValue={product?.persNameMaxLen ?? 12} /></div>
-          </div>
-          <small className="hint">Se admiten letras (con tildes y Ñ), espacios, punto, guion y apóstrofo. Se estampa en mayúsculas.</small>
+      <fieldset className="card grid gap-4 p-5 md:grid-cols-3">
+        <legend className="px-1 font-display text-lg font-bold uppercase">Clasificación</legend>
+        <div className="field">
+          <label htmlFor="family">Familia</label>
+          <select id="family" name="family" className="input" defaultValue={product?.family ?? "OTHER"}>
+            {Object.entries(FAMILY_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          <small>Indumentaria de juego, outfit, accesorio. Define la regla de producción sugerida.</small>
         </div>
-        <div className="grid gap-3">
-          <label className="flex items-center gap-2 font-semibold"><input type="checkbox" name="persNumberEnabled" defaultChecked={product?.persNumberEnabled} className="h-5 w-5" /> Número</label>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="field"><label htmlFor="persNumberPrice">Adicional</label><input id="persNumberPrice" name="persNumberPrice" className="input" inputMode="decimal" defaultValue={pesosInput(product?.persNumberPrice ?? 0)} /></div>
-            <div className="field"><label htmlFor="persNumberMin">Desde</label><input id="persNumberMin" name="persNumberMin" type="number" min={0} className="input" defaultValue={product?.persNumberMin ?? 1} /></div>
-            <div className="field"><label htmlFor="persNumberMax">Hasta</label><input id="persNumberMax" name="persNumberMax" type="number" min={0} className="input" defaultValue={product?.persNumberMax ?? 99} /></div>
-          </div>
+        <div className="field">
+          <label htmlFor="technique">Técnica</label>
+          <select id="technique" name="technique" className="input" defaultValue={product?.technique ?? "PENDING"}>
+            {Object.entries(TECHNIQUE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          <small>Campo separado de la familia (sublimado o no se define por producto).</small>
         </div>
+        <div className="field">
+          <label htmlFor="catalogStatus">Estado en el catálogo</label>
+          <select id="catalogStatus" name="catalogStatus" className="input" defaultValue={product?.catalogStatus ?? "PREPARATION"}>
+            {Object.entries(CATALOG_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          <small>“Preventa activa” y “preventa cerrada” se actualizan solos al publicar o cerrar campañas.</small>
+        </div>
+        <p className="text-sm text-muted md:col-span-3">La personalización (nombre, número, leyenda y adicionales) se configura en “Opciones del configurador”, en la ficha del producto.</p>
       </fieldset>
       <SubmitButton className="btn btn-primary justify-self-start">{product ? "Guardar producto" : "Crear producto"}</SubmitButton>
     </ActionForm>

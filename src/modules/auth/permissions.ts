@@ -8,6 +8,11 @@ export type Capability =
   | "catalog.manage"
   | "campaign.manage"
   | "campaign.view"
+  | "campaign.request" // armar borrador, precios al socio, alcance y pedir activación (club propio)
+  | "agreements.manage" // acuerdos comerciales privados
+  | "samples.manage" // muestrario y compras del club
+  | "samples.view"
+  | "shipments.manage" // envíos consolidados textil → club
   | "orders.view"
   | "orders.manage" // cancelar, registrar pagos manuales y devoluciones
   | "payments.review"
@@ -22,12 +27,13 @@ export type Capability =
 
 const MATRIX: Record<SessionUser["role"], Capability[]> = {
   TEXTIL_ADMIN: [
-    "clubs.manage", "club.profile", "catalog.manage", "campaign.manage", "campaign.view", "orders.view", "orders.manage",
+    "clubs.manage", "club.profile", "catalog.manage", "campaign.manage", "campaign.view", "campaign.request", "orders.view", "orders.manage",
+    "agreements.manage", "samples.manage", "samples.view", "shipments.manage",
     "payments.review", "production.view", "production.advance", "production.plan", "lot.receive",
     "deliveries.register", "deliveries.exception", "benefit.view", "benefit.settle",
   ],
   CLUB_ADMIN: [
-    "club.profile", "campaign.view", "orders.view", "orders.manage", "payments.review", "lot.receive",
+    "club.profile", "campaign.view", "campaign.request", "samples.view", "orders.view", "orders.manage", "payments.review", "lot.receive",
     "deliveries.register", "deliveries.exception", "benefit.view",
   ],
   PRODUCTION: ["production.view", "production.advance"],

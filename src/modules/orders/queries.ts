@@ -9,7 +9,7 @@ const fullInclude = {
   players: { orderBy: { sort: "asc" } },
   units: {
     orderBy: { sort: "asc" },
-    include: { components: true, player: true, delivery: true, lotUnits: { include: { lot: { select: { number: true, status: true } } } } },
+    include: { components: true, player: true, delivery: true, options: { orderBy: { sort: "asc" } }, lotUnits: { include: { lot: { select: { number: true, status: true } } } } },
   },
   payments: { orderBy: { createdAt: "asc" }, include: { receipts: { orderBy: { uploadedAt: "asc" } } } },
   deliveries: { orderBy: { deliveredAt: "asc" }, include: { units: { select: { id: true, ref: true, productName: true } } } },
@@ -66,6 +66,9 @@ export function orderWhere(base: Prisma.OrderWhereInput, f: OrderFilters): Prism
     case "review":
       and.push({ inReviewAmount: { gt: 0 } });
       break;
+    case "club":
+      and.push({ pricingModel: "TEXTIL_ADVANCE", status: "CONFIRMED", NOT: { clubPaid: { gte: db.order.fields.clubBalanceRequired } } });
+      break;
     case "refund":
       and.push({ status: "CANCELLED", paidAmount: { gt: 0 } });
       break;
@@ -88,8 +91,19 @@ export const DELIVERY_STATUS_LABEL: Record<string, string> = {
 };
 
 /** Estado de pago en palabras, a partir de los importes. */
-export function paymentStateLabel(o: { status: string; total: number; paidAmount: number; inReviewAmount: number; depositRequired: number }) {
+export function paymentStateLabel(o: {
+  status: string; total: number; paidAmount: number; inReviewAmount: number; depositRequired: number;
+  pricingModel?: string; advanceRequired?: number; advancePaid?: number; clubBalanceRequired?: number; clubPaid?: number;
+}) {
   if (o.status === "CANCELLED") return o.paidAmount > 0 ? "Devolución pendiente" : "Sin cobros";
+  if (o.pricingModel === "TEXTIL_ADVANCE") {
+    // Nunca "pagado" mientras quede saldo con el club
+    const advOk = (o.advancePaid ?? 0) >= (o.advanceRequired ?? 0) && (o.advanceRequired ?? 0) > 0;
+    const clubDue = (o.clubBalanceRequired ?? 0) - (o.clubPaid ?? 0);
+    if (!advOk) return o.inReviewAmount > 0 ? "Comprobante en revisión" : (o.advancePaid ?? 0) > 0 ? "Anticipo parcial" : "Anticipo pendiente";
+    if ((o.clubBalanceRequired ?? 0) === 0) return "Pagado (sin saldo al club)";
+    return clubDue > 0 ? "Anticipo aprobado · saldo al club pendiente" : "Pagado (anticipo y saldo al club)";
+  }
   if (o.paidAmount >= o.total && o.total > 0) return "Pagado";
   if (o.paidAmount > 0) return o.paidAmount >= o.depositRequired ? "Seña aprobada" : "Pago parcial";
   if (o.inReviewAmount > 0) return "Comprobante en revisión";

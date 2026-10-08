@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { requireUser, clubScope, can } from "@/modules/auth";
 import { campaignMetrics, CAMPAIGN_STATUS_LABEL, effectiveStatus } from "@/modules/campaigns";
 import { db } from "@/shared/db";
+import { expiringAgreements } from "@/modules/agreements";
 import { fmtDate } from "@/shared/dates";
 import { Badge, Bar, Empty, Money, PageHeader, Stat } from "@/shared/ui";
 
@@ -24,6 +25,9 @@ export default async function Dashboard() {
   const pendingLots = can(u, "production.plan") ? await db.productionLot.count({ where: { status: "PENDING_APPROVAL", campaign: scope } }) : 0;
   const overCap = await db.order.count({ where: { ...scope, overCapacity: true, status: "CONFIRMED" } });
   const refundPending = await db.order.count({ where: { ...scope, status: "CANCELLED", paidAmount: { gt: 0 } } });
+  const expiring = can(u, "agreements.manage") ? await expiringAgreements() : [];
+  const activations = await db.campaign.findMany({ where: { ...scope, status: u.role === "TEXTIL_ADMIN" ? "ACTIVATION_REQUESTED" : "ACTIVATION_APPROVED" }, select: { id: true, title: true, club: { select: { name: true } } } });
+  const clubPending = await db.order.count({ where: { ...scope, pricingModel: "TEXTIL_ADVANCE", status: "CONFIRMED", deliveryStatus: { in: ["READY", "PARTIAL"] }, NOT: { clubPaid: { gte: db.order.fields.clubBalanceRequired } } } });
 
   const tot = metrics.reduce(
     (a, m) => ({ collected: a.collected + m.collected, balance: a.balance + m.balanceDue, units: a.units + m.unitsConfirmed, review: a.review + m.inReview }),
@@ -40,8 +44,19 @@ export default async function Dashboard() {
         <Stat label="En revisión" value={<Money cents={tot.review} />} hint={`${reviewCount} comprobante(s)`} tone={reviewCount ? "warn" : undefined} />
       </div>
 
-      {(reviewCount > 0 || pendingLots > 0 || overCap > 0 || refundPending > 0) && (
+      {(reviewCount > 0 || pendingLots > 0 || overCap > 0 || refundPending > 0 || expiring.length > 0 || activations.length > 0 || clubPending > 0) && (
         <div className="mt-6 grid gap-2">
+          {activations.map((a) => (
+            <Link key={a.id} href={`/admin/campanas/${a.id}`} className="notice notice-info font-semibold">
+              {u.role === "TEXTIL_ADMIN" ? `${a.club.name} solicitó activar “${a.title}”: revisá y autorizá →` : `“${a.title}” está autorizada: ya la podés publicar →`}
+            </Link>
+          ))}
+          {expiring.map((a) => (
+            <Link key={a.id} href={`/admin/clubes/${a.clubId}/acuerdo`} className="notice notice-warn font-semibold">
+              El acuerdo con {a.club.name} {a.daysLeft > 0 ? `vence en ${a.daysLeft} días (${fmtDate(a.endsAt)})` : "está vencido"} →
+            </Link>
+          ))}
+          {clubPending > 0 && <Link href="/admin/pedidos?pay=club" className="notice notice-warn font-semibold">{clubPending} pedido(s) listos para retirar con saldo al club pendiente →</Link>}
           {reviewCount > 0 && can(u, "payments.review") && <Link href="/admin/pagos" className="notice notice-info font-semibold">Hay {reviewCount} comprobante(s) esperando revisión →</Link>}
           {pendingLots > 0 && <Link href="/admin/produccion" className="notice notice-warn font-semibold">Hay {pendingLots} lote(s) de producción pendientes de aprobación →</Link>}
           {overCap > 0 && <Link href="/admin/pedidos?alerta=cupo" className="notice notice-danger font-semibold">{overCap} pedido(s) confirmados fuera de cupo requieren una decisión →</Link>}

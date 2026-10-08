@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getClubStore, clubTheme } from "@/modules/clubs/public";
+import { getClubStore, clubTheme, CATALOG_PUBLIC_LABEL } from "@/modules/clubs/public";
 import { CAMPAIGN_STATUS_LABEL, effectiveStatus } from "@/modules/campaigns";
 import { fmtDate, fmtDateTime } from "@/shared/dates";
-import { ClubBar, Contact, Faq, PlatformFooter, Steps } from "../_ui/parts";
+import { ClubBar, Contact, DemoBanner, Faq, PlatformFooter, Steps } from "../_ui/parts";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +16,12 @@ export async function generateMetadata({ params }: { params: Promise<{ club: str
 export default async function ClubPage({ params }: { params: Promise<{ club: string }> }) {
   const data = await getClubStore((await params).club);
   if (!data) notFound();
-  const { club, current, history } = data;
+  const { club, current, history, catalog, brandLine } = data;
   const faq = (current?.faq as { q: string; a: string }[] | null) ?? [];
 
   return (
     <div style={clubTheme(club)}>
+      {club.isDemo && <DemoBanner />}
       <header className="relative overflow-hidden bg-club text-on-club">
         {club.coverUrl && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -30,7 +31,7 @@ export default async function ClubPage({ params }: { params: Promise<{ club: str
         <div className="relative mx-auto max-w-6xl px-4 pb-10 pt-6">
           <ClubBar club={club} />
           <div className="mt-10 max-w-3xl">
-            <div className="font-display text-sm font-bold uppercase tracking-[0.14em] opacity-85">Tienda oficial</div>
+            <div className="font-display text-sm font-bold uppercase tracking-[0.14em] opacity-85">{club.isDemo ? "Demostración" : "Tienda oficial"}{brandLine ? ` · ${brandLine}` : ""}</div>
             <h1 className="mt-2 text-5xl font-extrabold md:text-7xl">{club.name}</h1>
             {club.description && <p className="mt-4 max-w-[52ch] text-lg opacity-90">{club.description}</p>}
             {club.sports.length > 0 && <p className="mt-3 text-sm font-semibold opacity-80">{club.sports.map((s) => s.sport.name).join(" · ")}</p>}
@@ -70,8 +71,31 @@ export default async function ClubPage({ params }: { params: Promise<{ club: str
         <section className="mt-14">
           <div className="eyebrow">Cómo funciona</div>
           <h2 className="mb-6 mt-1 text-4xl font-extrabold">De la reserva al retiro</h2>
-          <Steps deposit={current ? current.paymentMode === "DEPOSIT" : true} />
+          <Steps deposit={current ? current.paymentMode === "DEPOSIT" : true} advance={current ? current.pricingModel === "TEXTIL_ADVANCE" : true} />
         </section>
+
+        {catalog.length > 0 && (
+          <section className="mt-14">
+            <div className="eyebrow">Catálogo del club</div>
+            <h2 className="mb-4 mt-1 text-3xl font-extrabold">Productos</h2>
+            <ul className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              {catalog.map((p) => (
+                <li key={p.id} className="card overflow-hidden">
+                  <div className="aspect-square bg-surface-2">
+                    {p.images[0] && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.images[0].url} alt={p.images[0].alt ?? p.name} className="h-full w-full object-cover" loading="lazy" />
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <div className="font-bold">{p.name}</div>
+                    <span className={`badge mt-1 ${p.catalogStatus === "PRESALE" ? "badge-ok" : "badge-muted"}`}>{CATALOG_PUBLIC_LABEL[p.catalogStatus]}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <section className="mt-14 grid gap-6 md:grid-cols-2">
           <div className="card p-5">
@@ -121,7 +145,7 @@ export default async function ClubPage({ params }: { params: Promise<{ club: str
           <Contact club={club} message={`Hola, tengo una consulta sobre la tienda de ${club.name}.`} />
         </section>
       </main>
-      <PlatformFooter name={club.name} />
+      <PlatformFooter name={club.name} brandLine={brandLine} demo={club.isDemo} />
     </div>
   );
 }

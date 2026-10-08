@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import QRCode from "qrcode";
 import { orderByToken, paymentStateLabel, ORDER_STATUS_LABEL, DELIVERY_STATUS_LABEL } from "@/modules/orders";
-import { dueOptions, onlineMode, PAYMENT_KIND_LABEL, PAYMENT_METHOD_LABEL, PAYMENT_STATUS_LABEL } from "@/modules/payments";
+import { advanceStates, dueOptions, onlineMode, PAYMENT_KIND_LABEL, PAYMENT_METHOD_LABEL, PAYMENT_STATUS_LABEL, RECEIVER_LABEL } from "@/modules/payments";
+import { MP_FINANCING_TEXT } from "@/shared/copy";
+import { DemoBanner } from "@/app/club/_ui/parts";
 import { LOT_PUBLIC_LABEL } from "@/modules/production";
 import { clubTheme } from "@/modules/clubs/public";
 import { pickupQrPayload } from "@/modules/deliveries";
@@ -27,7 +29,10 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   if (!o) notFound();
   const c = o.campaign;
   const club = o.club;
-  const balance = Math.max(0, o.total - o.paidAmount);
+  const adv = o.pricingModel === "TEXTIL_ADVANCE";
+  const st = adv ? advanceStates(o) : null;
+  // Con anticipo textil, lo que queda es el saldo con el club (no se paga por la plataforma)
+  const balance = adv ? st!.clubDue : Math.max(0, o.total - o.paidAmount);
   const options = dueOptions(o, c);
   const mpMode = onlineMode(c.paymentAccount);
   const mpEnabled = c.allowMercadoPago && mpMode !== "unavailable";
@@ -47,6 +52,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
 
   return (
     <div style={clubTheme(club)} className="min-h-dvh">
+      {club.isDemo && <DemoBanner />}
       <header className="bg-club text-on-club">
         <div className="mx-auto max-w-4xl px-4 py-5">
           <ClubBar club={club} />
@@ -55,7 +61,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       <main className="mx-auto max-w-4xl px-4 py-8">
         {sp.nuevo && (
           <div className="notice notice-ok mb-4">
-            <b>Pedido registrado.</b> Guardá este enlace: es privado y te permite pagar la seña, después el saldo, y ver el avance. También te lo enviamos por correo.
+            <b>Pedido registrado.</b> Guardá este enlace: es privado y te permite {adv ? "pagar el anticipo" : "pagar la seña, después el saldo,"} y ver el avance. También te lo enviamos por correo.
           </div>
         )}
         {sp.pago === "error" && <div className="notice notice-warn mb-4">No pudimos abrir Mercado Pago. Tu pedido está guardado: intentá de nuevo con el botón de pago.</div>}
@@ -69,10 +75,15 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
           </div>
         </div>
 
-        <dl className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <dl className={`mt-6 grid grid-cols-2 gap-3 ${adv ? "md:grid-cols-5" : "md:grid-cols-4"}`}>
           {[
             ["Pedido", <Badge key="o" tone={toneFor[o.status]}>{ORDER_STATUS_LABEL[o.status]}</Badge>],
-            ["Pago", <Badge key="p" tone={o.paidAmount >= o.total ? "ok" : o.paidAmount > 0 ? "info" : "warn"}>{paymentStateLabel(o)}</Badge>],
+            ...(adv
+              ? [
+                  ["Anticipo", <Badge key="a" tone={st!.advanceOk ? "ok" : "warn"}>{st!.advance}</Badge>],
+                  ["Saldo al club", <Badge key="c" tone={st!.clubDue > 0 ? "warn" : "ok"}>{st!.club}</Badge>],
+                ]
+              : [["Pago", <Badge key="p" tone={o.paidAmount >= o.total ? "ok" : o.paidAmount > 0 ? "info" : "warn"}>{paymentStateLabel(o)}</Badge>]]),
             ["Fabricación", <span key="f" className="font-semibold">{production}</span>],
             ["Entrega", <span key="e" className="font-semibold">{o.status === "CONFIRMED" ? DELIVERY_STATUS_LABEL[o.deliveryStatus] : "—"}</span>],
           ].map(([k, v]) => (
@@ -87,17 +98,31 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
           <h2 className="text-2xl font-bold">Importes</h2>
           <dl className="num mt-3 grid gap-1.5">
             <div className="flex justify-between"><dt>Prendas</dt><dd>{ars(o.itemsTotal)}</dd></div>
-            {o.persTotal > 0 && <div className="flex justify-between"><dt>Personalización</dt><dd>{ars(o.persTotal)}</dd></div>}
+            {o.persTotal > 0 && <div className="flex justify-between"><dt>Personalización y adicionales</dt><dd>{ars(o.persTotal)}</dd></div>}
             {o.shippingTotal > 0 && <div className="flex justify-between"><dt>Envío</dt><dd>{ars(o.shippingTotal)}</dd></div>}
             <div className="flex justify-between border-t-2 border-ink pt-2 text-lg font-bold"><dt>Total</dt><dd>{ars(o.total)}</dd></div>
-            <div className="flex justify-between text-ok"><dt>Confirmado</dt><dd>{ars(o.paidAmount)}</dd></div>
+            {adv ? (
+              <>
+                <div className="flex justify-between"><dt>Anticipo (Mercado Pago · lo cobra la textil)</dt><dd>{ars(o.advanceRequired)}</dd></div>
+                <div className="flex justify-between text-ok"><dt>Anticipo acreditado</dt><dd>{ars(o.advancePaid)}</dd></div>
+                <div className="flex justify-between"><dt>Saldo al club (lo cobra {club.name})</dt><dd>{ars(o.clubBalanceRequired)}</dd></div>
+                {o.clubBalanceRequired > 0 && <div className="flex justify-between text-ok"><dt>Saldo al club registrado</dt><dd>{ars(o.clubPaid)}</dd></div>}
+              </>
+            ) : (
+              <div className="flex justify-between text-ok"><dt>Confirmado</dt><dd>{ars(o.paidAmount)}</dd></div>
+            )}
             {o.inReviewAmount > 0 && <div className="flex justify-between text-info"><dt>En revisión (no descuenta saldo)</dt><dd>{ars(o.inReviewAmount)}</dd></div>}
             {o.refundedAmount > 0 && <div className="flex justify-between"><dt>Devuelto</dt><dd>{ars(o.refundedAmount)}</dd></div>}
-            <div className="flex justify-between text-lg font-bold"><dt>Saldo adeudado</dt><dd>{ars(o.status === "CANCELLED" ? 0 : balance)}</dd></div>
+            <div className="flex justify-between text-lg font-bold"><dt>{adv ? "Saldo a pagar al club" : "Saldo adeudado"}</dt><dd>{ars(o.status === "CANCELLED" ? 0 : balance)}</dd></div>
           </dl>
+          {adv && o.status === "CONFIRMED" && balance > 0 && (
+            <p className="notice notice-info mt-3 text-sm">
+              El saldo se paga directamente a {club.name}{club.pickupAddress ? ` (${club.pickupAddress})` : ""}{club.officeHours ? `, ${club.officeHours}` : ""}. No se paga por esta página. Es necesario para retirar las prendas.
+            </p>
+          )}
           {o.status === "PENDING_PAYMENT" && o.reservedUntil && (
             <p className="mt-3 text-sm text-muted">
-              Para confirmar, pagá {ars(Math.max(0, o.depositRequired - o.paidAmount))}. Reserva vigente hasta el {fmtDateTime(o.reservedUntil)}.
+              Para confirmar, pagá {adv ? "el anticipo de " : ""}{ars(Math.max(0, adv ? o.advanceRequired - o.advancePaid : o.depositRequired - o.paidAmount))}. Reserva vigente hasta el {fmtDateTime(o.reservedUntil)}.
             </p>
           )}
           {o.status === "EXPIRED" && <p className="notice notice-warn mt-3">La reserva venció sin pago. Si la preventa sigue abierta y hay cupo, podés pagar ahora y se reactiva el mismo pedido.</p>}
@@ -106,7 +131,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
 
         {options.length > 0 && (
           <section className="card mt-6 p-5">
-            <h2 className="text-2xl font-bold">{o.status === "CONFIRMED" ? "Pagar el saldo" : "Pagar para confirmar"}</h2>
+            <h2 className="text-2xl font-bold">{adv ? "Pagar el anticipo" : o.status === "CONFIRMED" ? "Pagar el saldo" : "Pagar para confirmar"}</h2>
             {o.inReviewAmount > 0 ? (
               <p className="notice notice-info mt-3">Tu comprobante está en revisión. Te avisamos por correo cuando se apruebe.</p>
             ) : (
@@ -115,11 +140,12 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                   <div>
                     <h3 className="text-lg font-bold">Mercado Pago</h3>
                     {mpMode === "simulator" && <p className="mb-2 text-sm text-warn">Entorno de prueba: el pago es simulado.</p>}
+                    <p className="text-sm text-muted">{MP_FINANCING_TEXT}</p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {options.map((op) => (
                         <ActionForm key={op.kind} action={payOnline.bind(null, token, op.kind)} className="grid gap-2">
                           <SubmitButton className="btn btn-club" pendingText="Abriendo Mercado Pago…">
-                            {op.kind === "DEPOSIT" ? "Pagar la seña" : op.kind === "BALANCE" ? "Pagar el saldo" : "Pagar el total"} · {ars(op.amount)}
+                            {op.kind === "ADVANCE" ? "Pagar el anticipo" : op.kind === "DEPOSIT" ? "Pagar la seña" : op.kind === "BALANCE" ? "Pagar el saldo" : "Pagar el total"} · {ars(op.amount)}
                           </SubmitButton>
                         </ActionForm>
                       ))}
@@ -167,7 +193,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               <h2 className="text-2xl font-bold">Retiro en el club</h2>
               <p className="mt-1">Código de retiro: <span className="select-all font-mono text-lg font-bold tracking-widest">{o.pickupCode}</span></p>
               <p className="mt-2 text-muted">{[club.pickupAddress, club.pickupHours, c.pickupInstructions].filter(Boolean).join(". ")}</p>
-              {balance > 0 && <p className="notice notice-warn mt-3">Antes de retirar, completá el saldo de {ars(balance)}.</p>}
+              {balance > 0 && <p className="notice notice-warn mt-3">Antes de retirar, {adv ? `pagá al club el saldo de ${ars(balance)}` : `completá el saldo de ${ars(balance)}`}.</p>}
               <p className="mt-2 text-xs text-muted">El código no contiene datos personales. Mostralo en la sede.</p>
             </div>
           </section>
@@ -188,8 +214,11 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                       <div className="font-semibold">{u.productName}</div>
                       <div className="text-sm text-muted">
                         {u.components.map((cmp) => `${u.components.length > 1 ? cmp.label : "Talle"} ${cmp.sizeLabel}`).join(" · ")}
-                        {(u.persName || u.persNumber) && ` · ${u.persName ?? "Sin nombre"} ${u.persNumber ? `#${u.persNumber}` : ""}`}
+                        {u.options.length
+                          ? ` · ${u.options.map((op) => `${op.groupName}: ${op.value}`).join(" · ")}`
+                          : (u.persName || u.persNumber) && ` · ${u.persName ?? "Sin nombre"} ${u.persNumber ? `#${u.persNumber}` : ""}`}
                       </div>
+                      {u.noSizeChange && <div className="text-xs font-semibold">Personalizada: sin cambio de talle</div>}
                     </div>
                     <div className="text-right">
                       <div className="num font-semibold">{ars(u.unitPrice + u.persPrice)}</div>
@@ -208,7 +237,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
             <h2 className="text-3xl font-bold">Pagos y comprobantes</h2>
             <div className="card tbl-wrap mt-3">
               <table className="tbl">
-                <thead><tr><th>Fecha</th><th>Tipo</th><th>Medio</th><th>Importe</th><th>Estado</th></tr></thead>
+                <thead><tr><th>Fecha</th><th>Tipo</th><th>Medio</th><th>Cobra</th><th>Importe</th><th>Estado</th></tr></thead>
                 <tbody>
                   {o.payments.map((p) => (
                     <tr key={p.id}>
@@ -222,6 +251,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                         ))}
                         {p.operationRef && <div className="text-xs text-muted">Op. {p.operationRef}</div>}
                       </td>
+                      <td>{p.receiver === "CLUB" ? club.name : RECEIVER_LABEL[p.receiver]}</td>
                       <td className="num">{ars(p.amount)}</td>
                       <td>
                         <Badge tone={payTone[p.status]}>{PAYMENT_STATUS_LABEL[p.status]}</Badge>
@@ -270,7 +300,11 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
 
 function TermsView({ terms }: { terms: Record<string, unknown> }) {
   const pol = (terms.policies ?? {}) as Record<string, string | null>;
+  const cp = (terms.changePolicy ?? null) as { personalized?: string; other?: string } | null;
   const rows: [string, unknown][] = [
+    ["Pagos", terms.payments],
+    ["Prendas personalizadas", cp?.personalized],
+    ["Prendas sin personalizar", cp?.other],
     ["Cambios", pol.changes],
     ["Cancelación", pol.cancellation],
     ["Devoluciones", pol.refunds],

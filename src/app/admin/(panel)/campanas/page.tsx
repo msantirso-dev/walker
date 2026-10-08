@@ -17,7 +17,7 @@ export default async function Campaigns() {
   });
   return (
     <>
-      <PageHeader eyebrow="Preventas" title="Campañas" actions={can(u, "campaign.manage") && <Link href="/admin/campanas/nueva" className="btn btn-primary">Nueva campaña</Link>} />
+      <PageHeader eyebrow="Preventas" title="Campañas" actions={(can(u, "campaign.manage") || can(u, "campaign.request", u.clubId)) && <Link href="/admin/campanas/nueva" className="btn btn-primary">{can(u, "campaign.manage") ? "Nueva campaña" : "Armar campaña"}</Link>} />
       {list.length === 0 ? <Empty>No hay campañas.</Empty> : (
         <div className="card tbl-wrap">
           <table className="tbl">

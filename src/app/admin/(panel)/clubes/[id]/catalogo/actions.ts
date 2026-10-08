@@ -120,23 +120,17 @@ const productSchema = z.object({
   sportId: z.string().nullable(),
   basePrice: z.number().int().positive("Precio base inválido"),
   manufacturingTerms: z.string().max(500).nullable(),
-  persNameEnabled: z.boolean(),
-  persNamePrice: z.number().int().min(0),
-  persNameMaxLen: z.number().int().min(1).max(20),
-  persNumberEnabled: z.boolean(),
-  persNumberPrice: z.number().int().min(0),
-  persNumberMin: z.number().int().min(0).max(999),
-  persNumberMax: z.number().int().min(0).max(999),
+  family: z.enum(["GAME_KIT", "OUTFIT", "ACCESSORY", "OTHER"]),
+  technique: z.enum(["PENDING", "SUBLIMATED", "NON_SUBLIMATED", "EMBROIDERED", "PRINTED", "OTHER"]),
+  catalogStatus: z.enum(["PREPARATION", "CATALOG", "PRESALE", "PRESALE_CLOSED", "ARCHIVED"]),
 });
 
 function readProduct(fd: FormData) {
   const d = productSchema.parse({
     code: str(fd, "code").toUpperCase(), name: str(fd, "name"), kind: str(fd, "kind") || "SIMPLE", description: opt(fd, "description"), audience: opt(fd, "audience"),
     sportId: opt(fd, "sportId"), basePrice: parsePesos(str(fd, "basePrice")) ?? 0, manufacturingTerms: opt(fd, "manufacturingTerms"),
-    persNameEnabled: bool(fd, "persNameEnabled"), persNamePrice: parsePesos(str(fd, "persNamePrice")) ?? 0, persNameMaxLen: int(fd, "persNameMaxLen", 12),
-    persNumberEnabled: bool(fd, "persNumberEnabled"), persNumberPrice: parsePesos(str(fd, "persNumberPrice")) ?? 0, persNumberMin: int(fd, "persNumberMin", 0), persNumberMax: int(fd, "persNumberMax", 99),
+    family: str(fd, "family") || "OTHER", technique: str(fd, "technique") || "PENDING", catalogStatus: str(fd, "catalogStatus") || "PREPARATION",
   });
-  if (d.persNumberMin > d.persNumberMax) throw new UserError("El número mínimo no puede superar al máximo.");
   return d;
 }
 
@@ -220,4 +214,41 @@ export async function updateImage(clubId: string, imageId: string, fd: FormData)
   if (bool(fd, "delete")) await db.productImage.delete({ where: { id: imageId } });
   else await db.productImage.update({ where: { id: imageId }, data: { tag: str(fd, "tag") as never, view: str(fd, "view") as never, sort: int(fd, "sort", img.sort) } });
   revalidatePath(`/admin/clubes/${clubId}/catalogo/productos/${img.productId}`);
+}
+
+/** Grupo de opciones del configurador. Valores de elección: una línea por valor "Etiqueta | precio textil | precio club". */
+export async function saveOptionGroupAction(clubId: string, productId: string, groupId: string | null, _p: FormState, fd: FormData): Promise<FormState> {
+  return run(async () => {
+    const { actor } = await guard(clubId);
+    const { saveOptionGroup } = await import("@/modules/catalog/admin");
+    const values = str(fd, "values")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((l) => {
+        const [label, t, c] = l.split("|").map((x) => x.trim());
+        return { label, priceTextil: t ? (parsePesos(t) ?? -1) : 0, priceClub: c ? (parsePesos(c) ?? -1) : 0 };
+      });
+    const type = str(fd, "type");
+    const role = str(fd, "role");
+    await saveOptionGroup(actor, clubId, productId, groupId, {
+      name: str(fd, "name"), type: (["CHOICE", "TEXT", "NUMBER"].includes(type) ? type : "CHOICE") as never, role: (["NAME", "NUMBER", "LEGEND", "OTHER"].includes(role) ? role : "OTHER") as never,
+      required: bool(fd, "required"), sort: int(fd, "sort", 0), help: opt(fd, "help"), dependsOnValueIds: fd.getAll("dependsOnValueIds").map(String),
+      maxLength: str(fd, "maxLength") ? int(fd, "maxLength", 12) : null, numberMin: str(fd, "numberMin") ? int(fd, "numberMin", 0) : null, numberMax: str(fd, "numberMax") ? int(fd, "numberMax", 99) : null,
+      priceTextil: parsePesos(str(fd, "priceTextil") || "0") ?? 0, priceClub: parsePesos(str(fd, "priceClub") || "0") ?? 0,
+      splitConfirmed: bool(fd, "splitConfirmed"), blocksSizeChange: bool(fd, "blocksSizeChange"), values,
+    });
+    revalidatePath(`/admin/clubes/${clubId}/catalogo/productos/${productId}`);
+    return "Opciones guardadas. Los pedidos hechos conservan lo que eligieron.";
+  });
+}
+
+export async function deleteOptionGroupAction(clubId: string, productId: string, groupId: string, _p: FormState, _fd: FormData): Promise<FormState> {
+  return run(async () => {
+    const { actor } = await guard(clubId);
+    const { deleteOptionGroup } = await import("@/modules/catalog/admin");
+    await deleteOptionGroup(actor, clubId, productId, groupId);
+    revalidatePath(`/admin/clubes/${clubId}/catalogo/productos/${productId}`);
+    return "Grupo eliminado.";
+  });
 }

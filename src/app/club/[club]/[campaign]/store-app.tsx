@@ -1,14 +1,17 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { StoreProduct, StoreComponent } from "@/modules/clubs/public";
+import { CHANGE_POLICY_TEXT, CHANGE_POLICY_UNPERSONALIZED, CHANGE_POLICY_VERSION, NAME_RE, isVisible, sortGroups, type OptionGroupT } from "@/modules/catalog/options";
 import { ars } from "@/shared/money";
+import { MP_FINANCING_TEXT, SAMPLE_TEXT } from "@/shared/copy";
 
 type Player = { key: string; name: string; sport: string; category: string; team: string };
-type Line = { id: string; productId: string; playerKey: string | null; sizes: Record<string, string>; persName: string; persNumber: string; quantity: number };
+type Line = { id: string; productId: string; playerKey: string | null; sizes: Record<string, string>; options: Record<string, string>; quantity: number };
 
 export type StoreConfig = {
   campaignId: string;
   open: boolean;
+  model: "LEGACY_DEPOSIT" | "TEXTIL_ADVANCE";
   paymentMode: "FULL" | "DEPOSIT";
   depositType: "PERCENT" | "FIXED";
   depositValue: number;
@@ -22,14 +25,18 @@ export type StoreConfig = {
   simulated: boolean;
   transfer: boolean;
   receiver: string;
+  clubName: string;
   sports: string[];
   categories: { name: string; sport: string | null }[];
+  audience: "ALL" | "SPORTS" | "CATEGORIES";
+  audienceText: string;
+  demo: boolean;
   policiesAnchor: string;
 };
 
+
 const GROUP_LABEL: Record<string, string> = { KIDS: "Infantiles", NUMERIC: "Curva 1 · 2 · 3", ALPHA: "Adultos", OTHER: "Otros" };
 const TAG_LABEL: Record<string, string> = { REAL: "Foto real", DESIGN: "Diseño", REFERENCE: "Referencia" };
-const NAME_RE = /^[A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ .'-]*$/;
 
 function groupSizes<T extends { group: string }>(list: T[]): [string, T[]][] {
   const m = new Map<string, T[]>();
@@ -41,22 +48,53 @@ function uid() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
 }
 
+/** Opciones visibles y completadas, con su precio (para mostrar; el servidor recalcula). */
+function chosenOptions(groups: OptionGroupT[], sel: Record<string, string>) {
+  const out: { g: OptionGroupT; label: string; textil: number; club: number }[] = [];
+  for (const g of sortGroups(groups)) {
+    if (!isVisible(g, sel)) continue;
+    const v = sel[g.id]?.trim();
+    if (!v) continue;
+    if (g.type === "CHOICE") {
+      const val = g.values.find((x) => x.id === v);
+      if (val) out.push({ g, label: val.label, textil: val.priceTextil, club: val.priceClub });
+    } else out.push({ g, label: v, textil: g.priceTextil, club: g.priceClub });
+  }
+  return out;
+}
+
+/** Selecciones limpias: solo grupos visibles con valor. */
+function cleanSelections(groups: OptionGroupT[], sel: Record<string, string>) {
+  const out: Record<string, string> = {};
+  for (const g of groups) if (isVisible(g, sel) && sel[g.id]?.trim()) out[g.id] = sel[g.id].trim();
+  return out;
+}
+
 function linePrice(p: StoreProduct, l: Line) {
-  const pers = (l.persName ? p.pers.namePrice : 0) + (l.persNumber ? p.pers.numberPrice : 0);
-  return { unit: p.price, pers, total: (p.price + pers) * l.quantity };
+  const opts = chosenOptions(p.optionGroups, l.options);
+  const extraTextil = opts.reduce((a, o) => a + o.textil, 0);
+  const extra = opts.reduce((a, o) => a + o.textil + o.club, 0);
+  const unit = p.price + extra;
+  const advance = (p.textilPrice ?? 0) + extraTextil;
+  return {
+    base: p.price, extra, unit, total: unit * l.quantity, advance: advance * l.quantity, club: (unit - advance) * l.quantity, opts,
+    noSizeChange: opts.some((o) => o.g.blocksSizeChange), freeText: opts.some((o) => o.g.type !== "CHOICE"),
+  };
 }
 
 export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: StoreConfig }) {
+  const advanceModel = cfg.model === "TEXTIL_ADVANCE";
   const [players, setPlayers] = useState<Player[]>([]);
   const [lines, setLines] = useState<Line[]>([]);
   const [sheet, setSheet] = useState<StoreProduct | null>(null);
   const [review, setReview] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [buyer, setBuyer] = useState({ name: "", email: "", phone: "", memberNumber: "" });
-  const [delivery, setDelivery] = useState<"PICKUP" | "SHIPPING">(cfg.pickupEnabled ? "PICKUP" : "SHIPPING");
+  const [delivery, setDelivery] = useState<"PICKUP" | "SHIPPING">(advanceModel || cfg.pickupEnabled ? "PICKUP" : "SHIPPING");
   const [address, setAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [terms, setTerms] = useState(false);
+  const [policyOk, setPolicyOk] = useState(false);
   const [payKind, setPayKind] = useState<"DEPOSIT" | "FULL">(cfg.paymentMode === "FULL" ? "FULL" : "DEPOSIT");
   const [payMethod, setPayMethod] = useState<"MERCADOPAGO" | "TRANSFER">(cfg.mercadopago ? "MERCADOPAGO" : "TRANSFER");
   const [formError, setFormError] = useState<string | null>(null);
@@ -76,25 +114,33 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
 
   const byId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const units = lines.reduce((a, l) => a + l.quantity, 0);
+  const anyNoChange = lines.some((l) => {
+    const p = byId.get(l.productId);
+    return p ? linePrice(p, l).noSizeChange : false;
+  });
   const totals = useMemo(() => {
-    let items = 0, pers = 0;
+    let items = 0, pers = 0, advance = 0;
     for (const l of lines) {
       const p = byId.get(l.productId);
       if (!p) continue;
       const lp = linePrice(p, l);
-      items += lp.unit * l.quantity;
-      pers += lp.pers * l.quantity;
+      items += lp.base * l.quantity;
+      pers += lp.extra * l.quantity;
+      advance += lp.advance;
     }
-    const ship = delivery === "SHIPPING" && lines.length ? cfg.shippingPrice : 0;
+    const ship = !advanceModel && delivery === "SHIPPING" && lines.length ? cfg.shippingPrice : 0;
     const total = items + pers + ship;
+    if (advanceModel) return { items, pers, ship, total, deposit: advance, now: advance, later: total - advance };
     const goods = items + pers;
     let deposit = total;
     if (cfg.paymentMode === "DEPOSIT") deposit = cfg.depositType === "FIXED" ? Math.min(cfg.depositValue, total) : Math.min(total, Math.round((goods * cfg.depositValue) / 100));
     const now = payKind === "FULL" ? total : deposit;
     return { items, pers, ship, total, deposit, now, later: total - now };
-  }, [lines, byId, delivery, cfg, payKind]);
+  }, [lines, byId, delivery, cfg, payKind, advanceModel]);
 
   const depositLabel = cfg.depositType === "PERCENT" ? `Seña (${cfg.depositValue} %)` : "Seña";
+  const nowLabel = advanceModel ? "Anticipo ahora (Mercado Pago)" : "A pagar ahora";
+  const laterLabel = advanceModel ? `Saldo a pagar al club` : "Saldo pendiente";
 
   function addLine(l: Omit<Line, "id">, newPlayer?: Player) {
     if (newPlayer) setPlayers((ps) => [...ps, newPlayer]);
@@ -109,6 +155,7 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
     if (buyer.phone.replace(/\D/g, "").length < 8) return "Completá un celular con código de área.";
     if (cfg.memberNumberMode === "REQUIRED" && !buyer.memberNumber.trim()) return "Completá tu número de socio.";
     if (delivery === "SHIPPING" && address.trim().length < 6) return "Completá la dirección de envío.";
+    if (anyNoChange && !policyOk) return "Confirmá que leíste la política de cambios de prendas personalizadas.";
     if (!terms) return "Para continuar, aceptá las condiciones de la preventa.";
     if (!cfg.mercadopago && !cfg.transfer) return "No hay medios de pago habilitados. Escribí al club.";
     return null;
@@ -125,13 +172,14 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
         body: JSON.stringify({
           idempotencyKey: idem.current,
           players: usedPlayers.map((p) => ({ key: p.key, name: p.name, sport: p.sport || undefined, category: p.category || undefined, team: p.team || undefined })),
-          items: lines.map((l) => ({ productId: l.productId, playerKey: l.playerKey, sizes: l.sizes, persName: l.persName || undefined, persNumber: l.persNumber || undefined, quantity: l.quantity })),
+          items: lines.map((l) => ({ productId: l.productId, playerKey: l.playerKey, sizes: l.sizes, options: l.options, quantity: l.quantity })),
           buyer: { name: buyer.name, email: buyer.email, phone: buyer.phone, memberNumber: buyer.memberNumber || undefined },
           delivery: { method: delivery, address: delivery === "SHIPPING" ? address : undefined },
           notes: notes || undefined,
           acceptTerms: terms,
           payMethod,
           payKind,
+          policyVersion: anyNoChange && policyOk ? CHANGE_POLICY_VERSION : undefined,
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -153,6 +201,28 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
     { player: null, lines: lines.filter((l) => !l.playerKey) },
   ].filter((g) => g.lines.length);
 
+  const Totals = ({ big }: { big?: boolean }) => (
+    <dl className="num grid gap-1.5">
+      <div className="flex justify-between"><dt>Prendas ({units})</dt><dd>{ars(totals.items)}</dd></div>
+      <div className="flex justify-between"><dt>Personalización y adicionales</dt><dd>{ars(totals.pers)}</dd></div>
+      {!advanceModel && <div className="flex justify-between"><dt>Envío</dt><dd>{totals.ship ? ars(totals.ship) : "Sin costo"}</dd></div>}
+      <div className={`mt-1 flex justify-between border-t-2 border-ink pt-2 font-bold ${big ? "text-lg" : ""}`}><dt>Total</dt><dd>{ars(totals.total)}</dd></div>
+      <div className={`flex justify-between rounded-lg bg-club-2 px-3 py-2 font-bold text-on-club-2 ${big ? "text-lg" : ""}`}>
+        <dt>{advanceModel ? nowLabel : review ? `${payKind === "FULL" ? "Pago total" : depositLabel} · ${payMethod === "MERCADOPAGO" ? "Mercado Pago" : "Transferencia"}` : nowLabel}</dt>
+        <dd>{ars(totals.now)}</dd>
+      </div>
+      {advanceModel && <div className="-mt-1 px-3 text-xs text-muted">Lo cobra la textil que fabrica las prendas.</div>}
+      {totals.later > 0 && (
+        <div className="flex justify-between text-muted">
+          <dt>{laterLabel}{!advanceModel && totals.ship ? " (incluye envío)" : ""}</dt>
+          <dd>{ars(totals.later)}</dd>
+        </div>
+      )}
+      {advanceModel && totals.later > 0 && <div className="-mt-1 text-xs text-muted">Lo cobra {cfg.clubName} directamente, antes del retiro.</div>}
+      {advanceModel && totals.later === 0 && lines.length > 0 && <div className="text-xs text-muted">Sin saldo a pagar al club.</div>}
+    </dl>
+  );
+
   return (
     <>
       <section id="coleccion" className="mt-14">
@@ -161,7 +231,9 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
             <div className="eyebrow">{cfg.open ? "Precios de preventa" : "Colección"}</div>
             <h2 className="mt-1 text-4xl font-extrabold">La colección</h2>
           </div>
-          <p className="max-w-[44ch] text-sm text-muted">Cada foto indica si es una foto real, un diseño o una referencia.</p>
+          <p className="max-w-[44ch] text-sm text-muted">
+            Cada foto indica si es una foto real, un diseño o una referencia.{cfg.audience !== "ALL" ? ` Preventa para ${cfg.audienceText}.` : ""}
+          </p>
         </div>
         <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
           {products.map((p) => {
@@ -185,10 +257,16 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
                     <span className="font-display text-2xl font-bold md:text-3xl">{ars(p.price)}</span>
                     {p.listPrice && <s className="text-sm text-muted">{ars(p.listPrice)}</s>}
                   </div>
+                  {advanceModel && p.textilPrice != null && (
+                    <p className="text-xs text-muted">
+                      Anticipo {ars(p.textilPrice)}{p.price > p.textilPrice ? ` · saldo al club ${ars(p.price - p.textilPrice)}` : ""}
+                    </p>
+                  )}
+                  {p.samples.length > 0 && <p className="text-xs font-semibold">Muestrario disponible en el club</p>}
                   {p.remaining != null && <p className="text-xs text-muted">{soldOut ? "Sin cupo disponible" : `Cupo disponible: ${p.remaining}`}</p>}
                   {cfg.open ? (
                     <button className="btn btn-club mt-2 w-full" onClick={() => setSheet(p)} disabled={soldOut}>
-                      {soldOut ? "Sin cupo" : "Elegir talle"}
+                      {soldOut ? "Sin cupo" : "Configurar"}
                     </button>
                   ) : (
                     <button className="btn btn-ghost mt-2 w-full" onClick={() => setSheet(p)}>
@@ -218,7 +296,6 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
                   {g.lines.map((l) => {
                     const p = byId.get(l.productId)!;
                     const lp = linePrice(p, l);
-                    const personalized = Boolean(l.persName || l.persNumber);
                     return (
                       <div key={l.id} className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 border-b border-dashed border-line py-3 last:border-0">
                         <div className="min-w-0">
@@ -230,12 +307,18 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
                               </span>
                             ))}
                           </div>
-                          {personalized && <span className="mt-1 inline-block rounded bg-surface-2 px-2 font-mono text-xs">{l.persName || "Sin nombre"} · {l.persNumber || "s/n"}</span>}
+                          {lp.opts.length > 0 && (
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {lp.opts.map((o) => <span key={o.g.id} className="rounded bg-surface-2 px-2 font-mono text-xs">{o.g.name}: {o.label}</span>)}
+                            </div>
+                          )}
+                          {lp.noSizeChange && <div className="mt-1 text-xs font-semibold">Sin cambio de talle (personalizada)</div>}
                         </div>
                         <div className="text-right">
                           <div className="num font-bold">{ars(lp.total)}</div>
+                          {advanceModel && <div className="num text-xs text-muted">anticipo {ars(lp.advance)}</div>}
                           <div className="mt-1 flex items-center justify-end gap-1">
-                            {!personalized && (
+                            {!lp.freeText && (
                               <>
                                 <button className="btn btn-ghost btn-sm w-9 px-0" aria-label="Restar una" onClick={() => setLines((ls) => ls.map((x) => (x.id === l.id ? { ...x, quantity: Math.max(1, x.quantity - 1) } : x)))}>−</button>
                                 <span className="num w-6 text-center font-semibold">{l.quantity}</span>
@@ -286,27 +369,38 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
                   <small>Es un dato declarado: el club lo puede verificar al entregar.</small>
                 </div>
               )}
-              <fieldset className="grid gap-2">
-                <legend className="label mb-1">Entrega</legend>
-                {cfg.pickupEnabled && (
-                  <label className="flex cursor-pointer gap-3 rounded-lg border-[1.5px] border-line p-3 has-[:checked]:border-club">
-                    <input type="radio" name="dl" className="mt-1 accent-[var(--club)]" checked={delivery === "PICKUP"} onChange={() => setDelivery("PICKUP")} />
-                    <span>
-                      <b>Retiro en sede</b> · sin costo
-                      {cfg.pickupText && <span className="block text-sm text-muted">{cfg.pickupText}</span>}
-                    </span>
-                  </label>
-                )}
-                {cfg.shippingEnabled && (
-                  <label className="flex cursor-pointer gap-3 rounded-lg border-[1.5px] border-line p-3 has-[:checked]:border-club">
-                    <input type="radio" name="dl" className="mt-1 accent-[var(--club)]" checked={delivery === "SHIPPING"} onChange={() => setDelivery("SHIPPING")} />
-                    <span>
-                      <b>Envío a domicilio</b> · {ars(cfg.shippingPrice)}
-                      {cfg.shippingNotes && <span className="block text-sm text-muted">{cfg.shippingNotes}</span>}
-                    </span>
-                  </label>
-                )}
-              </fieldset>
+
+              {advanceModel ? (
+                <div className="grid gap-1 rounded-lg border-[1.5px] border-line p-3">
+                  <span className="label">Entrega</span>
+                  <b>Retiro en el club</b>
+                  <span className="text-sm text-muted">
+                    La producción completa se entrega en {cfg.clubName}. Te avisamos cuando tus prendas estén disponibles.{cfg.pickupText ? ` ${cfg.pickupText}` : ""}
+                  </span>
+                </div>
+              ) : (
+                <fieldset className="grid gap-2">
+                  <legend className="label mb-1">Entrega</legend>
+                  {cfg.pickupEnabled && (
+                    <label className="flex cursor-pointer gap-3 rounded-lg border-[1.5px] border-line p-3 has-[:checked]:border-club">
+                      <input type="radio" name="dl" className="mt-1 accent-[var(--club)]" checked={delivery === "PICKUP"} onChange={() => setDelivery("PICKUP")} />
+                      <span>
+                        <b>Retiro en sede</b> · sin costo
+                        {cfg.pickupText && <span className="block text-sm text-muted">{cfg.pickupText}</span>}
+                      </span>
+                    </label>
+                  )}
+                  {cfg.shippingEnabled && (
+                    <label className="flex cursor-pointer gap-3 rounded-lg border-[1.5px] border-line p-3 has-[:checked]:border-club">
+                      <input type="radio" name="dl" className="mt-1 accent-[var(--club)]" checked={delivery === "SHIPPING"} onChange={() => setDelivery("SHIPPING")} />
+                      <span>
+                        <b>Envío a domicilio</b> · {ars(cfg.shippingPrice)}
+                        {cfg.shippingNotes && <span className="block text-sm text-muted">{cfg.shippingNotes}</span>}
+                      </span>
+                    </label>
+                  )}
+                </fieldset>
+              )}
               {delivery === "SHIPPING" && (
                 <div className="field">
                   <label htmlFor="bAddr">Dirección de envío</label>
@@ -318,7 +412,7 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
                 <textarea id="bNotes" className="input" rows={2} maxLength={500} value={notes} onChange={(e) => setNotes(e.target.value)} />
               </div>
 
-              {cfg.paymentMode === "DEPOSIT" && (
+              {!advanceModel && cfg.paymentMode === "DEPOSIT" && (
                 <fieldset className="grid gap-2">
                   <legend className="label mb-1">¿Cuánto pagás ahora?</legend>
                   <label className="flex cursor-pointer gap-3 rounded-lg border-[1.5px] border-line p-3 has-[:checked]:border-club">
@@ -333,15 +427,13 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
               )}
 
               <fieldset className="grid gap-2">
-                <legend className="label mb-1">Medio de pago</legend>
+                <legend className="label mb-1">{advanceModel ? "Pago del anticipo" : "Medio de pago"}</legend>
                 {cfg.mercadopago && (
                   <label className="flex cursor-pointer gap-3 rounded-lg border-[1.5px] border-line p-3 has-[:checked]:border-club">
                     <input type="radio" name="pm" className="mt-1 accent-[var(--club)]" checked={payMethod === "MERCADOPAGO"} onChange={() => setPayMethod("MERCADOPAGO")} />
                     <span>
                       <b>Mercado Pago</b>
-                      <span className="block text-sm text-muted">
-                        {cfg.simulated ? "Entorno de prueba: el pago es simulado y no mueve dinero." : "Tarjeta, dinero en cuenta u otros medios de Mercado Pago."}
-                      </span>
+                      <span className="block text-sm text-muted">{cfg.simulated ? "Entorno de prueba: el pago es simulado y no mueve dinero. " : ""}{MP_FINANCING_TEXT}</span>
                     </span>
                   </label>
                 )}
@@ -350,24 +442,23 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
                     <input type="radio" name="pm" className="mt-1 accent-[var(--club)]" checked={payMethod === "TRANSFER"} onChange={() => setPayMethod("TRANSFER")} />
                     <span>
                       <b>Transferencia bancaria</b>
-                      <span className="block text-sm text-muted">Te mostramos los datos y subís el comprobante. El club lo revisa y confirma.</span>
+                      <span className="block text-sm text-muted">Te mostramos los datos y subís el comprobante. Queda en revisión hasta que se aprueba.</span>
                     </span>
                   </label>
                 )}
-                <p className="text-xs text-muted">Destinatario de los pagos: {cfg.receiver}.</p>
+                <p className="text-xs text-muted">
+                  {advanceModel ? `El anticipo lo cobra ${cfg.receiver}. El saldo, si corresponde, se paga a ${cfg.clubName}.` : `Destinatario de los pagos: ${cfg.receiver}.`}
+                </p>
               </fieldset>
 
-              {lines.length > 0 && (
-                <dl className="num grid gap-1.5">
-                  <div className="flex justify-between"><dt>Prendas ({units})</dt><dd>{ars(totals.items)}</dd></div>
-                  <div className="flex justify-between"><dt>Personalización</dt><dd>{ars(totals.pers)}</dd></div>
-                  <div className="flex justify-between"><dt>Envío</dt><dd>{totals.ship ? ars(totals.ship) : "Sin costo"}</dd></div>
-                  <div className="mt-1 flex justify-between border-t-2 border-ink pt-2 text-lg font-bold"><dt>Total</dt><dd>{ars(totals.total)}</dd></div>
-                  <div className="flex justify-between rounded-lg bg-club-2 px-3 py-2 text-lg font-bold text-on-club-2"><dt>A pagar ahora</dt><dd>{ars(totals.now)}</dd></div>
-                  {totals.later > 0 && <div className="flex justify-between text-muted"><dt>Saldo pendiente{totals.ship ? " (incluye envío)" : ""}</dt><dd>{ars(totals.later)}</dd></div>}
-                </dl>
-              )}
+              {lines.length > 0 && <Totals big />}
 
+              {anyNoChange && (
+                <label className="flex items-start gap-3 rounded-lg border-[1.5px] border-club p-3 text-sm">
+                  <input type="checkbox" className="mt-1 h-5 w-5 flex-none accent-[var(--club)]" checked={policyOk} onChange={(e) => setPolicyOk(e.target.checked)} />
+                  <span><b>Política de cambios.</b> {CHANGE_POLICY_TEXT}</span>
+                </label>
+              )}
               <label className="flex items-start gap-3 text-sm">
                 <input type="checkbox" className="mt-1 h-5 w-5 flex-none accent-[var(--club)]" checked={terms} onChange={(e) => setTerms(e.target.checked)} />
                 <span>
@@ -385,7 +476,7 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
         <div className="fixed inset-x-0 bottom-0 z-30 bg-ink px-4 pt-2.5 text-paper" style={{ paddingBottom: "calc(10px + env(safe-area-inset-bottom, 0px))" }}>
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
             <div>
-              <div className="text-sm opacity-80">{units ? `${units} ${units === 1 ? "prenda" : "prendas"} · ahora ${ars(totals.now)}` : "Tu pedido está vacío"}</div>
+              <div className="text-sm opacity-80">{units ? `${units} ${units === 1 ? "prenda" : "prendas"} · ${advanceModel ? "anticipo" : "ahora"} ${ars(totals.now)}` : "Tu pedido está vacío"}</div>
               <b className="num font-display text-2xl">{ars(totals.total)}</b>
             </div>
             <a href="#pedido" className="btn btn-accent">Ver pedido</a>
@@ -408,10 +499,11 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
             <div key={g.player?.key ?? "none"} className="mt-4">
               <div className="flex justify-between font-display text-lg font-bold uppercase">
                 <span>{g.player?.name ?? "Sin jugador"}</span>
-                <span className="font-sans text-sm font-normal normal-case text-muted">{g.player ? [g.player.category, g.player.team].filter(Boolean).join(" · ") : "Socio o hincha"}</span>
+                <span className="font-sans text-sm font-normal normal-case text-muted">{g.player ? [g.player.sport, g.player.category, g.player.team].filter(Boolean).join(" · ") : "Socio o hincha"}</span>
               </div>
               {g.lines.map((l) => {
                 const p = byId.get(l.productId)!;
+                const lp = linePrice(p, l);
                 return (
                   <div key={l.id} className="mt-2 rounded-lg border border-line p-3">
                     <b>{l.quantity > 1 ? `${l.quantity} × ` : ""}{p.name}</b>
@@ -419,27 +511,23 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
                       {p.components.map((c) => (
                         <div key={c.label} className="contents"><dt className="text-muted">Talle {c.label.toLowerCase()}</dt><dd className="font-semibold">{l.sizes[c.label]}</dd></div>
                       ))}
-                      {(p.pers.name || p.pers.number) && (
-                        <>
-                          {p.pers.name && <div className="contents"><dt className="text-muted">Nombre</dt><dd className="font-semibold">{l.persName || "Sin nombre"}</dd></div>}
-                          {p.pers.number && <div className="contents"><dt className="text-muted">Número</dt><dd className="font-semibold">{l.persNumber || "Sin número"}</dd></div>}
-                        </>
-                      )}
+                      {lp.opts.map((o) => (
+                        <div key={o.g.id} className="contents"><dt className="text-muted">{o.g.name}</dt><dd className="font-semibold">{o.label}</dd></div>
+                      ))}
                     </dl>
+                    {lp.noSizeChange && <p className="mt-1 text-xs font-semibold">Personalizada: no admite cambio de talle.</p>}
                   </div>
                 );
               })}
             </div>
           ))}
-          <dl className="num mt-5 grid gap-1.5">
-            <div className="flex justify-between border-t-2 border-ink pt-2 font-bold"><dt>Total</dt><dd>{ars(totals.total)}</dd></div>
-            <div className="flex justify-between rounded-lg bg-club-2 px-3 py-2 font-bold text-on-club-2"><dt>{payKind === "FULL" ? "Pago total" : depositLabel} · {payMethod === "MERCADOPAGO" ? "Mercado Pago" : "Transferencia"}</dt><dd>{ars(totals.now)}</dd></div>
-            {totals.later > 0 && <div className="flex justify-between text-muted"><dt>Saldo pendiente</dt><dd>{ars(totals.later)}</dd></div>}
-          </dl>
-          <p className="mt-3 text-xs text-muted">El importe final lo calcula el sistema con los precios vigentes al confirmar.</p>
+          <div className="mt-5"><Totals /></div>
+          {anyNoChange && <p className="notice notice-info mt-3 text-sm">{CHANGE_POLICY_TEXT}</p>}
+          {payMethod === "MERCADOPAGO" && <p className="mt-3 text-xs text-muted">{MP_FINANCING_TEXT}</p>}
+          <p className="mt-1 text-xs text-muted">El importe final lo calcula el sistema con los precios vigentes al confirmar.</p>
           <div className="mt-5 grid gap-2">
             <button className="btn btn-club w-full" disabled={sending} onClick={submit}>
-              {sending ? "Registrando pedido…" : payMethod === "MERCADOPAGO" ? "Confirmar e ir a pagar" : "Confirmar y ver datos de transferencia"}
+              {sending ? "Registrando pedido…" : payMethod === "MERCADOPAGO" ? (advanceModel ? "Confirmar y pagar el anticipo" : "Confirmar e ir a pagar") : "Confirmar y ver datos de transferencia"}
             </button>
             <button className="btn btn-ghost w-full" disabled={sending} onClick={() => setReview(false)}>Volver a editar</button>
           </div>
@@ -494,33 +582,66 @@ function SizeChart({ c }: { c: StoreComponent }) {
   );
 }
 
+const Step = ({ n, title, aside }: { n: number; title: string; aside?: string }) => (
+  <div className="mb-2 flex items-baseline justify-between gap-2">
+    <span className="font-display text-lg font-bold uppercase">
+      <span className="mr-2 inline-grid h-6 w-6 place-items-center rounded-full bg-club text-sm text-on-club">{n}</span>
+      {title}
+    </span>
+    {aside && <span className="text-sm text-muted">{aside}</span>}
+  </div>
+);
+
 function ProductSheet({ p, cfg, players, canBuy, onClose, onAdd }: { p: StoreProduct; cfg: StoreConfig; players: Player[]; canBuy: boolean; onClose: () => void; onAdd: (l: Omit<Line, "id">, np?: Player) => void }) {
+  const advanceModel = cfg.model === "TEXTIL_ADVANCE";
+  const needsPlayer = cfg.audience !== "ALL";
+  const allowedSports = cfg.audience === "SPORTS" ? cfg.sports : cfg.audience === "CATEGORIES" ? [...new Set(cfg.categories.map((c) => c.sport).filter(Boolean) as string[])] : cfg.sports;
   const [sizes, setSizes] = useState<Record<string, string>>({});
   const [player, setPlayer] = useState<string>(players[0]?.key ?? "__new");
-  const [np, setNp] = useState({ name: "", sport: cfg.sports[0] ?? "", category: "", team: "" });
-  const [persName, setPersName] = useState("");
-  const [persNumber, setPersNumber] = useState("");
+  const [np, setNp] = useState({ name: "", sport: allowedSports[0] ?? "", category: "", team: "" });
+  const [sel, setSel] = useState<Record<string, string>>({});
   const [qty, setQty] = useState(1);
   const [img, setImg] = useState(0);
   const [err, setErr] = useState<string | null>(null);
-  const personalized = Boolean(persName.trim() || persNumber.trim());
+  const groups = sortGroups(p.optionGroups);
+  const visible = groups.filter((g) => isVisible(g, sel));
   const cats = cfg.categories.filter((c) => !np.sport || !c.sport || c.sport === np.sport);
+  const draft: Line = { id: "draft", productId: p.id, playerKey: null, sizes, options: cleanSelections(groups, sel), quantity: 1 };
+  const lp = linePrice(p, draft);
+  const single = lp.freeText;
+  const q = single ? 1 : qty;
+  let step = 1;
 
   function add() {
     const missing = p.components.filter((c) => !sizes[c.label]).map((c) => c.label.toLowerCase());
     if (missing.length) return setErr(`Elegí el talle de: ${missing.join(" y ")}.`);
     let newPlayer: Player | undefined;
     let key: string | null = player === "__none" ? null : player;
+    if (needsPlayer && !key) return setErr(`Esta preventa es para ${cfg.audienceText}: elegí o agregá el jugador.`);
     if (player === "__new") {
       if (np.name.trim().length < 2) return setErr("Escribí el nombre del jugador.");
+      if (needsPlayer && !np.category && cfg.audience === "CATEGORIES") return setErr("Elegí la categoría del jugador.");
       newPlayer = { key: `p${Date.now()}`, name: np.name.trim(), sport: np.sport, category: np.category, team: np.team.trim() };
       key = newPlayer.key;
     }
-    const name = persName.trim().toUpperCase();
-    if (name && (name.length > p.pers.nameMax || !NAME_RE.test(name))) return setErr(`El nombre admite hasta ${p.pers.nameMax} letras, espacios, punto, guion y apóstrofo.`);
-    if (persNumber && (!/^\d{1,3}$/.test(persNumber) || +persNumber < p.pers.numberMin || +persNumber > p.pers.numberMax)) return setErr(`El número debe estar entre ${p.pers.numberMin} y ${p.pers.numberMax}.`);
-    if (p.remaining != null && qty > p.remaining) return setErr(`Cupo disponible: ${p.remaining}.`);
-    onAdd({ productId: p.id, playerKey: key, sizes, persName: name, persNumber: persNumber ? String(+persNumber) : "", quantity: personalized ? 1 : qty }, newPlayer);
+    for (const g of visible) {
+      const v = sel[g.id]?.trim();
+      if (!v) {
+        if (g.required) return setErr(`Completá "${g.name}".`);
+        continue;
+      }
+      if (g.type === "TEXT") {
+        const max = g.maxLength ?? 20;
+        if (v.length > max) return setErr(`"${g.name}" admite hasta ${max} caracteres.`);
+        if (g.role === "NAME" && !NAME_RE.test(v.toUpperCase())) return setErr(`"${g.name}" solo admite letras, espacios, punto, guion y apóstrofo.`);
+      }
+      if (g.type === "NUMBER" && (!/^\d{1,3}$/.test(v) || +v < (g.numberMin ?? 0) || +v > (g.numberMax ?? 99)))
+        return setErr(`"${g.name}" debe estar entre ${g.numberMin ?? 0} y ${g.numberMax ?? 99}.`);
+    }
+    if (p.remaining != null && q > p.remaining) return setErr(`Cupo disponible: ${p.remaining}.`);
+    const options = cleanSelections(groups, sel);
+    for (const g of groups) if (g.role === "NAME" && options[g.id]) options[g.id] = options[g.id].toUpperCase();
+    onAdd({ productId: p.id, playerKey: key, sizes, options, quantity: q }, newPlayer);
   }
 
   const image = p.images[img];
@@ -553,6 +674,9 @@ function ProductSheet({ p, cfg, players, canBuy, onClose, onAdd }: { p: StorePro
             <span className="font-display text-3xl font-bold">{ars(p.price)}</span>
             {p.listPrice && <s className="text-muted">{ars(p.listPrice)}</s>}
           </div>
+          {advanceModel && p.textilPrice != null && (
+            <p className="text-sm text-muted">Anticipo {ars(p.textilPrice)} por Mercado Pago{p.price > p.textilPrice ? ` · saldo ${ars(p.price - p.textilPrice)} al club` : ""}</p>
+          )}
           {p.components.map((c) => (
             <p key={c.label} className="mt-1 text-xs text-muted">
               {p.components.length > 1 && <b>{c.label}: </b>}
@@ -560,15 +684,24 @@ function ProductSheet({ p, cfg, players, canBuy, onClose, onAdd }: { p: StorePro
             </p>
           ))}
           {p.manufacturingTerms && <p className="mt-1 text-xs text-muted">{p.manufacturingTerms}</p>}
+          {groups.some((g) => g.blocksSizeChange) && <p className="mt-2 text-xs"><b>Cambios:</b> {CHANGE_POLICY_TEXT}</p>}
         </div>
       </div>
 
+      {p.samples.length > 0 && (
+        <div className="notice notice-info mt-4 text-sm">
+          <b>{SAMPLE_TEXT}</b>
+          {p.samples.map((s, i) => (
+            <span key={i} className="block">
+              Talles del muestrario: {s.sizes.join(", ")}{s.location ? ` · ${s.location}` : ""}
+            </span>
+          ))}
+        </div>
+      )}
+
       {p.components.map((c) => (
         <div key={c.label} className="mt-5">
-          <div className="mb-2 flex justify-between gap-2">
-            <span className="font-display text-lg font-bold uppercase">Talle{p.components.length > 1 ? ` · ${c.label}` : ""}</span>
-            <span className="text-sm text-muted">{c.garmentName}{c.variant ? ` · ${c.variant}` : ""}</span>
-          </div>
+          <Step n={step++} title={`Talle${p.components.length > 1 ? ` · ${c.label}` : ""}`} aside={`${c.garmentName}${c.variant ? ` · ${c.variant}` : ""}`} />
           {groupSizes(c.sizes).map(([g, list]) => (
             <div key={g} className="mb-2">
               <div className="mb-1 text-xs font-bold uppercase tracking-wider text-muted">{GROUP_LABEL[g] ?? g}</div>
@@ -588,21 +721,21 @@ function ProductSheet({ p, cfg, players, canBuy, onClose, onAdd }: { p: StorePro
       {canBuy && (
         <>
           <div className="mt-5">
-            <div className="mb-2 font-display text-lg font-bold uppercase">Jugador</div>
+            <Step n={step++} title="Jugador" aside={needsPlayer ? `Para ${cfg.audienceText}` : undefined} />
             <select className="input" value={player} onChange={(e) => setPlayer(e.target.value)} aria-label="Jugador">
               {players.map((pl) => (
                 <option key={pl.key} value={pl.key}>{pl.name}{pl.category ? ` · ${pl.category}` : ""}</option>
               ))}
               <option value="__new">+ Agregar jugador</option>
-              <option value="__none">Sin jugador (socio o hincha)</option>
+              {!needsPlayer && <option value="__none">Sin jugador (socio o hincha)</option>}
             </select>
             {player === "__new" && (
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div className="field sm:col-span-2"><label htmlFor="npName">Nombre del jugador</label><input id="npName" className="input" value={np.name} onChange={(e) => setNp({ ...np, name: e.target.value })} /></div>
                 <div className="field">
-                  <label htmlFor="npSport">Deporte</label>
+                  <label htmlFor="npSport">Disciplina</label>
                   <select id="npSport" className="input" value={np.sport} onChange={(e) => setNp({ ...np, sport: e.target.value, category: "" })}>
-                    {cfg.sports.map((s) => <option key={s}>{s}</option>)}
+                    {allowedSports.map((s) => <option key={s}>{s}</option>)}
                   </select>
                 </div>
                 <div className="field">
@@ -617,36 +750,75 @@ function ProductSheet({ p, cfg, players, canBuy, onClose, onAdd }: { p: StorePro
             )}
           </div>
 
-          {(p.pers.name || p.pers.number) && (
+          {visible.length > 0 && (
             <div className="mt-5">
-              <div className="mb-2 flex justify-between gap-2"><span className="font-display text-lg font-bold uppercase">Personalización</span><span className="text-sm text-muted">Opcional · por unidad</span></div>
+              <Step n={step++} title="Personalización" aside="Por unidad" />
               <div className="grid gap-3 sm:grid-cols-2">
-                {p.pers.name && (
-                  <div className="field">
-                    <label htmlFor="pzName">Nombre estampado <small>+ {ars(p.pers.namePrice)} · hasta {p.pers.nameMax}</small></label>
-                    <input id="pzName" className="input uppercase" maxLength={p.pers.nameMax} value={persName} onChange={(e) => setPersName(e.target.value.toUpperCase())} />
-                  </div>
-                )}
-                {p.pers.number && (
-                  <div className="field">
-                    <label htmlFor="pzNum">Número <small>+ {ars(p.pers.numberPrice)} · {p.pers.numberMin} a {p.pers.numberMax}</small></label>
-                    <input id="pzNum" className="input" inputMode="numeric" maxLength={3} value={persNumber} onChange={(e) => setPersNumber(e.target.value.replace(/\D/g, ""))} />
-                  </div>
-                )}
+                {visible.map((g) => {
+                  const price = g.priceTextil + g.priceClub;
+                  return (
+                    <div key={g.id} className={`field ${g.type === "CHOICE" ? "sm:col-span-2" : ""}`}>
+                      <label htmlFor={`og-${g.id}`}>
+                        {g.name} {!g.required && <small>(opcional)</small>}
+                        {g.type !== "CHOICE" && price > 0 && <small> + {ars(price)}</small>}
+                        {g.type === "TEXT" && <small> · hasta {g.maxLength ?? 20}</small>}
+                        {g.type === "NUMBER" && <small> · {g.numberMin ?? 0} a {g.numberMax ?? 99}</small>}
+                      </label>
+                      {g.type === "CHOICE" ? (
+                        <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={g.name}>
+                          {!g.required && (
+                            <button type="button" className="chip-size" aria-pressed={!sel[g.id]} onClick={() => setSel({ ...sel, [g.id]: "" })}>Ninguna</button>
+                          )}
+                          {g.values.map((v) => (
+                            <button key={v.id} type="button" className="chip-size" aria-pressed={sel[g.id] === v.id} onClick={() => setSel({ ...sel, [g.id]: v.id })}>
+                              {v.label}{v.priceTextil + v.priceClub > 0 ? ` +${ars(v.priceTextil + v.priceClub)}` : ""}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <input
+                          id={`og-${g.id}`}
+                          className={`input ${g.role === "NAME" ? "uppercase" : ""}`}
+                          inputMode={g.type === "NUMBER" ? "numeric" : undefined}
+                          maxLength={g.type === "NUMBER" ? 3 : (g.maxLength ?? 20)}
+                          value={sel[g.id] ?? ""}
+                          onChange={(e) => setSel({ ...sel, [g.id]: g.type === "NUMBER" ? e.target.value.replace(/\D/g, "") : g.role === "NAME" ? e.target.value.toUpperCase() : e.target.value })}
+                        />
+                      )}
+                      {g.help && <small>{g.help}</small>}
+                    </div>
+                  );
+                })}
               </div>
+              {lp.noSizeChange && <p className="notice notice-info mt-3 text-sm"><b>Atención:</b> {CHANGE_POLICY_TEXT}</p>}
+              {!lp.noSizeChange && groups.some((g) => g.blocksSizeChange) && <p className="mt-2 text-xs text-muted">{CHANGE_POLICY_UNPERSONALIZED}</p>}
             </div>
           )}
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <div className="font-display text-lg font-bold uppercase">Cantidad</div>
-              {personalized && <small className="text-muted">Las prendas personalizadas se agregan de a una.</small>}
+              <Step n={step++} title="Cantidad" />
+              {single && <small className="text-muted">Las prendas con nombre o número se agregan de a una.</small>}
             </div>
             <div className="inline-flex items-center overflow-hidden rounded-lg border-[1.5px] border-line">
-              <button type="button" className="h-11 w-11 bg-surface-2 text-xl" aria-label="Restar" onClick={() => setQty(Math.max(1, qty - 1))} disabled={personalized}>−</button>
-              <output className="num w-12 text-center font-bold">{personalized ? 1 : qty}</output>
-              <button type="button" className="h-11 w-11 bg-surface-2 text-xl" aria-label="Sumar" onClick={() => setQty(Math.min(30, qty + 1))} disabled={personalized}>+</button>
+              <button type="button" className="h-11 w-11 bg-surface-2 text-xl" aria-label="Restar" onClick={() => setQty(Math.max(1, qty - 1))} disabled={single}>−</button>
+              <output className="num w-12 text-center font-bold">{q}</output>
+              <button type="button" className="h-11 w-11 bg-surface-2 text-xl" aria-label="Sumar" onClick={() => setQty(Math.min(30, qty + 1))} disabled={single}>+</button>
             </div>
+          </div>
+
+          <div className="mt-5 rounded-lg bg-surface-2 p-3">
+            <Step n={step++} title="Resumen" />
+            <dl className="num grid gap-1 text-sm">
+              <div className="flex justify-between"><dt>Precio por unidad</dt><dd>{ars(lp.unit)}</dd></div>
+              <div className="flex justify-between font-bold"><dt>Total ({q})</dt><dd>{ars(lp.unit * q)}</dd></div>
+              {advanceModel && (
+                <>
+                  <div className="flex justify-between"><dt>Anticipo ahora (Mercado Pago)</dt><dd>{ars(lp.advance * q)}</dd></div>
+                  <div className="flex justify-between"><dt>Saldo al club</dt><dd>{ars(lp.club * q)}</dd></div>
+                </>
+              )}
+            </dl>
           </div>
           {err && <p role="alert" className="notice notice-danger mt-4">{err}</p>}
           <button className="btn btn-club mt-5 w-full" onClick={add}>Agregar al pedido</button>

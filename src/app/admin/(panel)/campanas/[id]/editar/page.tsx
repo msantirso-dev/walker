@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireUser, assertCan } from "@/modules/auth";
+import { requireUser, assertCan, can } from "@/modules/auth";
+import { RULE_LABEL, AUDIENCE_LABEL, OUTFIT_INITIAL_PURCHASE_DEFAULT, productionRuleStatus, CAMPAIGN_STATUS_LABEL } from "@/modules/campaigns";
+import { PURPOSE_LABEL } from "@/modules/samples";
+import { Badge, Money } from "@/shared/ui";
 import { db } from "@/shared/db";
 import { toArLocal } from "@/shared/dates";
 import { pesosInput } from "@/shared/money";
@@ -8,7 +11,7 @@ import { PageHeader, Section } from "@/shared/ui";
 import { ActionForm, SubmitButton } from "@/shared/ui/client";
 import { onlineMode } from "@/modules/payments";
 import { BENEFIT_TYPE_LABEL } from "@/modules/benefits";
-import { updateCampaign, saveCollection, saveBenefit } from "../../actions";
+import { updateCampaign, saveCollection, saveBenefit, saveRuleAction, approveRuleAction, audienceAction } from "../../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -25,15 +28,27 @@ function T({ name, label, value, hint, rows = 2 }: { name: string; label: string
 export default async function EditCampaign({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const u = await requireUser();
-  assertCan(u, "campaign.manage");
   const c = await db.campaign.findUnique({
     where: { id },
-    include: { club: true, benefitRule: true, products: { orderBy: { sort: "asc" }, include: { product: true } } },
+    include: {
+      club: { include: { sports: { include: { sport: true } }, categories: { where: { active: true }, orderBy: { sort: "asc" }, include: { sport: true } } } },
+      benefitRule: true, audienceSports: true, audienceCategories: true,
+      products: { orderBy: { sort: "asc" }, include: { product: true, ruleCategory: true, clubPurchase: true } },
+    },
   });
   if (!c) notFound();
+  const textil = can(u, "campaign.manage");
+  if (!textil) assertCan(u, "campaign.request", c.clubId);
+  const advance = c.pricingModel === "TEXTIL_ADVANCE";
+  const editable = ["DRAFT", "ACTIVATION_REQUESTED", "ACTIVATION_APPROVED"].includes(c.status);
+  const [rules, purchases] = await Promise.all([
+    productionRuleStatus(id),
+    db.clubPurchase.findMany({ where: { clubId: c.clubId, purposes: { has: "INITIAL" } }, orderBy: { createdAt: "desc" } }),
+  ]);
+  const ruleOf = new Map(rules.map((r) => [r.id, r]));
   const [accounts, catalog] = await Promise.all([
     db.paymentAccount.findMany({ where: { OR: [{ owner: "TEXTIL" }, { clubId: c.clubId }] }, orderBy: { label: "asc" } }),
-    db.product.findMany({ where: { clubId: c.clubId, active: true }, orderBy: { code: "asc" } }),
+    db.product.findMany({ where: { clubId: c.clubId, active: true, ...(textil ? {} : { catalogStatus: { in: ["CATALOG", "PRESALE", "PRESALE_CLOSED"] } }) }, orderBy: { code: "asc" } }),
   ]);
   const faq = ((c.faq as { q: string; a: string }[] | null) ?? []).map((f) => `${f.q} | ${f.a}`).join("\n");
   const available = catalog.filter((p) => !c.products.some((x) => x.productId === p.id));
@@ -43,26 +58,53 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
     <>
       <PageHeader eyebrow={c.club.name} title={`Configurar · ${c.title}`} actions={<Link href={`/admin/campanas/${id}`} className="btn btn-ghost">Volver a la campaña</Link>} />
 
+      <p className="mb-4 flex flex-wrap gap-2">
+        <Badge tone="info">{CAMPAIGN_STATUS_LABEL[c.status]}</Badge>
+        <Badge tone="muted">{advance ? "Modelo: anticipo textil + saldo al club" : "Modelo: seña (anterior)"}</Badge>
+        {!editable && advance && <Badge tone="warn">Publicada: precios y reglas bloqueados</Badge>}
+      </p>
+
       <Section title="Colección y precios">
         <ActionForm action={saveCollection.bind(null, id)} className="grid gap-4">
           <div className="card tbl-wrap">
             <table className="tbl">
-              <thead><tr><th>Producto</th><th>Precio preventa</th><th>Precio de lista</th><th>Cupo</th><th>Orden</th><th>Activo</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  {advance && <th>Precio textil (anticipo)</th>}
+                  <th>{advance ? "Precio al socio" : "Precio preventa"}</th>
+                  {advance && <th>o recargo %</th>}
+                  {advance && <th>Saldo club</th>}
+                  {textil && <th>Precio de lista</th>}
+                  {textil && <th>Cupo</th>}
+                  {textil && <th>Orden</th>}
+                  {textil && <th>Activo</th>}
+                </tr>
+              </thead>
               <tbody>
                 {c.products.map((cp) => (
                   <tr key={cp.id}>
                     <td><span className="font-mono text-xs text-muted">{cp.product.code}</span><div className="font-semibold">{cp.product.name}</div></td>
-                    <td><input name={`price_${cp.id}`} className="input w-32" inputMode="decimal" defaultValue={pesosInput(cp.price)} aria-label="Precio de preventa" /></td>
-                    <td><input name={`list_${cp.id}`} className="input w-32" inputMode="decimal" defaultValue={pesosInput(cp.listPrice)} aria-label="Precio de lista" /></td>
-                    <td><input name={`max_${cp.id}`} type="number" min={1} className="input w-24" defaultValue={cp.maxUnits ?? ""} placeholder="Sin límite" aria-label="Cupo" /></td>
-                    <td><input name={`sort_${cp.id}`} type="number" className="input w-20" defaultValue={cp.sort} aria-label="Orden" /></td>
-                    <td><input name={`active_${cp.id}`} type="checkbox" className="h-5 w-5" defaultChecked={cp.active} aria-label="Activo" /></td>
+                    {advance && (
+                      <td>
+                        {textil ? (
+                          <input name={`textil_${cp.id}`} className="input w-32" inputMode="decimal" defaultValue={pesosInput(cp.textilPrice)} aria-label="Precio textil" disabled={!editable} />
+                        ) : cp.textilPrice != null ? <Money cents={cp.textilPrice} /> : <span className="text-warn">Pendiente de la textil</span>}
+                      </td>
+                    )}
+                    <td><input name={`price_${cp.id}`} className="input w-32" inputMode="decimal" defaultValue={pesosInput(cp.price)} aria-label="Precio al socio" disabled={advance && !editable} /></td>
+                    {advance && <td><input name={`markup_${cp.id}`} className="input w-24" inputMode="decimal" defaultValue={cp.markupBp != null ? String(cp.markupBp / 100).replace(".", ",") : ""} placeholder="—" aria-label="Recargo %" disabled={!editable} /></td>}
+                    {advance && <td className="num">{cp.textilPrice != null ? <Money cents={Math.max(0, cp.price - cp.textilPrice)} /> : "—"}</td>}
+                    {textil && <td><input name={`list_${cp.id}`} className="input w-32" inputMode="decimal" defaultValue={pesosInput(cp.listPrice)} aria-label="Precio de lista" /></td>}
+                    {textil && <td><input name={`max_${cp.id}`} type="number" min={1} className="input w-24" defaultValue={cp.maxUnits ?? ""} placeholder="Sin límite" aria-label="Cupo" /></td>}
+                    {textil && <td><input name={`sort_${cp.id}`} type="number" className="input w-20" defaultValue={cp.sort} aria-label="Orden" /></td>}
+                    {textil && <td><input name={`active_${cp.id}`} type="checkbox" className="h-5 w-5" defaultChecked={cp.active} aria-label="Activo" /></td>}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {available.length > 0 && (
+          {available.length > 0 && (editable || !advance) && (
             <div className="card grid gap-3 p-4 sm:grid-cols-[2fr_1fr] sm:items-end">
               <div className="field">
                 <label htmlFor="addProduct">Agregar producto del catálogo</label>
@@ -71,14 +113,124 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
                   {available.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}
                 </select>
               </div>
-              <div className="field"><label htmlFor="addPrice">Precio de preventa</label><input id="addPrice" name="addPrice" className="input" inputMode="decimal" placeholder="Precio de lista si queda vacío" /></div>
+              <div className="field"><label htmlFor="addPrice">{advance ? "Precio al socio" : "Precio de preventa"}</label><input id="addPrice" name="addPrice" className="input" inputMode="decimal" placeholder="Precio de lista si queda vacío" /></div>
             </div>
           )}
-          <p className="text-sm text-muted">El precio de lista solo se muestra tachado si es mayor que el de preventa. El cupo por producto es opcional; sin cupo no se muestra disponibilidad.</p>
+          <p className="text-sm text-muted">
+            {advance
+              ? "El precio textil lo fija la textil y es el anticipo que paga el comprador por Mercado Pago. El club fija el precio al socio (directo o con recargo %), nunca menor al textil; la diferencia es el saldo que cobra el club. Si completás el recargo, se usa en lugar del precio directo. Los pedidos hechos conservan su precio."
+              : "El precio de lista solo se muestra tachado si es mayor que el de preventa. El cupo por producto es opcional; sin cupo no se muestra disponibilidad."}
+          </p>
           <SubmitButton className="btn btn-primary justify-self-start">Guardar colección</SubmitButton>
         </ActionForm>
       </Section>
 
+      {advance && (
+        <Section title="Alcance de la campaña">
+          <ActionForm action={audienceAction.bind(null, id)} className="card grid gap-4 p-5">
+            <div className="field">
+              <label htmlFor="audience">¿Para quién es la preventa?</label>
+              <select id="audience" name="audience" className="input" defaultValue={c.audience} disabled={!editable}>
+                {Object.entries(AUDIENCE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+            <fieldset className="grid gap-1">
+              <legend className="label">Disciplinas (si el alcance es por disciplina)</legend>
+              <div className="flex flex-wrap gap-3">
+                {c.club.sports.map((s) => (
+                  <label key={s.sportId} className="flex items-center gap-2"><input type="checkbox" name="sportIds" value={s.sportId} defaultChecked={c.audienceSports.some((x) => x.id === s.sportId)} className="h-5 w-5" disabled={!editable} /> {s.sport.name}</label>
+                ))}
+              </div>
+            </fieldset>
+            <fieldset className="grid gap-1">
+              <legend className="label">Categorías (si el alcance es por categoría)</legend>
+              <div className="flex flex-wrap gap-3">
+                {c.club.categories.map((x) => (
+                  <label key={x.id} className="flex items-center gap-2"><input type="checkbox" name="categoryIds" value={x.id} defaultChecked={c.audienceCategories.some((y) => y.id === x.id)} className="h-5 w-5" disabled={!editable} /> {x.sport ? `${x.sport.name} · ` : ""}{x.name}</label>
+                ))}
+              </div>
+            </fieldset>
+            {editable && <SubmitButton className="btn btn-primary justify-self-start">Guardar alcance</SubmitButton>}
+          </ActionForm>
+        </Section>
+      )}
+
+      {advance && (
+        <Section title="Reglas de producción por producto">
+          <p className="mb-3 text-sm text-muted">
+            Las define y aprueba la textil. Categoría completa: la cantidad esperada se fija por campaña (no es universal). Outfit: compra inicial del club, sugerida {OUTFIT_INITIAL_PURCHASE_DEFAULT} unidades (estimada, editable). Ninguna regla se aprueba sola.
+          </p>
+          <div className="grid gap-3">
+            {c.products.map((cp) => {
+              const r = ruleOf.get(cp.id);
+              return (
+                <div key={cp.id} className="card p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <b>{cp.product.name} <span className="font-mono text-xs text-muted">{cp.product.code} · {cp.product.family}</span></b>
+                    <span className="flex flex-wrap gap-1">
+                      <Badge tone="muted">{RULE_LABEL[cp.ruleType]}</Badge>
+                      {cp.ruleType !== "NONE" && <Badge tone={cp.ruleApprovedAt ? "ok" : "warn"}>{cp.ruleApprovedAt ? "Aprobada para abrir" : "Sin aprobar"}</Badge>}
+                      {cp.ruleType === "FULL_CATEGORY" && r && <Badge tone={r.canProduce ? "ok" : "warn"}>{r.confirmed} de {cp.expectedQty ?? "?"} confirmados{cp.productionApprovedAt ? " · producción aprobada" : ""}</Badge>}
+                    </span>
+                  </div>
+                  {r && r.openProblems.length > 0 && <ul className="mt-2 list-disc pl-5 text-sm text-warn">{r.openProblems.map((p) => <li key={p}>{p}</li>)}</ul>}
+                  {cp.ruleNote && <p className="mt-1 text-sm text-muted">Nota: {cp.ruleNote}</p>}
+                  {textil && editable && (
+                    <details className="mt-3">
+                      <summary className="btn btn-ghost btn-sm">Editar regla</summary>
+                      <ActionForm action={saveRuleAction.bind(null, id, cp.id)} className="mt-3 grid gap-3 md:grid-cols-3">
+                        <div className="field"><label htmlFor={`rt-${cp.id}`}>Regla</label>
+                          <select id={`rt-${cp.id}`} name="ruleType" className="input" defaultValue={cp.ruleType}>
+                            {Object.entries(RULE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                          </select>
+                        </div>
+                        <div className="field"><label htmlFor={`rc-${cp.id}`}>Categoría (categoría completa)</label>
+                          <select id={`rc-${cp.id}`} name="ruleCategoryId" className="input" defaultValue={cp.ruleCategoryId ?? ""}>
+                            <option value="">—</option>
+                            {c.club.categories.map((x) => <option key={x.id} value={x.id}>{x.sport ? `${x.sport.name} · ` : ""}{x.name}</option>)}
+                          </select>
+                        </div>
+                        <div className="field"><label htmlFor={`eq-${cp.id}`}>Cantidad esperada</label><input id={`eq-${cp.id}`} name="expectedQty" type="number" min={1} className="input" defaultValue={cp.expectedQty ?? ""} /></div>
+                        <div className="field"><label htmlFor={`im-${cp.id}`}>Compra inicial mínima</label><input id={`im-${cp.id}`} name="initialPurchaseMin" type="number" min={1} className="input" defaultValue={cp.initialPurchaseMin ?? ""} placeholder={String(OUTFIT_INITIAL_PURCHASE_DEFAULT)} /></div>
+                        <div className="field"><label htmlFor={`cp-${cp.id}`}>Compra inicial del club</label>
+                          <select id={`cp-${cp.id}`} name="clubPurchaseId" className="input" defaultValue={cp.clubPurchaseId ?? ""}>
+                            <option value="">Sin vincular</option>
+                            {purchases.map((p) => <option key={p.id} value={p.id}>{p.purposes.map((x) => PURPOSE_LABEL[x]).join(" + ")} · {p.committedQty} u. {p.approvedAt ? "(aprobada)" : ""}</option>)}
+                          </select>
+                        </div>
+                        <div className="grid gap-1 self-end">
+                          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="initialPurchaseEstimated" defaultChecked={cp.initialPurchaseEstimated} className="h-5 w-5" /> Mínimo estimado (a confirmar)</label>
+                          <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="initialPurchaseWaived" defaultChecked={cp.initialPurchaseWaived} className="h-5 w-5" /> Excepción: abrir sin compra inicial</label>
+                        </div>
+                        <div className="field md:col-span-3"><label htmlFor={`rn-${cp.id}`}>Nota</label><input id={`rn-${cp.id}`} name="ruleNote" className="input" defaultValue={cp.ruleNote ?? ""} /></div>
+                        <SubmitButton className="btn btn-primary justify-self-start">Guardar regla</SubmitButton>
+                      </ActionForm>
+                    </details>
+                  )}
+                  {textil && cp.ruleType !== "NONE" && (
+                    <div className="mt-3 flex flex-wrap gap-3">
+                      {!cp.ruleApprovedAt && editable && (
+                        <ActionForm action={approveRuleAction.bind(null, id, cp.id, "open")} className="flex flex-wrap items-end gap-2">
+                          <input name="note" className="input w-64" placeholder={cp.initialPurchaseWaived ? "Motivo de la excepción (obligatorio)" : "Nota (opcional)"} aria-label="Nota" />
+                          <SubmitButton className="btn btn-primary btn-sm">Aprobar para abrir</SubmitButton>
+                        </ActionForm>
+                      )}
+                      {cp.ruleType === "FULL_CATEGORY" && cp.ruleApprovedAt && !cp.productionApprovedAt && r && !r.canProduce && (
+                        <ActionForm action={approveRuleAction.bind(null, id, cp.id, "production")} className="flex flex-wrap items-end gap-2">
+                          <input name="note" className="input w-64" placeholder="Motivo de producir con menos (obligatorio)" aria-label="Motivo" />
+                          <SubmitButton className="btn btn-ghost btn-sm">Aprobar producción excepcional</SubmitButton>
+                        </ActionForm>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Section>
+      )}
+
+      {textil && (<>
       <Section title="Configuración">
         <ActionForm action={updateCampaign.bind(null, id)} className="grid gap-6">
           <fieldset className="card grid gap-4 p-5 md:grid-cols-2">
@@ -96,10 +248,16 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
             <div className="field"><label htmlFor="closesAt">Cierre (hora Argentina)</label><input id="closesAt" name="closesAt" type="datetime-local" className="input" defaultValue={toArLocal(c.closesAt)} /></div>
             <div className="field"><label htmlFor="deliveryDaysMin">Entrega: desde (días del cierre)</label><input id="deliveryDaysMin" name="deliveryDaysMin" type="number" className="input" defaultValue={c.deliveryDaysMin} /></div>
             <div className="field"><label htmlFor="deliveryDaysMax">Entrega: hasta (días del cierre)</label><input id="deliveryDaysMax" name="deliveryDaysMax" type="number" className="input" defaultValue={c.deliveryDaysMax} /></div>
-            <label className="flex items-center gap-2 font-semibold"><input type="checkbox" name="pickupEnabled" defaultChecked={c.pickupEnabled} className="h-5 w-5" /> Retiro en sede</label>
-            <label className="flex items-center gap-2 font-semibold"><input type="checkbox" name="shippingEnabled" defaultChecked={c.shippingEnabled} className="h-5 w-5" /> Envío a domicilio</label>
-            <div className="field"><label htmlFor="shippingPrice">Costo de envío (ARS)</label><input id="shippingPrice" name="shippingPrice" className="input" inputMode="decimal" defaultValue={pesosInput(c.shippingPrice)} /></div>
-            <div className="field"><label htmlFor="shippingNotes">Detalle del envío</label><input id="shippingNotes" name="shippingNotes" className="input" defaultValue={c.shippingNotes ?? ""} /></div>
+            {advance ? (
+              <p className="text-sm text-muted md:col-span-2">Entrega consolidada al club: sin envío a domicilio. El envío textil → club se registra en Logística.</p>
+            ) : (
+              <>
+                <label className="flex items-center gap-2 font-semibold"><input type="checkbox" name="pickupEnabled" defaultChecked={c.pickupEnabled} className="h-5 w-5" /> Retiro en sede</label>
+                <label className="flex items-center gap-2 font-semibold"><input type="checkbox" name="shippingEnabled" defaultChecked={c.shippingEnabled} className="h-5 w-5" /> Envío a domicilio</label>
+                <div className="field"><label htmlFor="shippingPrice">Costo de envío (ARS)</label><input id="shippingPrice" name="shippingPrice" className="input" inputMode="decimal" defaultValue={pesosInput(c.shippingPrice)} /></div>
+                <div className="field"><label htmlFor="shippingNotes">Detalle del envío</label><input id="shippingNotes" name="shippingNotes" className="input" defaultValue={c.shippingNotes ?? ""} /></div>
+              </>
+            )}
             <T name="pickupInstructions" label="Instrucciones de retiro" value={c.pickupInstructions} hint={`La dirección y los horarios se toman del club: ${c.club.pickupAddress ?? "sin cargar"}.`} />
           </fieldset>
 
@@ -186,6 +344,7 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
           <SubmitButton className="btn btn-primary justify-self-start">Guardar beneficio</SubmitButton>
         </ActionForm>
       </Section>
+      </>)}
     </>
   );
 }

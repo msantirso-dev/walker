@@ -88,12 +88,24 @@ export default async function LotPage({ params }: { params: Promise<{ id: string
         </div>
       </Section>
 
+      {(r.persJobs?.length ?? 0) > 0 && (
+        <Section title="Trabajos de personalización (sobre prendas base)">
+          <p className="mb-3 text-sm text-muted">Las prendas base se fabrican consolidadas arriba; estos trabajos (leyenda, nombre, número, adicionales) se aplican después, sin dividir el lote base.</p>
+          <div className="card tbl-wrap">
+            <table className="tbl">
+              <thead><tr><th>Trabajo</th><th>Valor</th><th>Prenda</th><th>Cantidad</th></tr></thead>
+              <tbody>{r.persJobs!.map((j, i) => <tr key={i}><td>{j.kind}</td><td className="font-semibold">{j.value}</td><td className="font-mono text-sm">{j.garmentCode}</td><td className="num">{j.quantity}</td></tr>)}</tbody>
+            </table>
+          </div>
+        </Section>
+      )}
+
       <Section title="Personalización por unidad">
         {r.personalization.length === 0 ? <p className="card p-4 text-muted">Sin prendas personalizadas.</p> : (
           <div className="card tbl-wrap">
             <table className="tbl">
-              <thead><tr><th>Ref.</th><th>Prenda</th><th>Talle</th><th>Nombre</th><th>Número</th><th>Movimiento</th></tr></thead>
-              <tbody>{r.personalization.map((p) => <tr key={p.unitRef + p.delta}><td className="font-mono text-xs">{p.unitRef}</td><td className="font-mono text-sm">{p.garmentCode}</td><td className="font-bold">{p.size}</td><td>{p.name ?? "—"}</td><td className="num">{p.number ?? "—"}</td><td>{p.delta > 0 ? <Badge tone="ok">Alta</Badge> : <Badge tone="danger">Baja</Badge>}</td></tr>)}</tbody>
+              <thead><tr><th>Ref.</th><th>Prenda</th><th>Talle</th><th>Nombre</th><th>Número</th><th>Leyenda</th><th>Otros</th><th>Movimiento</th></tr></thead>
+              <tbody>{r.personalization.map((p) => <tr key={p.unitRef + p.delta}><td className="font-mono text-xs">{p.unitRef}</td><td className="font-mono text-sm">{p.garmentCode}</td><td className="font-bold">{p.size}</td><td>{p.name ?? "—"}</td><td className="num">{p.number ?? "—"}</td><td>{p.legend ?? "—"}</td><td className="text-sm">{p.extras || "—"}</td><td>{p.delta > 0 ? <Badge tone="ok">Alta</Badge> : <Badge tone="danger">Baja</Badge>}</td></tr>)}</tbody>
             </table>
           </div>
         )}

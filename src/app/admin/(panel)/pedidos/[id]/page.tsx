@@ -3,7 +3,9 @@ import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import { requireUser, assertCan, can, canReviewPayments } from "@/modules/auth";
 import { orderById, paymentStateLabel, ORDER_STATUS_LABEL, DELIVERY_STATUS_LABEL } from "@/modules/orders";
-import { PAYMENT_KIND_LABEL, PAYMENT_METHOD_LABEL, PAYMENT_STATUS_LABEL } from "@/modules/payments";
+import { advanceStates, PAYMENT_KIND_LABEL, PAYMENT_METHOD_LABEL, PAYMENT_STATUS_LABEL, RECEIVER_LABEL } from "@/modules/payments";
+import { EDIT_REASON_LABEL } from "@/modules/orders";
+import { toArLocal } from "@/shared/dates";
 import { LOT_STATUS_LABEL } from "@/modules/production";
 import { ACTION_LABELS, history } from "@/modules/audit";
 import { TEMPLATE_LABELS, SYSTEM_TEMPLATE_LABELS, type Template } from "@/modules/notifications";
@@ -11,7 +13,7 @@ import { db } from "@/shared/db";
 import { fmtDateTime, fmtShortTime } from "@/shared/dates";
 import { Badge, Money, PageHeader, Section, type Tone } from "@/shared/ui";
 import { ActionForm, ConfirmAction, SubmitButton } from "@/shared/ui/client";
-import { cancelOrderAction, cancelUnitAction, editUnitAction, manualPaymentAction, refundAction, resendLinkAction, reviewAction } from "../actions";
+import { cancelOrderAction, cancelUnitAction, clubBalanceAction, editUnitAction, manualPaymentAction, refundAction, resendLinkAction, reviewAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 const payTone: Record<string, Tone> = { APPROVED: "ok", IN_REVIEW: "info", PENDING: "warn", REJECTED: "danger", REFUNDED: "info" };
@@ -34,11 +36,16 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
   const userName = new Map(users.map((x) => [x.id, x.name]));
   const catalog = await db.product.findMany({
     where: { id: { in: [...new Set(o.units.map((x) => x.productId))] } },
-    include: { components: { orderBy: { sort: "asc" }, include: { garment: { include: { sizes: { where: { enabled: true }, orderBy: { sort: "asc" } } } } } } },
+    include: { optionGroups: true, components: { orderBy: { sort: "asc" }, include: { garment: { include: { sizes: { where: { enabled: true }, orderBy: { sort: "asc" } } } } } } },
   });
+  const nameGroup = (pid: string) => productOf.get(pid)?.optionGroups.find((g) => g.role === "NAME");
+  const numberGroup = (pid: string) => productOf.get(pid)?.optionGroups.find((g) => g.role === "NUMBER");
   const productOf = new Map(catalog.map((p) => [p.id, p]));
   const lockedByLot = (x: (typeof o.units)[number]) => x.lotUnits.filter((l) => l.lot.status !== "PENDING_APPROVAL").reduce((a, l) => a + l.delta, 0) > 0;
-  const balance = Math.max(0, o.total - o.paidAmount);
+  const adv = o.pricingModel === "TEXTIL_ADVANCE";
+  const st = adv ? advanceStates(o) : null;
+  const balance = adv ? st!.clubDue : Math.max(0, o.total - o.paidAmount);
+  const canClubBalance = adv && (u.role === "TEXTIL_ADMIN" || (u.role === "CLUB_ADMIN" && u.clubId === o.clubId));
   const groups = [...o.players.map((p) => ({ p, units: o.units.filter((x) => x.playerId === p.id) })), { p: null, units: o.units.filter((x) => !x.playerId) }].filter((g) => g.units.length);
 
   return (
@@ -60,7 +67,18 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
 
       <div className="flex flex-wrap gap-2">
         <Badge tone={o.status === "CONFIRMED" ? "ok" : o.status === "CANCELLED" ? "danger" : "warn"}>Pedido: {ORDER_STATUS_LABEL[o.status]}</Badge>
-        <Badge tone={o.inReviewAmount ? "info" : o.paidAmount >= o.total ? "ok" : "muted"}>Pago: {paymentStateLabel(o)}</Badge>
+        {adv ? (
+          <>
+            <Badge tone={st!.advanceOk ? "ok" : "warn"}>{st!.advance}</Badge>
+            <Badge tone={st!.clubDue > 0 ? "warn" : "ok"}>{st!.club}</Badge>
+            <Badge tone="muted">Modelo: anticipo textil</Badge>
+          </>
+        ) : (
+          <>
+            <Badge tone={o.inReviewAmount ? "info" : o.paidAmount >= o.total ? "ok" : "muted"}>Pago: {paymentStateLabel(o)}</Badge>
+            <Badge tone="muted">Modelo: seña (anterior)</Badge>
+          </>
+        )}
         <Badge tone="info">Entrega: {DELIVERY_STATUS_LABEL[o.deliveryStatus]}</Badge>
         {o.overCapacity && <Badge tone="danger">Pago aprobado fuera de cupo: requiere decisión</Badge>}
       </div>
@@ -83,8 +101,15 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
             <div><dt className="text-muted">Total</dt><dd className="text-lg font-bold"><Money cents={o.total} /></dd></div>
             <div><dt className="text-muted">Confirmado</dt><dd className="text-lg font-bold text-ok"><Money cents={o.paidAmount} /></dd></div>
             <div><dt className="text-muted">En revisión</dt><dd className="text-lg font-bold text-info"><Money cents={o.inReviewAmount} /></dd></div>
-            <div><dt className="text-muted">Saldo</dt><dd className="text-lg font-bold"><Money cents={o.status === "CANCELLED" ? 0 : balance} /></dd></div>
-            <div><dt className="text-muted">Seña requerida</dt><dd><Money cents={o.depositRequired} /></dd></div>
+            <div><dt className="text-muted">{adv ? "Saldo al club" : "Saldo"}</dt><dd className="text-lg font-bold"><Money cents={o.status === "CANCELLED" ? 0 : balance} /></dd></div>
+            {adv ? (
+              <>
+                <div><dt className="text-muted">Anticipo textil</dt><dd><Money cents={o.advancePaid} /> de <Money cents={o.advanceRequired} /></dd></div>
+                <div><dt className="text-muted">Saldo club cobrado</dt><dd><Money cents={o.clubPaid} /> de <Money cents={o.clubBalanceRequired} /></dd></div>
+              </>
+            ) : (
+              <div><dt className="text-muted">Seña requerida</dt><dd><Money cents={o.depositRequired} /></dd></div>
+            )}
             <div><dt className="text-muted">Prendas</dt><dd><Money cents={o.itemsTotal} /></dd></div>
             <div><dt className="text-muted">Personalización</dt><dd><Money cents={o.persTotal} /></dd></div>
             <div><dt className="text-muted">Devuelto</dt><dd><Money cents={o.refundedAmount} /></dd></div>
@@ -112,8 +137,11 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
                         <td className="font-mono text-xs">{x.ref}</td>
                         <td>{x.productName}<div className="font-mono text-xs text-muted">{x.productCode}</div></td>
                         <td>{x.components.map((c) => `${c.label} ${c.sizeLabel}`).join(" + ")}</td>
-                        <td>{x.persName || x.persNumber ? `${x.persName ?? "—"} #${x.persNumber ?? "—"}` : "—"}</td>
-                        <td className="num"><Money cents={x.unitPrice + x.persPrice} /></td>
+                        <td>
+                          {x.options.length ? x.options.map((op) => `${op.groupName}: ${op.value}`).join(" · ") : x.persName || x.persNumber ? `${x.persName ?? "—"} #${x.persNumber ?? "—"}` : "—"}
+                          {x.noSizeChange && <div className="text-xs text-warn">Sin cambio de talle voluntario</div>}
+                        </td>
+                        <td className="num"><Money cents={x.unitPrice + x.persPrice} />{x.textilPrice != null && <div className="text-xs text-muted">textil <Money cents={x.textilPrice + x.optionsTextil} /></div>}</td>
                         <td className="text-sm">{inLot ? `Lote ${inLot.lot.number} · ${LOT_STATUS_LABEL[inLot.lot.status]}` : "—"}</td>
                         <td>{x.status === "CANCELLED" ? <Badge tone="danger">Cancelada</Badge> : x.delivery ? <Badge tone="ok">Entregada</Badge> : <Badge>Activa</Badge>}</td>
                         <td>
@@ -145,8 +173,8 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
                                     </div>
                                   );
                                 })}
-                                {productOf.get(x.productId)!.persNameEnabled && <div className="field"><label htmlFor={`pn-${x.id}`}>Nombre</label><input id={`pn-${x.id}`} name="persName" className="input uppercase" defaultValue={x.persName ?? ""} maxLength={productOf.get(x.productId)!.persNameMaxLen} /></div>}
-                                {productOf.get(x.productId)!.persNumberEnabled && <div className="field"><label htmlFor={`pu-${x.id}`}>Número</label><input id={`pu-${x.id}`} name="persNumber" className="input" inputMode="numeric" defaultValue={x.persNumber ?? ""} maxLength={3} /></div>}
+                                {(nameGroup(x.productId) || x.persName) && <div className="field"><label htmlFor={`pn-${x.id}`}>Nombre</label><input id={`pn-${x.id}`} name="persName" className="input uppercase" defaultValue={x.persName ?? ""} maxLength={nameGroup(x.productId)?.maxLength ?? productOf.get(x.productId)!.persNameMaxLen} /></div>}
+                                {(numberGroup(x.productId) || x.persNumber) && <div className="field"><label htmlFor={`pu-${x.id}`}>Número</label><input id={`pu-${x.id}`} name="persNumber" className="input" inputMode="numeric" defaultValue={x.persNumber ?? ""} maxLength={3} /></div>}
                                 <div className="field">
                                   <label htmlFor={`pl-${x.id}`}>Jugador</label>
                                   <select id={`pl-${x.id}`} name="playerId" className="input" defaultValue={x.playerId ?? "__none"}>
@@ -154,6 +182,14 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
                                     <option value="__none">Sin jugador</option>
                                   </select>
                                 </div>
+                                <div className="field">
+                                  <label htmlFor={`rs-${x.id}`}>Motivo del cambio</label>
+                                  <select id={`rs-${x.id}`} name="reason" className="input" defaultValue="DATA_ERROR">
+                                    {Object.entries(EDIT_REASON_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                                  </select>
+                                  {x.noSizeChange && <small>Prenda personalizada: el cambio de talle voluntario no está permitido. Falla o error de la textil, sí (con nota).</small>}
+                                </div>
+                                <input name="note" className="input" placeholder="Nota (obligatoria para falla o error de la textil)" aria-label="Nota" />
                                 <p className="text-xs text-muted">El precio de la prenda no cambia. Agregar o quitar nombre o número recalcula la personalización.</p>
                                 <SubmitButton className="btn btn-primary btn-sm">Guardar cambios</SubmitButton>
                               </ActionForm>
@@ -177,7 +213,7 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
               <div key={p.id} className="card p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <b>{PAYMENT_KIND_LABEL[p.kind]}</b> · {PAYMENT_METHOD_LABEL[p.method]} · <Money cents={p.amount} />
+                    <b>{PAYMENT_KIND_LABEL[p.kind]}</b> · {PAYMENT_METHOD_LABEL[p.method]} · <Money cents={p.amount} /> · cobra {p.receiver === "CLUB" ? o.club.name : RECEIVER_LABEL[p.receiver]}
                     {p.simulated && <Badge tone="warn">Simulado</Badge>}
                     <div className="text-xs text-muted">
                       {fmtShortTime(p.createdAt)}
@@ -187,6 +223,15 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
                       {p.reviewedById && ` · Revisó ${userName.get(p.reviewedById) ?? "usuario"} el ${fmtShortTime(p.reviewedAt!)}`}
                       {p.replacesPaymentId && " · Reemplaza un comprobante rechazado"}
                     </div>
+                    {p.paidAt && <div className="text-xs text-muted">Fecha de cobro: {fmtDateTime(p.paidAt)}</div>}
+                    {p.providerTotalPaid != null && (
+                      <div className="text-xs text-muted">
+                        Conciliación MP · operación <Money cents={p.providerGross ?? p.amount} /> · pagó el comprador <Money cents={p.providerTotalPaid} />
+                        {p.providerTotalPaid > (p.providerGross ?? p.amount) && " (incluye intereses de financiación a cargo del comprador)"}
+                        {p.providerNet != null && <> · neto acreditado <Money cents={p.providerNet} /></>}
+                        {p.installments ? ` · ${p.installments} cuota(s)` : ""}
+                      </div>
+                    )}
                     {p.reviewNote && <div className="text-sm">{p.status === "REJECTED" ? "Motivo: " : "Nota: "}{p.reviewNote}</div>}
                   </div>
                   <Badge tone={payTone[p.status] ?? "muted"}>{PAYMENT_STATUS_LABEL[p.status]}</Badge>
@@ -215,9 +260,25 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
             ))}
           </div>
         )}
+        {canClubBalance && o.status === "CONFIRMED" && balance > 0 && (
+          <details className="card mt-4 p-4" open>
+            <summary className="cursor-pointer font-bold">Registrar saldo cobrado por el club</summary>
+            <ActionForm action={clubBalanceAction.bind(null, o.id)} className="mt-3 grid gap-3" resetOnOk>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="field"><label htmlFor="cb-amount">Importe</label><input id="cb-amount" name="amount" className="input" inputMode="decimal" defaultValue={String(balance / 100)} /></div>
+                <div className="field"><label htmlFor="cb-date">Fecha</label><input id="cb-date" name="date" type="date" className="input" defaultValue={toArLocal(new Date()).slice(0, 10)} /></div>
+                <div className="field"><label htmlFor="cb-method">Medio</label><select id="cb-method" name="method" className="input"><option value="CASH">Efectivo</option><option value="TRANSFER">Transferencia al club</option><option value="OTHER">Otro</option></select></div>
+              </div>
+              <div className="field"><label htmlFor="cb-ref">Referencia</label><input id="cb-ref" name="reference" className="input" placeholder="Recibo, operación o nota" /></div>
+              <input name="note" className="input" placeholder="Nota (opcional)" aria-label="Nota" />
+              <p className="text-xs text-muted">Lo cobra el club directamente. No pasa por Mercado Pago ni por la cuenta de la textil.</p>
+              <SubmitButton className="btn btn-primary justify-self-start">Registrar saldo</SubmitButton>
+            </ActionForm>
+          </details>
+        )}
         {review && o.status !== "CANCELLED" && (
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-            {balance > 0 && (
+            {!adv && balance > 0 && (
               <details className="card p-4">
                 <summary className="cursor-pointer font-bold">Registrar pago manual</summary>
                 <ActionForm action={manualPaymentAction.bind(null, o.id)} className="mt-3 grid gap-3" resetOnOk>

@@ -18,8 +18,16 @@ export function ClubBar({ club, href }: { club: { name: string; logoUrl: string 
   );
 }
 
-export function Steps({ deposit }: { deposit: boolean }) {
-  const steps = deposit
+export function Steps({ deposit, advance }: { deposit: boolean; advance?: boolean }) {
+  const steps = advance
+    ? [
+        ["Configurás", "Producto, talle, jugador y personalización. Podés comprar para varios hijos en un solo pedido."],
+        ["Anticipás", "Pagás el anticipo con Mercado Pago. El pedido se confirma al acreditarse."],
+        ["Fabricamos", "Al cierre se consolida la orden y se produce solo lo que se pidió."],
+        ["Llega al club", "La producción completa se entrega en el club. Si hay saldo, se paga al club."],
+        ["Retirás", "En la sede, con tu código de retiro, en los horarios publicados."],
+      ]
+    : deposit
     ? [
         ["Elegís", "Prendas, talles y el jugador de cada una. Podés comprar para varios hijos en un solo pedido."],
         ["Reservás", "Pagás la seña con Mercado Pago o transferencia. El pedido se confirma al acreditarse."],
@@ -115,11 +123,20 @@ export function WindowLine({ c, open }: { c: { status: string; opensAt: Date; cl
   return <>Ventana cerrada el {fmtDate(c.closesAt)}. No se aceptan nuevas compras.</>;
 }
 
-export function PlatformFooter({ name }: { name: string }) {
+/** Aviso visible en clubes de demostración: no hay ventas reales ni respaldo del club. */
+export function DemoBanner() {
+  return (
+    <div role="note" className="bg-ink px-4 py-2 text-center text-sm font-semibold text-paper">
+      DEMOSTRACIÓN · Club, productos y precios de ejemplo. No es una tienda oficial ni una venta real; los pagos son simulados.
+    </div>
+  );
+}
+
+export function PlatformFooter({ name, brandLine, demo }: { name: string; brandLine?: string | null; demo?: boolean }) {
   return (
     <footer className="mt-16 border-t border-line py-6 text-sm text-muted">
       <div className="mx-auto flex max-w-6xl flex-wrap justify-between gap-2 px-4">
-        <span>Tienda oficial de {name}</span>
+        <span>{demo ? `Demostración para ${name}` : `Tienda oficial de ${name}`}{brandLine ? ` · ${brandLine}` : ""}</span>
         <span>Fabricación y gestión: {process.env.PLATFORM_NAME ?? "Camada"}</span>
       </div>
     </footer>

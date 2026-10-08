@@ -1,7 +1,9 @@
 import "server-only";
 import { db } from "@/shared/db";
 import { heldUnits } from "@/modules/orders/capacity";
-import { isWindowOpen } from "@/modules/orders/pricing";
+import { isWindowOpen, optionGroupsInclude, audienceText } from "@/modules/orders/pricing";
+import { sampleInfoForProducts } from "@/modules/samples";
+import type { OptionGroupT } from "@/modules/catalog/options";
 import { onlineMode } from "@/modules/payments/accounts";
 import { readableOn } from "@/shared/colors";
 import type { CSSProperties } from "react";
@@ -15,26 +17,47 @@ export function clubTheme(c: { colorPrimary: string; colorSecondary: string }) {
   } as CSSProperties;
 }
 
+/** Única parte pública del acuerdo: la línea de marca ("Club by Marca"), si hay un acuerdo vigente. */
+async function brandLineFor(clubId: string) {
+  const now = new Date();
+  const a = await db.clubAgreement.findFirst({ where: { clubId, status: "ACTIVE", startsAt: { lte: now }, endsAt: { gt: now } }, select: { brandLine: true } });
+  return a?.brandLine ?? null;
+}
+
 export async function getClubStore(slug: string) {
   const club = await db.club.findUnique({
     where: { slug },
     include: {
       sports: { include: { sport: true } },
       photos: { orderBy: { sort: "asc" } },
-      campaigns: { where: { status: { not: "DRAFT" } }, orderBy: { opensAt: "desc" }, select: { id: true, slug: true, title: true, season: true, status: true, opensAt: true, closesAt: true, description: true, showCatalogWhenClosed: true, deliveryDaysMin: true, deliveryDaysMax: true, paymentMode: true, depositType: true, depositValue: true, faq: true } },
+      campaigns: { where: { status: { notIn: ["DRAFT", "ACTIVATION_REQUESTED", "ACTIVATION_APPROVED"] } }, orderBy: { opensAt: "desc" }, select: { id: true, slug: true, title: true, season: true, status: true, opensAt: true, closesAt: true, description: true, showCatalogWhenClosed: true, deliveryDaysMin: true, deliveryDaysMax: true, paymentMode: true, pricingModel: true, depositType: true, depositValue: true, faq: true } },
     },
   });
   if (!club || !club.active) return null;
   const now = new Date();
   const current = club.campaigns.find((c) => c.status === "PUBLISHED" && c.closesAt > now) ?? null;
-  return { club, current, history: club.campaigns.filter((c) => c.id !== current?.id) };
+  // Catálogo del club: productos visibles sin preventa abierta (catálogo sin venta, preventa cerrada)
+  const catalog = await db.product.findMany({
+    where: { clubId: club.id, active: true, catalogStatus: { in: ["CATALOG", "PRESALE", "PRESALE_CLOSED"] } },
+    orderBy: [{ catalogStatus: "asc" }, { name: "asc" }],
+    select: { id: true, code: true, name: true, description: true, catalogStatus: true, images: { orderBy: { sort: "asc" }, take: 1, select: { url: true, alt: true, tag: true } } },
+  });
+  return { club, current, history: club.campaigns.filter((c) => c.id !== current?.id), catalog, brandLine: await brandLineFor(club.id) };
 }
+
+export const CATALOG_PUBLIC_LABEL: Record<string, string> = { CATALOG: "Próximamente", PRESALE: "En preventa", PRESALE_CLOSED: "Preventa cerrada" };
 
 export type StoreSize = { label: string; group: string; a: number | null; b: number | null };
 export type StoreComponent = { label: string; garmentCode: string; garmentName: string; variant: string | null; material: string | null; care: string | null; measureA: string; measureB: string; unit: string; note: string | null; printTarget: boolean; sizes: StoreSize[] };
 export type StoreProduct = {
   id: string; code: string; name: string; kind: string; description: string | null; audience: string | null; sport: string | null; manufacturingTerms: string | null;
   price: number; listPrice: number | null; remaining: number | null;
+  /** Anticipo por prenda (precio textil). Null en campañas con seña heredada. */
+  textilPrice: number | null;
+  family: string;
+  optionGroups: OptionGroupT[];
+  /** Curvas del muestrario aprobadas y disponibles en el club */
+  samples: { kind: string; location: string | null; sizes: string[] }[];
   pers: { name: boolean; namePrice: number; nameMax: number; number: boolean; numberPrice: number; numberMin: number; numberMax: number };
   images: { url: string; view: string; tag: string; alt: string | null }[];
   components: StoreComponent[];
@@ -50,6 +73,8 @@ export async function getCampaignStore(clubSlug: string, campaignSlug: string) {
     where: { clubId_slug: { clubId: club.id, slug: campaignSlug } },
     include: {
       paymentAccount: true,
+      audienceSports: true,
+      audienceCategories: { include: { sport: true } },
       products: {
         where: { active: true, product: { active: true } },
         orderBy: { sort: "asc" },
@@ -57,6 +82,7 @@ export async function getCampaignStore(clubSlug: string, campaignSlug: string) {
           product: {
             include: {
               sport: true,
+              optionGroups: optionGroupsInclude,
               images: { orderBy: { sort: "asc" } },
               components: { orderBy: { sort: "asc" }, include: { garment: { include: { sizes: { where: { enabled: true }, orderBy: { sort: "asc" } } } } } },
             },
@@ -65,7 +91,8 @@ export async function getCampaignStore(clubSlug: string, campaignSlug: string) {
       },
     },
   });
-  if (!c || c.status === "DRAFT") return null;
+  if (!c || ["DRAFT", "ACTIVATION_REQUESTED", "ACTIVATION_APPROVED"].includes(c.status)) return null;
+  const samples = await sampleInfoForProducts(c.products.map((cp) => cp.productId));
 
   const open = isWindowOpen(c);
   const limited = c.maxUnits != null || c.products.some((p) => p.maxUnits != null);
@@ -80,6 +107,15 @@ export async function getCampaignStore(clubSlug: string, campaignSlug: string) {
     return {
       id: p.id, code: p.code, name: p.name, kind: p.kind, description: p.description, audience: p.audience, sport: p.sport?.name ?? null, manufacturingTerms: p.manufacturingTerms,
       price: cp.price, listPrice: cp.listPrice && cp.listPrice > cp.price ? cp.listPrice : null, remaining,
+      textilPrice: c.pricingModel === "TEXTIL_ADVANCE" ? cp.textilPrice : null,
+      family: p.family,
+      optionGroups: p.optionGroups.map((g) => ({
+        id: g.id, name: g.name, type: g.type, role: g.role, required: g.required, sort: g.sort, help: g.help, dependsOnGroupId: g.dependsOnGroupId,
+        dependsOnValueIds: g.dependsOnValueIds, maxLength: g.maxLength, numberMin: g.numberMin, numberMax: g.numberMax, priceTextil: g.priceTextil,
+        priceClub: g.priceClub, blocksSizeChange: g.blocksSizeChange,
+        values: g.values.filter((v) => v.active).map((v) => ({ id: v.id, label: v.label, sort: v.sort, priceTextil: v.priceTextil, priceClub: v.priceClub, active: v.active })),
+      })),
+      samples: samples.get(p.id) ?? [],
       pers: { name: p.persNameEnabled, namePrice: p.persNamePrice, nameMax: p.persNameMaxLen, number: p.persNumberEnabled, numberPrice: p.persNumberPrice, numberMin: p.persNumberMin, numberMax: p.persNumberMax },
       images: p.images.map((i) => ({ url: i.url, view: i.view, tag: i.tag, alt: i.alt })),
       components: p.components.map((comp) => ({
@@ -98,6 +134,8 @@ export async function getCampaignStore(clubSlug: string, campaignSlug: string) {
     open,
     products,
     confirmedUnits,
+    audience: audienceText(c),
+    brandLine: await brandLineFor(club.id),
     payments: {
       mercadopago: c.allowMercadoPago && mode !== "unavailable",
       simulated: mode === "simulator",
