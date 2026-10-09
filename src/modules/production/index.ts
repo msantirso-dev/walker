@@ -108,9 +108,12 @@ export async function computeLotReport(lotId: string, tx: Tx = db): Promise<LotR
     include: {
       campaign: { include: { club: true } },
       units: { include: { unit: { include: { components: true, options: { orderBy: { sort: "asc" } } } } } },
+      purchaseItems: { include: { purchaseItem: { include: { product: { include: { components: { orderBy: { sort: "asc" }, include: { garment: true } } } } } } } },
     },
   });
-  const garmentIds = [...new Set(lot.units.flatMap((u) => u.unit.components.map((c) => c.garmentId)))];
+  const garmentIds = [
+    ...new Set([...lot.units.flatMap((u) => u.unit.components.map((c) => c.garmentId)), ...lot.purchaseItems.flatMap((pi) => pi.purchaseItem.product?.components.map((c) => c.garmentId) ?? [])]),
+  ];
   const sizes = await tx.garmentSize.findMany({ where: { garmentId: { in: garmentIds } } });
   const sortOf = new Map(sizes.map((s) => [`${s.garmentId}|${s.label}`, s.sort]));
 
@@ -151,6 +154,22 @@ export async function computeLotReport(lotId: string, tx: Tx = db): Promise<LotR
       for (const e of lu.unit.options.filter((o) => o.role === "OTHER")) add(e.groupName, e.value);
     }
   }
+  // Unidades de compras del club (revisión del lote): mismo consolidado por prenda y talle, sin datos personales
+  for (const pi of lot.purchaseItems) {
+    const prod = pi.purchaseItem.product;
+    if (!prod) continue;
+    for (const comp of prod.components) {
+      const size = pi.purchaseItem.sizeLabel;
+      const bk = `${prod.code}|${comp.label}|${size}|club`;
+      const b = breakdown.get(bk) ?? { productCode: prod.code, productName: `${prod.name} (compra del club)`, component: comp.label, garmentCode: comp.garment.code, size, sizeSort: sortOf.get(`${comp.garmentId}|${size}`) ?? 999, quantity: 0 };
+      b.quantity += pi.quantity;
+      breakdown.set(bk, b);
+      const key = `${comp.garment.code}|${size}`;
+      const cur = lines.get(key) ?? { garmentCode: comp.garment.code, garmentName: comp.garment.name, variant: comp.garment.variant, component: comp.label, product: prod.code, size, sizeSort: sortOf.get(`${comp.garmentId}|${size}`) ?? 999, quantity: 0 };
+      cur.quantity += pi.quantity;
+      lines.set(key, cur);
+    }
+  }
   const sorted = [...lines.values()].filter((l) => l.quantity !== 0).sort((a, b) => a.garmentCode.localeCompare(b.garmentCode) || a.sizeSort - b.sizeSort);
   const garments = new Map<string, { code: string; name: string; variant: string | null; total: number }>();
   for (const l of sorted) {
@@ -171,7 +190,7 @@ export async function computeLotReport(lotId: string, tx: Tx = db): Promise<LotR
     garments: [...garments.values()],
     personalization: pers,
     persJobs: [...jobs.values()].filter((j) => j.quantity !== 0).sort((a, b) => a.kind.localeCompare(b.kind) || a.value.localeCompare(b.value)),
-    totalUnits: lot.units.reduce((a, u) => a + u.delta, 0),
+    totalUnits: lot.units.reduce((a, u) => a + u.delta, 0) + lot.purchaseItems.reduce((a, p) => a + p.quantity, 0),
   };
 }
 
@@ -200,6 +219,9 @@ async function ordersInLot(tx: Tx, lotId: string) {
 }
 
 export async function advanceLot(actor: Actor, lotId: string, to: LotStatus) {
+  // Solo la empresa actualiza producción y confirma la disponibilidad en el club
+  if (!["TEXTIL_ADMIN", "PRODUCTION", "SYSTEM"].includes(actor.role)) throw new OrderError("La producción la actualiza la empresa.");
+  if (to === "RECEIVED_BY_CLUB" && !["TEXTIL_ADMIN", "SYSTEM"].includes(actor.role)) throw new OrderError("La disponibilidad en el club la confirma la empresa.");
   await db.$transaction(async (tx) => {
     const lot = await tx.productionLot.findUniqueOrThrow({ where: { id: lotId }, include: { campaign: true } });
     if (nextLotStatus(lot.status) !== to || to === "APPROVED") throw new OrderError("Cambio de estado no permitido.");
@@ -208,6 +230,11 @@ export async function advanceLot(actor: Actor, lotId: string, to: LotStatus) {
     const orderIds = await ordersInLot(tx, lotId);
 
     if (to === "IN_PRODUCTION") {
+      // Inicio real de producción (el previsto es el cierre): se registra con el primer lote que empieza
+      if (!lot.campaign.productionStartedAt) {
+        await tx.campaign.update({ where: { id: lot.campaignId }, data: { productionStartedAt: new Date(), productionStartedById: actor.id ?? null } });
+        await audit(actor, { entity: "Campaign", entityId: lot.campaignId, clubId: lot.campaign.clubId, action: "campaign.production_started", before: { productionStartedAt: null }, after: { productionStartedAt: new Date().toISOString() } }, tx);
+      }
       for (const id of orderIds) {
         const sent = await tx.emailOutbox.count({ where: { orderId: id, template: "IN_PRODUCTION" } });
         const o = await tx.order.findUniqueOrThrow({ where: { id }, select: { ...orderMailSelect, status: true } });

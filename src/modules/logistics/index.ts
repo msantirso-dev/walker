@@ -4,6 +4,7 @@ import { audit, type Actor } from "@/modules/audit";
 import { OrderError } from "@/modules/orders/pricing";
 import { advanceLot } from "@/modules/production";
 import type { CostBearer, ShipmentStatus } from "@/generated/prisma/client";
+import { assertDispatchAllowed } from "@/modules/purchases";
 
 /**
  * Entrega consolidada textil → club. No hay envío a domicilio del comprador:
@@ -51,6 +52,8 @@ export async function dispatchShipment(actor: Actor, shipmentId: string, input: 
   const s = await db.clubShipment.findUniqueOrThrow({ where: { id: shipmentId }, include: { lots: true } });
   if (s.status !== "PREPARING") throw new OrderError("El envío ya fue despachado.");
   if (!s.lots.length) throw new OrderError("El envío no tiene lotes.");
+  // Unidades adicionales impagas del club: no se liberan (o se frena todo el despacho, según la decisión comercial)
+  await assertDispatchAllowed(s.clubId, s.lots.map((l) => l.id));
   await db.clubShipment.update({
     where: { id: shipmentId },
     data: { status: "DISPATCHED", dispatchedAt: input.dispatchedAt, carrier: input.carrier?.trim() || s.carrier, trackingRef: input.trackingRef?.trim() || s.trackingRef },
