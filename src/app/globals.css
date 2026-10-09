@@ -120,3 +120,8 @@ h1, h2, h3, .display { font-family: var(--font-display); text-transform: upperca
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* Web comercial: presentación progresiva al hacer scroll (solo si hay JS y movimiento permitido) */
+[data-reveal][data-pending] { opacity: 0; transform: translateY(18px); transition: opacity 0.6s ease, transform 0.6s ease; }
+[data-reveal][data-pending][data-shown] { opacity: 1; transform: none; }
+.web summary::-webkit-details-marker { display: none; }

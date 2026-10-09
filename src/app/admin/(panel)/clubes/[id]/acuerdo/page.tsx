@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser, assertCan } from "@/modules/auth";
+import { getBrand } from "@/modules/brand";
 import { AGREEMENT_STATUS_LABEL, DEFAULT_EXCLUSIVITY_MONTHS, defaultBrandLine } from "@/modules/agreements";
 import { db } from "@/shared/db";
 import { fmtDate, toArLocal, addDays } from "@/shared/dates";
@@ -55,7 +56,7 @@ export default async function AgreementPage({ params }: { params: Promise<{ id: 
   const club = await db.club.findUnique({ where: { id } });
   if (!club) notFound();
   const list = await db.clubAgreement.findMany({ where: { clubId: id }, orderBy: { startsAt: "desc" } });
-  const brand = defaultBrandLine(club.shortName ?? club.name);
+  const brand = defaultBrandLine(club.shortName ?? club.name, (await getBrand()).name);
   return (
     <>
       <PageHeader eyebrow={club.name} title="Acuerdo comercial" actions={<Link href={`/admin/clubes/${id}`} className="btn btn-ghost">Volver al club</Link>}>

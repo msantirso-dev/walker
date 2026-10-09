@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { currentUser, login } from "@/modules/auth";
 import { ActionForm, SubmitButton } from "@/shared/ui/client";
 import type { FormState } from "@/shared/actions-types";
-import { BrandMark } from "@/shared/ui/brand";
+import { BrandMark } from "@/app/_brand/mark";
 
 export const metadata = { title: "Ingresar" };
 
@@ -20,7 +20,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   return (
     <main className="grid min-h-dvh place-items-center px-4 py-10">
       <div className="w-full max-w-sm">
-        <BrandMark className="h-12" />
+        <BrandMark size="xl" />
         <h1 className="mt-6 text-5xl font-extrabold">Panel</h1>
         <p className="mt-2 text-muted">Textil, clubes, producción y entregas.</p>
         {restablecida && <p className="notice notice-ok mt-6">Contraseña actualizada. Ingresá con la nueva.</p>}

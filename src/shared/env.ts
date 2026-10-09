@@ -5,9 +5,6 @@ const schema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   DATABASE_URL: z.string().url(),
   APP_URL: z.string().url(),
-  PLATFORM_NAME: z.string().default("Walkersport"),
-  /** Marca de la textil para la línea "Club by Marca" (configurable, no se inventa). */
-  TEXTIL_BRAND: z.string().min(1).default("Walkersport"),
   /** 32 bytes en base64. Cifra credenciales de cobro. */
   APP_ENCRYPTION_KEY: z
     .string()
@@ -22,7 +19,7 @@ const schema = z.object({
   MP_API_BASE: z.string().url().default("https://api.mercadopago.com"),
   /** smtp(s)://usuario:clave@host:puerto. Si falta, los correos quedan como "no enviados". */
   SMTP_URL: z.string().optional(),
-  MAIL_FROM: z.string().default("Walkersport <no-responder@example.com>"),
+  MAIL_FROM: z.string().default("BACK <no-responder@example.com>"),
 });
 
 export type Env = z.infer<typeof schema>;

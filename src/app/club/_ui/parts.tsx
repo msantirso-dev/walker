@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { fmtDate, fmtDateTime } from "@/shared/dates";
-import { BrandMark } from "@/shared/ui/brand";
+import { BrandMark } from "@/app/_brand/mark";
 
 export function ClubBar({ club, href }: { club: { name: string; logoUrl: string | null; city: string | null; venue: string | null; slug: string }; href?: string }) {
   return (
@@ -138,7 +138,7 @@ export function PlatformFooter({ name, brandLine, demo }: { name: string; brandL
     <footer className="mt-16 border-t border-line py-6 text-sm text-muted">
       <div className="mx-auto flex max-w-6xl flex-wrap justify-between gap-2 px-4">
         <span>{demo ? `Demostración para ${name}` : `Tienda oficial de ${name}`}{brandLine ? ` · ${brandLine}` : ""}</span>
-        <span className="inline-flex items-center gap-2">Fabricación y gestión: <BrandMark className="h-5" /> {process.env.PLATFORM_NAME ?? "Walkersport"}</span>
+        <span className="inline-flex items-center gap-2">Fabricación y gestión: <BrandMark size="sm" /></span>
       </div>
     </footer>
   );

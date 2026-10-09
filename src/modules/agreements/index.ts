@@ -4,6 +4,7 @@ import { env } from "@/shared/env";
 import { audit, SYSTEM, type Actor } from "@/modules/audit";
 import { OrderError } from "@/modules/orders/pricing";
 import type { AgreementStatus } from "@/generated/prisma/client";
+import { getBrand } from "@/modules/brand";
 
 /**
  * Acuerdo comercial privado textil–club (exclusividad, marca "by", muestrario, compras iniciales, reglas de precio).
@@ -25,8 +26,8 @@ function validate(i: AgreementInput) {
   if (!Number.isInteger(i.alertDaysBefore) || i.alertDaysBefore < 1 || i.alertDaysBefore > 365) throw new OrderError("El aviso de vencimiento debe estar entre 1 y 365 días.");
 }
 
-/** Línea de marca por defecto: "<Club> by <marca textil>". */
-export const defaultBrandLine = (clubName: string) => `${clubName} by ${env().TEXTIL_BRAND}`;
+/** Línea de marca por defecto: "<Club> by <marca de la empresa>". */
+export const defaultBrandLine = (clubName: string, brandName: string) => `${clubName} by ${brandName}`;
 
 export async function saveAgreement(actor: Actor & { id: string }, clubId: string, id: string | null, i: AgreementInput, contract?: { key: string; name: string }) {
   validate(i);
@@ -39,7 +40,7 @@ export async function saveAgreement(actor: Actor & { id: string }, clubId: strin
   }
   const data = {
     ...i,
-    brandLine: i.brandLine?.trim() || defaultBrandLine(club.shortName ?? club.name),
+    brandLine: i.brandLine?.trim() || defaultBrandLine(club.shortName ?? club.name, (await getBrand()).name),
     ...(contract ? { contractFileKey: contract.key, contractFileName: contract.name.slice(0, 120) } : {}),
   };
   const a = id
