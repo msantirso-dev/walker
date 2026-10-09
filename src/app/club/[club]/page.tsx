@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getClubStore, clubTheme, CATALOG_PUBLIC_LABEL } from "@/modules/clubs/public";
+import { getClubStore, clubTheme, ITEM_STATE_LABEL } from "@/modules/clubs/public";
+import { ars } from "@/shared/money";
 import { CAMPAIGN_STATUS_LABEL, effectiveStatus } from "@/modules/campaigns";
 import { fmtDate, fmtDateTime } from "@/shared/dates";
-import { ClubBar, Contact, DemoBanner, Faq, PlatformFooter, Steps } from "../_ui/parts";
+import { StoreAccount, ClubBar, Contact, DemoBanner, Faq, PlatformFooter, Steps } from "../_ui/parts";
 import { Countdown } from "../_ui/countdown";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ export async function generateMetadata({ params }: { params: Promise<{ club: str
 export default async function ClubPage({ params }: { params: Promise<{ club: string }> }) {
   const data = await getClubStore((await params).club);
   if (!data) notFound();
-  const { club, current, openList, history, catalog, brandLine } = data;
+  const { club, current, openList, upcoming, history, catalog, brandLine } = data;
   const others = openList.filter((c) => c.id !== current?.id);
   const faq = (current?.faq as { q: string; a: string }[] | null) ?? [];
 
@@ -31,7 +32,7 @@ export default async function ClubPage({ params }: { params: Promise<{ club: str
         )}
         <div className="hoops pointer-events-none absolute inset-0" aria-hidden />
         <div className="relative mx-auto max-w-6xl px-4 pb-10 pt-6">
-          <ClubBar club={club} />
+          <div className="flex items-center justify-between gap-3"><ClubBar club={club} /><StoreAccount clubSlug={club.slug} back={`/club/${club.slug}`} /></div>
           <div className="mt-10 max-w-3xl">
             <div className="font-display text-sm font-bold uppercase tracking-[0.14em] opacity-85">{club.isDemo ? "Demostración" : "Tienda oficial"}{brandLine ? ` · ${brandLine}` : ""}</div>
             <h1 className="mt-2 text-5xl font-extrabold md:text-7xl">{club.name}</h1>
@@ -53,7 +54,7 @@ export default async function ClubPage({ params }: { params: Promise<{ club: str
                 <dl className="mt-5 flex flex-wrap gap-x-10 gap-y-3">
                   <div>
                     <dt className="text-sm text-muted">Cierre</dt><dd className="font-display text-2xl font-bold">{fmtDateTime(current.closesAt)}</dd>
-                    <dd className="text-sm font-semibold"><Countdown to={current.closesAt.toISOString()} fallback="" /></dd>
+                    <dd className="text-sm font-semibold"><Countdown to={current.closesAt.toISOString()} fallback="" serverNow={new Date().toISOString()} /></dd>
                   </div>
                   <div><dt className="text-sm text-muted">Entrega estimada</dt><dd className="font-display text-2xl font-bold">{current.deliveryDaysMin} a {current.deliveryDaysMax} días del cierre</dd></div>
                 </dl>
@@ -85,7 +86,7 @@ export default async function ClubPage({ params }: { params: Promise<{ club: str
                 </div>
                 <div className="text-right text-sm">
                   <div>Hasta el {fmtDate(c.closesAt)}</div>
-                  <div className="font-semibold"><Countdown to={c.closesAt.toISOString()} fallback="" /></div>
+                  <div className="font-semibold"><Countdown to={c.closesAt.toISOString()} fallback="" serverNow={new Date().toISOString()} /></div>
                 </div>
               </Link>
             ))}
@@ -98,14 +99,32 @@ export default async function ClubPage({ params }: { params: Promise<{ club: str
           <Steps deposit={current ? current.paymentMode === "DEPOSIT" : true} advance={current ? current.pricingModel === "TEXTIL_ADVANCE" : true} />
         </section>
 
+        {upcoming.length > 0 && (
+          <section className="mt-6 grid gap-3 md:grid-cols-2">
+            {upcoming.map((c) => (
+              <div key={c.id} className="card flex flex-wrap items-center justify-between gap-3 p-4">
+                <div>
+                  <div className="eyebrow">Próxima preventa</div>
+                  <div className="font-display text-2xl font-bold uppercase">{c.title}</div>
+                  {c.audience !== "ALL" && <span className="badge badge-info mt-1">Exclusivo para {c.audienceText}</span>}
+                </div>
+                <div className="text-right text-sm">
+                  <div>Abre el {fmtDateTime(c.opensAt)}</div>
+                  <div className="font-semibold"><Countdown to={c.opensAt.toISOString()} fallback="" label="Abre en" ended="Abierta" serverNow={new Date().toISOString()} /></div>
+                </div>
+              </div>
+            ))}
+          </section>
+        )}
+
         {catalog.length > 0 && (
           <section className="mt-14">
             <div className="eyebrow">Catálogo del club</div>
             <h2 className="mb-4 mt-1 text-3xl font-extrabold">Productos</h2>
             <ul className="grid grid-cols-2 gap-3 md:grid-cols-4">
               {catalog.map((p) => (
-                <li key={p.id} className="card overflow-hidden">
-                  <div className="aspect-square bg-surface-2">
+                <li key={p.id} className={`card overflow-hidden ${p.state === "ACTIVE" ? "" : "bg-surface-2"}`}>
+                  <div className={`relative aspect-square bg-surface-2 ${p.state === "ACTIVE" ? "" : "opacity-55 grayscale-[35%]"}`}>
                     {p.images[0] && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={p.images[0].url} alt={p.images[0].alt ?? p.name} className="h-full w-full object-cover" loading="lazy" />
@@ -115,11 +134,18 @@ export default async function ClubPage({ params }: { params: Promise<{ club: str
                     <div className="font-bold">{p.name}</div>
                     {p.sale ? (
                       <>
-                        <Link href={`/club/${club.slug}/${p.sale.slug}`} className="badge badge-ok mt-1">En preventa hasta el {fmtDate(p.sale.closesAt)}</Link>
+                        <div className="num font-display text-xl font-bold">{ars(p.sale.price)}</div>
+                        <div className="text-xs text-muted">Cierra el {fmtDateTime(p.sale.closesAt)}</div>
+                        <div className="text-xs font-semibold"><Countdown to={p.sale.closesAt.toISOString()} fallback="" serverNow={new Date().toISOString()} /></div>
                         {p.sale.audience !== "ALL" && <div className="mt-1 text-xs text-muted">Solo {p.sale.audienceText}</div>}
+                        <Link href={`/club/${club.slug}/${p.sale.slug}`} className="btn btn-club btn-sm mt-2 w-full">Comprar</Link>
                       </>
                     ) : (
-                      <span className="badge badge-muted mt-1">{CATALOG_PUBLIC_LABEL[p.catalogStatus === "PRESALE" ? "PRESALE_CLOSED" : p.catalogStatus]}</span>
+                      <>
+                        <span className={`badge mt-1 ${p.state === "ENDED" ? "badge-muted" : "badge-info"}`}>{ITEM_STATE_LABEL[p.state]}</span>
+                        {p.opensAt && <div className="mt-1 text-xs text-muted">Abre el {fmtDateTime(p.opensAt)}</div>}
+                        <div className="mt-1 text-xs text-muted">{p.state === "ENDED" ? "Ya no se puede comprar." : "Todavía no se puede comprar."}</div>
+                      </>
                     )}
                   </div>
                 </li>

@@ -7,7 +7,7 @@ export const PRESETS: Record<string, { group: SizeGroup; labels: string[] }> = {
 };
 
 export const GROUP_LABEL: Record<SizeGroup, string> = { KIDS: "Infantiles por edad (curva anterior)", NUMERIC: "Infantiles 1 = 6-8 · 2 = 10-12 · 3 = 14-16", ALPHA: "Adultos", OTHER: "Otros" };
-export const VIEW_LABEL = { FRONT: "Frente", BACK: "Espalda", DETAIL: "Detalle", OTHER: "Otra" } as const;
+export const VIEW_LABEL = { FRONT: "Frente", BACK: "Espalda", SIZE_CHART: "Tabla de talles", DETAIL: "Detalle", OTHER: "Otra" } as const;
 export const TAG_LABEL = { REAL: "Foto real", DESIGN: "Diseño", REFERENCE: "Referencia" } as const;
 export const KIND_LABEL = { SIMPLE: "Simple", SET: "Conjunto", COMBO: "Combo" } as const;
 

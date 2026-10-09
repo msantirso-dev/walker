@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { fmtDate, fmtDateTime } from "@/shared/dates";
 import { BrandMark } from "@/app/_brand/mark";
+import { currentMember } from "@/modules/members";
 
 export function ClubBar({ club, href }: { club: { name: string; logoUrl: string | null; city: string | null; venue: string | null; slug: string }; href?: string }) {
   return (
@@ -15,6 +16,20 @@ export function ClubBar({ club, href }: { club: { name: string; logoUrl: string 
         <span className="block font-display text-lg font-bold uppercase tracking-wider">{club.name}</span>
         <span className="block text-sm opacity-80">{[club.venue, club.city].filter(Boolean).join(" · ")}</span>
       </span>
+    </Link>
+  );
+}
+
+/** Acceso del socio desde la tienda: conserva el club elegido. */
+export async function StoreAccount({ clubSlug, back }: { clubSlug: string; back: string }) {
+  const m = await currentMember();
+  return m ? (
+    <Link href="/mi-cuenta" className="rounded-full border border-current/40 px-3 py-1.5 text-sm font-semibold hover:bg-white/10">
+      Mis pedidos · {m.name.split(" ")[0]}
+    </Link>
+  ) : (
+    <Link href={`/socios/ingresar?${new URLSearchParams({ club: clubSlug, next: back })}`} className="rounded-full border border-current/40 px-3 py-1.5 text-sm font-semibold hover:bg-white/10">
+      Ingresar
     </Link>
   );
 }

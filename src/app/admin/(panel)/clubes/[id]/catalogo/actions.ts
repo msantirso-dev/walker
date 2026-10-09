@@ -200,7 +200,7 @@ export async function addProductImage(clubId: string, productId: string, _p: For
     if (!f) throw new UserError("Elegí una imagen.");
     const view = str(fd, "view");
     const tag = str(fd, "tag");
-    if (!["FRONT", "BACK", "DETAIL", "OTHER"].includes(view) || !["REAL", "DESIGN", "REFERENCE"].includes(tag)) throw new UserError("Elegí vista y etiqueta.");
+    if (!["FRONT", "BACK", "SIZE_CHART", "DETAIL", "OTHER"].includes(view) || !["REAL", "DESIGN", "REFERENCE"].includes(tag)) throw new UserError("Elegí vista y etiqueta.");
     await db.productImage.create({ data: { productId, url: await saveImage(f, `prod-${productId}`), view: view as never, tag: tag as never, alt: opt(fd, "alt"), sort: p._count.images } });
     revalidatePath(`/admin/clubes/${clubId}/catalogo/productos/${productId}`);
     return "Imagen agregada.";
@@ -216,7 +216,7 @@ export async function updateImage(clubId: string, imageId: string, fd: FormData)
   revalidatePath(`/admin/clubes/${clubId}/catalogo/productos/${img.productId}`);
 }
 
-/** Grupo de opciones del configurador. Valores de elección: una línea por valor "Etiqueta | precio textil | precio club". */
+/** Grupo de opciones del configurador. Valores de elección: una línea por valor "Etiqueta | precio de la empresa | precio club". */
 export async function saveOptionGroupAction(clubId: string, productId: string, groupId: string | null, _p: FormState, fd: FormData): Promise<FormState> {
   return run(async () => {
     const { actor } = await guard(clubId);

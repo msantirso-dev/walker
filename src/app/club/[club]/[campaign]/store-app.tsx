@@ -5,6 +5,7 @@ import { CHANGE_POLICY_TEXT, CHANGE_POLICY_UNPERSONALIZED, CHANGE_POLICY_VERSION
 import { ars } from "@/shared/money";
 import { MP_FINANCING_TEXT, SAMPLE_TEXT } from "@/shared/copy";
 import { advanceUnit, extraForBuyer } from "@/shared/advance";
+import { Countdown } from "../../_ui/countdown";
 
 type Player = { key: string; name: string; sport: string; category: string; team: string };
 type Line = { id: string; productId: string; playerKey: string | null; sizes: Record<string, string>; options: Record<string, string>; quantity: number };
@@ -33,6 +34,12 @@ export type StoreConfig = {
   audienceText: string;
   demo: boolean;
   policiesAnchor: string;
+  /** Estado de la ventana según la hora del servidor; el contador es solo informativo. */
+  windowState: "OPEN" | "SOON" | "ENDED";
+  closesAt: string;
+  closesAtText: string;
+  opensAtText: string;
+  serverNow: string;
   /** Socio con sesión (los datos del pedido salen de su cuenta) o null. */
   member: { name: string; email: string; phone: string | null; memberNumber: string | null } | null;
   /** Acceso o registro del socio, conservando el club y volviendo a esta tienda. */
@@ -44,6 +51,11 @@ type SavedCart = { players: Player[]; lines: Line[]; notes: string };
 
 
 const GROUP_LABEL: Record<string, string> = { KIDS: "Infantiles", NUMERIC: "Infantiles · 1 (6-8) · 2 (10-12) · 3 (14-16)", ALPHA: "Adultos", OTHER: "Otros" };
+const RESOURCES = [
+  { key: "FRONT", label: "Frente" },
+  { key: "BACK", label: "Espalda" },
+  { key: "SIZE_CHART", label: "Talles" },
+] as const;
 const TAG_LABEL: Record<string, string> = { REAL: "Foto real", DESIGN: "Diseño", REFERENCE: "Referencia" };
 
 function groupSizes<T extends { group: string }>(list: T[]): [string, T[]][] {
@@ -78,7 +90,7 @@ function cleanSelections(groups: OptionGroupT[], sel: Record<string, string>) {
   return out;
 }
 
-/** Precio que ve el comprador por un adicional: en v2, precio textil con el recargo del club. */
+/** Precio que ve el comprador por un adicional: en v2, precio de la empresa con el recargo del club. */
 const optPrice = (p: StoreProduct, t: number, c: number) => (p.textilPrice != null ? extraForBuyer(t, p.textilPrice, p.price) : t + c);
 
 function linePrice(p: StoreProduct, l: Line) {
@@ -264,7 +276,7 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
         <dt>{advanceModel ? nowLabel : review ? `${payKind === "FULL" ? "Pago total" : depositLabel} · ${payMethod === "MERCADOPAGO" ? "Mercado Pago" : "Transferencia"}` : nowLabel}</dt>
         <dd>{ars(totals.now)}</dd>
       </div>
-      {advanceModel && <div className="-mt-1 px-3 text-xs text-muted">Lo cobra la textil que fabrica las prendas.</div>}
+      {advanceModel && <div className="-mt-1 px-3 text-xs text-muted">Lo cobra {cfg.receiver}, que fabrica las prendas.</div>}
       {totals.later > 0 && (
         <div className="flex justify-between text-muted">
           <dt>{laterLabel}{!advanceModel && totals.ship ? " (incluye envío)" : ""}</dt>
@@ -293,8 +305,8 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
             const img = p.images[0];
             const soldOut = p.remaining === 0;
             return (
-              <article key={p.id} className="card flex min-w-0 flex-col overflow-hidden">
-                <div className="relative aspect-square bg-surface-2">
+              <article key={p.id} className={`card flex min-w-0 flex-col overflow-hidden ${cfg.windowState === "OPEN" ? "" : "bg-surface-2"}`}>
+                <div className={`relative aspect-square bg-surface-2 ${cfg.windowState === "OPEN" ? "" : "opacity-55 grayscale-[35%]"}`}>
                   {img && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={img.url} alt={img.alt ?? p.name} className="h-full w-full object-cover" loading="lazy" />
@@ -317,9 +329,21 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
                   )}
                   {p.samples.length > 0 && <p className="text-xs font-semibold">Muestrario disponible en el club</p>}
                   {p.remaining != null && <p className="text-xs text-muted">{soldOut ? "Sin cupo disponible" : `Cupo disponible: ${p.remaining}`}</p>}
+                  {cfg.windowState === "OPEN" ? (
+                    <p className="text-xs">
+                      <span className="text-muted">Cierra el {cfg.closesAtText}</span>
+                      <br />
+                      <Countdown to={cfg.closesAt} fallback="" serverNow={cfg.serverNow} className="font-semibold" />
+                    </p>
+                  ) : (
+                    <p className="text-xs">
+                      <span className={`badge ${cfg.windowState === "SOON" ? "badge-info" : "badge-muted"}`}>{cfg.windowState === "SOON" ? "Próximamente" : "Preventa finalizada"}</span>
+                      <span className="mt-1 block text-muted">{cfg.windowState === "SOON" ? `Abre el ${cfg.opensAtText}. Todavía no se puede comprar.` : "Ya no se puede comprar."}</span>
+                    </p>
+                  )}
                   {cfg.open ? (
                     <button className="btn btn-club mt-2 w-full" onClick={() => setSheet(p)} disabled={soldOut}>
-                      {soldOut ? "Sin cupo" : "Configurar"}
+                      {soldOut ? "Sin cupo" : "Elegir opciones y comprar"}
                     </button>
                   ) : (
                     <button className="btn btn-ghost mt-2 w-full" onClick={() => setSheet(p)}>
@@ -621,7 +645,45 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
   );
 }
 
-/** Catálogo de talles de la textil con medidas de todas sus prendas. */
+/** Aviso sobre medidas en reposo (texto acordado con el cliente). */
+const MEASURE_NOTICE = "Las medidas corresponden a la prenda en reposo. Algunos tejidos deportivos contienen elastano y pueden expandirse. Si el talle sugerido es muy distinto al que usás habitualmente, acercate al club para probarte el muestrario antes de comprar.";
+
+/** Guía visual para medir una prenda propia y compararla con la tabla del producto. */
+function MeasureGuide() {
+  return (
+    <details className="mt-3 rounded-lg border border-line p-3">
+      <summary className="cursor-pointer text-sm font-semibold">Cómo medir una prenda</summary>
+      <div className="mt-3 grid gap-3 sm:grid-cols-[180px_1fr]">
+        <svg viewBox="0 0 240 150" className="w-full" role="img" aria-label="Remera y short apoyados: A es el ancho de axila a axila; B, el largo; C, el ancho de cintura; D, el largo del short">
+          <path d="M30 22 L52 12 Q65 22 78 12 L100 22 L114 44 L100 50 L98 130 L32 130 L30 50 L16 44 Z" fill="none" stroke="currentColor" strokeWidth="2" />
+          <line x1="32" y1="56" x2="98" y2="56" stroke="var(--club)" strokeWidth="2.5" markerStart="url(#ma)" markerEnd="url(#ma)" />
+          <text x="65" y="70" textAnchor="middle" fontSize="12" fontWeight="700" fill="currentColor">A</text>
+          <line x1="108" y1="14" x2="108" y2="130" stroke="var(--club)" strokeWidth="2.5" markerStart="url(#ma)" markerEnd="url(#ma)" />
+          <text x="119" y="76" fontSize="12" fontWeight="700" fill="currentColor">B</text>
+          <path d="M150 30 H222 L228 120 L194 124 L186 72 L178 124 L144 120 Z" fill="none" stroke="currentColor" strokeWidth="2" />
+          <line x1="150" y1="40" x2="222" y2="40" stroke="var(--club)" strokeWidth="2.5" markerStart="url(#ma)" markerEnd="url(#ma)" />
+          <text x="186" y="54" textAnchor="middle" fontSize="12" fontWeight="700" fill="currentColor">C</text>
+          <line x1="234" y1="30" x2="234" y2="120" stroke="var(--club)" strokeWidth="2.5" markerStart="url(#ma)" markerEnd="url(#ma)" />
+          <text x="222" y="140" fontSize="12" fontWeight="700" fill="currentColor">D</text>
+          <defs>
+            <marker id="ma" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 Z" fill="var(--club)" />
+            </marker>
+          </defs>
+        </svg>
+        <ol className="grid list-decimal gap-1 pl-5 text-sm">
+          <li>Apoyá una prenda que te quede bien sobre una superficie plana, sin arrugas.</li>
+          <li>Medí sin estirar la tela, en centímetros.</li>
+          <li><b>A · Ancho:</b> de axila a axila (sisa), de lado a lado. <b>B · Largo:</b> desde el punto más alto del hombro hasta el ruedo.</li>
+          <li><b>C · Ancho de cintura:</b> de lado a lado, con el elástico en reposo. <b>D · Largo:</b> desde la cintura hasta el ruedo.</li>
+          <li>Compará tus medidas con la tabla del producto y elegí el talle más cercano.</li>
+        </ol>
+      </div>
+    </details>
+  );
+}
+
+/** Catálogo de talles de la empresa con medidas de todas sus prendas. */
 const SIZE_GUIDE_URL = "/brand/guia-talles-wkr26.pdf";
 
 function SizeChart({ c }: { c: StoreComponent }) {
@@ -632,7 +694,13 @@ function SizeChart({ c }: { c: StoreComponent }) {
       Guía de talles Walkersport (PDF)
     </a>
   ) : null;
-  if (!hasMeasures) return guide;
+  if (!hasMeasures)
+    return sized ? (
+      <>
+        <p className="mt-2 text-xs text-muted">Este producto todavía no tiene medidas cargadas. Consultá el muestrario en el club antes de comprar.</p>
+        {guide}
+      </>
+    ) : null;
   return (
     <>
     <details className="mt-2">
@@ -673,7 +741,7 @@ function ProductSheet({ p, cfg, players, canBuy, onClose, onAdd }: { p: StorePro
   const [np, setNp] = useState({ name: "", sport: allowedSports[0] ?? "", category: "", team: "" });
   const [sel, setSel] = useState<Record<string, string>>({});
   const [qty, setQty] = useState(1);
-  const [img, setImg] = useState(0);
+  const [res, setRes] = useState<string>("FRONT");
   const [err, setErr] = useState<string | null>(null);
   const groups = sortGroups(p.optionGroups);
   const visible = groups.filter((g) => isVisible(g, sel));
@@ -716,22 +784,38 @@ function ProductSheet({ p, cfg, players, canBuy, onClose, onAdd }: { p: StorePro
     onAdd({ productId: p.id, playerKey: key, sizes, options, quantity: q }, newPlayer);
   }
 
-  const image = p.images[img];
+  // Tres recursos principales: frente, espalda y tabla de talles (además, detalles opcionales)
+  const front = p.images.find((i) => i.view === "FRONT") ?? p.images.find((i) => !["BACK", "SIZE_CHART"].includes(i.view)) ?? null;
+  const back = p.images.find((i) => i.view === "BACK") ?? null;
+  const chart = p.images.find((i) => i.view === "SIZE_CHART") ?? null;
+  const extraImages = p.images.filter((i) => i !== front && i !== back && i !== chart);
+  const resImage = res === "FRONT" ? front : res === "BACK" ? back : res === "SIZE_CHART" ? chart : extraImages[Number(res.slice(1))] ?? null;
   return (
     <Modal title={p.name} onClose={onClose}>
       <div className="grid gap-4 md:grid-cols-[220px_1fr]">
         <div>
-          <div className="relative aspect-square overflow-hidden rounded-lg bg-surface-2">
-            {image && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={image.url} alt={image.alt ?? p.name} className="h-full w-full object-cover" />
-            )}
-            {image && <span className="tag-photo">{TAG_LABEL[image.tag]}</span>}
+          <div className="mb-2 grid grid-cols-3 gap-1" role="tablist" aria-label="Recursos del producto">
+            {RESOURCES.map((r) => (
+              <button key={r.key} type="button" role="tab" aria-selected={res === r.key} onClick={() => setRes(r.key)} className={`rounded-md border px-1 py-1.5 text-xs font-bold ${res === r.key ? "border-club bg-club text-on-club" : "border-line"}`}>
+                {r.label}
+              </button>
+            ))}
           </div>
-          {p.images.length > 1 && (
+          <div className="relative aspect-square overflow-hidden rounded-lg bg-surface-2" role="tabpanel">
+            {resImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={resImage.url} alt={resImage.alt ?? `${p.name}: ${RESOURCES.find((r) => r.key === res)?.label}`} className={`h-full w-full ${res === "SIZE_CHART" ? "object-contain bg-white" : "object-cover"}`} />
+            ) : res === "SIZE_CHART" ? (
+              <div className="grid h-full place-items-center p-3 text-center text-sm text-muted">La tabla de talles está debajo, junto a cada talle, como tabla legible.</div>
+            ) : (
+              <div className="grid h-full place-items-center p-3 text-center text-sm text-muted">{res === "BACK" ? "Imagen de la espalda pendiente." : "Imagen pendiente."}</div>
+            )}
+            {resImage && <span className="tag-photo">{TAG_LABEL[resImage.tag]}</span>}
+          </div>
+          {extraImages.length > 0 && (
             <div className="mt-2 flex gap-2">
-              {p.images.map((im, i) => (
-                <button key={im.url + i} onClick={() => setImg(i)} aria-label={`Ver imagen ${i + 1}`} aria-pressed={i === img} className={`h-14 w-14 overflow-hidden rounded border-2 ${i === img ? "border-club" : "border-line"}`}>
+              {extraImages.map((im, i) => (
+                <button key={im.url + i} type="button" onClick={() => setRes(`X${i}`)} aria-label={`Ver detalle ${i + 1}`} aria-pressed={res === `X${i}`} className={`h-12 w-12 overflow-hidden rounded border-2 ${res === `X${i}` ? "border-club" : "border-line"}`}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={im.url} alt="" className="h-full w-full object-cover" />
                 </button>
@@ -789,6 +873,12 @@ function ProductSheet({ p, cfg, players, canBuy, onClose, onAdd }: { p: StorePro
           <SizeChart c={c} />
         </div>
       ))}
+      {p.components.some((c) => c.sizes.some((x) => x.group !== "OTHER")) && (
+        <>
+          <MeasureGuide />
+          <p className="mt-2 text-xs text-muted">{MEASURE_NOTICE}</p>
+        </>
+      )}
 
       {canBuy && (
         <>

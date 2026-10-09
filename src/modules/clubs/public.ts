@@ -30,10 +30,11 @@ export async function getClubStore(slug: string) {
     include: {
       sports: { include: { sport: true } },
       photos: { orderBy: { sort: "asc" } },
-      campaigns: { where: { status: { notIn: ["DRAFT", "ACTIVATION_REQUESTED", "ACTIVATION_APPROVED"] } }, orderBy: { opensAt: "desc" }, select: { id: true, slug: true, title: true, season: true, status: true, opensAt: true, closesAt: true, description: true, showCatalogWhenClosed: true, deliveryDaysMin: true, deliveryDaysMax: true, paymentMode: true, pricingModel: true, depositType: true, depositValue: true, faq: true, audience: true, audienceSports: { select: { name: true } }, audienceCategories: { select: { name: true, sport: { select: { name: true } } } }, products: { where: { active: true }, select: { productId: true } } } },
+      campaigns: { where: { status: { notIn: ["DRAFT", "ACTIVATION_REQUESTED", "ACTIVATION_APPROVED"] } }, orderBy: { opensAt: "desc" }, select: { id: true, slug: true, title: true, season: true, status: true, opensAt: true, closesAt: true, description: true, showCatalogWhenClosed: true, deliveryDaysMin: true, deliveryDaysMax: true, paymentMode: true, pricingModel: true, depositType: true, depositValue: true, faq: true, audience: true, audienceSports: { select: { name: true } }, audienceCategories: { select: { name: true, sport: { select: { name: true } } } }, products: { where: { active: true }, select: { productId: true, price: true } } } },
     },
   });
   if (!club || !club.active) return null;
+  // La hora del servidor decide qué está abierto, próximo o finalizado
   const now = new Date();
   // Todas las preventas abiertas, cada una con su alcance (el socio ve qué puede comprar)
   const openList = club.campaigns.filter((c) => c.status === "PUBLISHED" && c.closesAt > now && c.opensAt <= now).map((c) => ({ ...c, audienceText: audienceText(c) }));
@@ -45,23 +46,39 @@ export async function getClubStore(slug: string) {
     select: { id: true, code: true, name: true, description: true, catalogStatus: true, images: { orderBy: { sort: "asc" }, take: 1, select: { url: true, alt: true, tag: true } } },
   });
   // Producto en preventa → campaña abierta que lo vende (para enlazar y mostrar el cierre)
-  const saleOf = new Map<string, { slug: string; closesAt: Date; audienceText: string; audience: string }>();
-  for (const c of openList) for (const p of c.products) if (!saleOf.has(p.productId)) saleOf.set(p.productId, { slug: c.slug, closesAt: c.closesAt, audienceText: c.audienceText, audience: c.audience });
+  const saleOf = new Map<string, { slug: string; closesAt: Date; audienceText: string; audience: string; price: number }>();
+  for (const c of openList) for (const p of c.products) if (!saleOf.has(p.productId)) saleOf.set(p.productId, { slug: c.slug, closesAt: c.closesAt, audienceText: c.audienceText, audience: c.audience, price: p.price });
+  // Campañas programadas (abren más adelante) y productos de preventas ya finalizadas
+  const upcoming = club.campaigns.filter((c) => c.status === "PUBLISHED" && c.opensAt > now).map((c) => ({ ...c, audienceText: audienceText(c) }));
+  const upcomingOf = new Map<string, Date>();
+  for (const c of upcoming) for (const p of c.products) if (!upcomingOf.has(p.productId) || upcomingOf.get(p.productId)! > c.opensAt) upcomingOf.set(p.productId, c.opensAt);
+  const endedIds = new Set(club.campaigns.filter((c) => c.closesAt <= now && c.status !== "CANCELLED").flatMap((c) => c.products.map((p) => p.productId)));
   const openIds = new Set(openList.map((c) => c.id));
+  const upcomingIds = new Set(upcoming.map((c) => c.id));
   return {
-    club, current, openList, history: club.campaigns.filter((c) => !openIds.has(c.id)),
-    catalog: catalog.map((p) => ({ ...p, sale: saleOf.get(p.id) ?? null })), brandLine: await brandLineFor(club.id),
+    club, current, openList, upcoming, history: club.campaigns.filter((c) => !openIds.has(c.id) && !upcomingIds.has(c.id)),
+    catalog: catalog.map((p) => {
+      const sale = saleOf.get(p.id) ?? null;
+      const opensAt = upcomingOf.get(p.id) ?? null;
+      const state: StoreItemState = sale ? "ACTIVE" : opensAt || p.catalogStatus === "CATALOG" || !endedIds.has(p.id) ? "SOON" : "ENDED";
+      return { ...p, sale, opensAt, state };
+    }),
+    brandLine: await brandLineFor(club.id),
   };
 }
 
-export const CATALOG_PUBLIC_LABEL: Record<string, string> = { CATALOG: "Pendiente de preventa", PRESALE: "En preventa", PRESALE_CLOSED: "Preventa cerrada" };
+/** Estado público de un producto: activo (se compra), próximamente (atenuado, sin compra) o preventa finalizada. */
+export type StoreItemState = "ACTIVE" | "SOON" | "ENDED";
+export const ITEM_STATE_LABEL: Record<StoreItemState, string> = { ACTIVE: "En preventa", SOON: "Próximamente", ENDED: "Preventa finalizada" };
+
+export const CATALOG_PUBLIC_LABEL: Record<string, string> = { CATALOG: "Próximamente", PRESALE: "En preventa", PRESALE_CLOSED: "Preventa finalizada" };
 
 export type StoreSize = { label: string; group: string; a: number | null; b: number | null };
 export type StoreComponent = { label: string; garmentCode: string; garmentName: string; variant: string | null; material: string | null; care: string | null; measureA: string; measureB: string; unit: string; note: string | null; printTarget: boolean; sizes: StoreSize[] };
 export type StoreProduct = {
   id: string; code: string; name: string; kind: string; description: string | null; audience: string | null; sport: string | null; manufacturingTerms: string | null;
   price: number; listPrice: number | null; remaining: number | null;
-  /** Anticipo por prenda (precio textil). Null en campañas con seña heredada. */
+  /** Anticipo por prenda (precio de la empresa). Null en campañas con seña heredada. */
   textilPrice: number | null;
   /** Cobertura impositiva del anticipo (v2); el comprador no ve el desglose */
   clubTaxBp: number | null;

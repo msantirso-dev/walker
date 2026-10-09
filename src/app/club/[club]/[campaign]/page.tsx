@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getCampaignStore, clubTheme } from "@/modules/clubs/public";
-import { fmtDate } from "@/shared/dates";
+import { fmtDate, fmtDateTime } from "@/shared/dates";
 import { ars } from "@/shared/money";
 import { Bar } from "@/shared/ui";
 import { Countdown } from "../../_ui/countdown";
-import { ClubBar, Contact, DemoBanner, Faq, PlatformFooter, Steps, WindowLine } from "../../_ui/parts";
+import { StoreAccount, ClubBar, Contact, DemoBanner, Faq, PlatformFooter, Steps, WindowLine } from "../../_ui/parts";
 import { CHANGE_POLICY_TEXT, CHANGE_POLICY_UNPERSONALIZED } from "@/modules/catalog/options";
 import { MP_FINANCING_TEXT, SAMPLE_TEXT } from "@/shared/copy";
 import { StoreApp, type StoreConfig } from "./store-app";
@@ -65,6 +65,11 @@ export default async function CampaignPage({ params }: P) {
     audience: c.audience,
     audienceText: d.audience,
     demo: club.isDemo,
+    windowState: open ? "OPEN" : c.status === "PUBLISHED" && c.opensAt > new Date() ? "SOON" : "ENDED",
+    closesAt: c.closesAt.toISOString(),
+    closesAtText: fmtDateTime(c.closesAt),
+    opensAtText: fmtDateTime(c.opensAt),
+    serverNow: new Date().toISOString(),
     member: member ? { name: member.name, email: member.email, phone: member.phone, memberNumber: link?.memberNumber ?? null } : null,
     loginUrl: `/socios/ingresar?club=${club.slug}&next=${encodeURIComponent(`/club/${club.slug}/${c.slug}?checkout=1`)}`,
     policiesAnchor: "#condiciones",
@@ -77,7 +82,7 @@ export default async function CampaignPage({ params }: P) {
         <div className="hoops pointer-events-none absolute inset-0" aria-hidden />
         <div className="relative mx-auto grid max-w-6xl items-center gap-6 px-4 pb-10 pt-6 md:grid-cols-[1.25fr_1fr]">
           <div>
-            <ClubBar club={club} />
+            <div className="flex items-center justify-between gap-3"><ClubBar club={club} /><StoreAccount clubSlug={club.slug} back={`/club/${club.slug}/${c.slug}`} /></div>
             <p className="mt-6 inline-flex items-center gap-2 rounded-full border border-current/30 bg-white/10 px-3 py-1 text-sm font-semibold">
               <span aria-hidden className={`h-2 w-2 rounded-full ${open ? "bg-club-2" : "bg-current opacity-60"}`} />
               <WindowLine c={c} open={open} />
@@ -89,7 +94,7 @@ export default async function CampaignPage({ params }: P) {
               <div>
                 <dt className="text-sm opacity-80">Cierre</dt>
                 <dd className="font-display text-2xl font-bold uppercase">{fmtDate(c.closesAt)}</dd>
-                {open && <dd className="text-sm font-semibold"><Countdown to={c.closesAt.toISOString()} fallback={`Hasta el ${fmtDate(c.closesAt)}`} /></dd>}
+                {open && <dd className="text-sm font-semibold"><Countdown to={c.closesAt.toISOString()} fallback={`Hasta el ${fmtDate(c.closesAt)}`} serverNow={new Date().toISOString()} /></dd>}
               </div>
               <div><dt className="text-sm opacity-80">Entrega estimada</dt><dd className="font-display text-2xl font-bold">{c.deliveryDaysMin} a {c.deliveryDaysMax} días del cierre</dd></div>
               <div><dt className="text-sm opacity-80">{advance ? "Entrega" : "Para reservar"}</dt><dd className="font-display text-2xl font-bold">{advance ? "En el club" : depositText}</dd></div>
@@ -154,7 +159,12 @@ export default async function CampaignPage({ params }: P) {
                 ? `Para confirmar el pedido pagás el anticipo con Mercado Pago; lo cobra ${payments.receiver}. Si hay saldo, lo pagás directamente a ${club.name}: el retiro en la dirección dispuesta por el club se realiza solo contra pago total de la compra. ${MP_FINANCING_TEXT}`
                 : `${deposit ? `Seña de ${depositText} para confirmar; el saldo ${c.balanceDueText ?? "se paga antes del retiro"}` : "Pago total al comprar"}. Los pagos se acreditan a: ${payments.receiver}. Un comprobante cargado queda en revisión hasta su aprobación.`],
               ["Fabricación y entrega", `Se fabrica solo lo pedido en la ventana. Entrega estimada entre ${c.deliveryDaysMin} y ${c.deliveryDaysMax} días desde el cierre.${advance ? ` La producción completa se entrega en ${club.name}; no hay envío a domicilio.` : ""}${(advance || c.pickupEnabled) && club.pickupAddress ? ` Retiro en ${club.pickupAddress}.` : ""}`],
-              ["Cambios", [anyPersonalized ? `${CHANGE_POLICY_TEXT} ${CHANGE_POLICY_UNPERSONALIZED}` : null, c.policyChanges].filter(Boolean).join(" ") || null],
+              ["Cambios", [
+                anyPersonalized ? CHANGE_POLICY_TEXT : null,
+                c.policyLegendChanges ? `Prendas con leyenda de disciplina: ${c.policyLegendChanges}` : null,
+                c.policyPlainChanges ? `Productos sin personalizar: ${c.policyPlainChanges}` : anyPersonalized ? CHANGE_POLICY_UNPERSONALIZED : null,
+                c.policyChanges,
+              ].filter(Boolean).join(" ") || null],
               ["Cancelación", c.policyCancellation],
               ["Devoluciones", c.policyRefunds],
               ["Mínimo de producción", c.minPolicyText],

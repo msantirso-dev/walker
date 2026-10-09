@@ -59,7 +59,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       <Section title="Opciones del configurador">
         <p className="mb-3 text-sm text-muted">
           Grupos que ve el comprador, en orden: elección (ej. Personalización: Sin personalizar / Nombre y número), texto (nombre) o número. Un grupo puede mostrarse solo si en otro se eligió cierto valor.
-          Los adicionales son de la textil: en las campañas con anticipo, el recargo del club se aplica también sobre ellos y el anticipo los incluye. La "parte club" solo se usa en campañas del modelo anterior (seña).
+          Los adicionales son de la empresa: en las campañas con anticipo, el recargo del club se aplica también sobre ellos y el anticipo los incluye. La "parte club" solo se usa en campañas del modelo anterior (seña).
         </p>
         <div className="grid gap-3">
           {[...p.optionGroups, null].map((g) => {
@@ -91,7 +91,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                   <div className="field"><label htmlFor={`gpc-${key}`}>Parte club (solo modelo anterior)</label><input id={`gpc-${key}`} name="priceClub" className="input" inputMode="decimal" defaultValue={pesosInput(g?.priceClub ?? 0)} /></div>
                   <div className="field md:col-span-2"><label htmlFor={`gh-${key}`}>Ayuda</label><input id={`gh-${key}`} name="help" className="input" defaultValue={g?.help ?? ""} /></div>
                   <div className="field md:col-span-4">
-                    <label htmlFor={`gv-${key}`}>Valores (elección): una línea por valor · Etiqueta | precio textil | parte club (solo modelo anterior)</label>
+                    <label htmlFor={`gv-${key}`}>Valores (elección): una línea por valor · Etiqueta | precio de la empresa | parte club (solo modelo anterior)</label>
                     <textarea id={`gv-${key}`} name="values" className="input font-mono text-sm" rows={3} defaultValue={g?.values.filter((v) => v.active).map((v) => `${v.label} | ${pesosInput(v.priceTextil)} | ${pesosInput(v.priceClub)}`).join("\n") ?? ""} placeholder={"Nombre y número | 3000\nSolo número | 1500"} />
                   </div>
                   {choiceValues.length > 0 && (
