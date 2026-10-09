@@ -8,8 +8,8 @@ import { UserError } from "@/shared/errors";
 import { parsePesos } from "@/shared/money";
 import { parseArLocal } from "@/shared/dates";
 import { SLUG_RE, slugify } from "@/shared/slug";
-import { requireUser, assertCan, can, actorOf, clientIp } from "@/modules/auth";
-import { audit } from "@/modules/audit";
+import { requireWriter, assertCan, can, actorOf, clientIp } from "@/modules/auth";
+import { audit, diffFields } from "@/modules/audit";
 import {
   publishCampaign, closeCampaign, finishCampaign, cancelCampaign, decideMinimum, requestActivation, approveActivation, rejectActivation,
   setCampaignProductPrices, setProductRule, approveProductRule, setAudience, commitShortfall, createShortfallPurchase,
@@ -19,14 +19,14 @@ import { generateLot } from "@/modules/production";
 import type { CampaignAudience, MinDecision, ProductionRuleType } from "@/generated/prisma/client";
 
 async function manager() {
-  const u = await requireUser();
+  const u = await requireWriter();
   assertCan(u, "campaign.manage");
   return { u, actor: actorOf(u, await clientIp()) };
 }
 
 /** Textil (gestión total) o administrador del club dueño de la campaña (solicitud). */
 async function editor(campaignId: string) {
-  const u = await requireUser();
+  const u = await requireWriter();
   const c = await db.campaign.findUnique({ where: { id: campaignId }, select: { clubId: true } });
   if (!c) throw new UserError("Campaña inexistente.");
   if (!can(u, "campaign.manage") && !can(u, "campaign.request", c.clubId)) assertCan(u, "campaign.manage");
@@ -42,7 +42,7 @@ async function accountFor(clubId: string, accountId: string) {
 export async function createCampaign(_p: FormState, fd: FormData): Promise<FormState> {
   let id = "";
   const res = await run(async () => {
-    const u = await requireUser();
+    const u = await requireWriter();
     const clubId = u.role === "CLUB_ADMIN" ? (u.clubId ?? "") : str(fd, "clubId");
     if (!can(u, "campaign.manage") && !can(u, "campaign.request", clubId)) assertCan(u, "campaign.manage");
     const actor = actorOf(u, await clientIp());
@@ -131,22 +131,31 @@ export async function updateCampaign(id: string, _p: FormState, fd: FormData): P
       showCatalogWhenClosed: bool(fd, "showCatalogWhenClosed"), paymentAccountId: acc.id, paymentMode, depositType, depositValue,
       balanceDueText: opt(fd, "balanceDueText"), allowMercadoPago, allowTransfer, lotCondition: str(fd, "lotCondition") === "FULLY_PAID" ? "FULLY_PAID" : "DEPOSIT_APPROVED",
       pickupEnabled, pickupInstructions: opt(fd, "pickupInstructions"), shippingEnabled, shippingNotes: opt(fd, "shippingNotes"),
-      memberNumberMode: ["HIDDEN", "OPTIONAL", "REQUIRED"].includes(str(fd, "memberNumberMode")) ? str(fd, "memberNumberMode") : "OPTIONAL",
       policyChanges: opt(fd, "policyChanges"), policyCancellation: opt(fd, "policyCancellation"), policyRefunds: opt(fd, "policyRefunds"),
       minPolicyText: opt(fd, "minPolicyText"), faq: faqParse(str(fd, "faq")), ...nums,
     } as const;
     if (data.title.length < 3) throw new UserError("Escribí el título de la campaña.");
     if (data.minUnits && !data.minPolicyText) throw new UserError("Con mínimo de producción, explicá públicamente qué pasa si no se alcanza.");
-    let clubTaxBp = c.clubTaxBp;
-    if (c.pricingModel === "TEXTIL_ADVANCE" && str(fd, "clubTaxPercent")) {
-      const pct = Number(str(fd, "clubTaxPercent").replace(",", "."));
-      if (!Number.isFinite(pct) || pct < 0 || pct > 100) throw new UserError("La cobertura impositiva debe estar entre 0 % y 100 %.");
-      clubTaxBp = Math.round(pct * 100);
-    }
-    await db.campaign.update({ where: { id }, data: { ...data, clubTaxBp } });
+    // Deducciones sobre la diferencia del club que integran el anticipo (hipótesis 21 % + 3,5 %, pendiente de aprobación)
+    const pctBp = (k: string, def: number) => {
+      const raw = str(fd, k);
+      if (!raw) return def;
+      const pct = Number(raw.replace(",", "."));
+      if (!Number.isFinite(pct) || pct < 0 || pct > 100) throw new UserError("Cada deducción debe estar entre 0 % y 100 %.");
+      return Math.round(pct * 100);
+    };
+    const deductionBpA = advance ? pctBp("deductionA", c.deductionBpA) : c.deductionBpA;
+    const deductionBpB = advance ? pctBp("deductionB", c.deductionBpB) : c.deductionBpB;
+    const clubTaxBp = deductionBpA + deductionBpB;
+    if (clubTaxBp > 10000) throw new UserError("Las deducciones no pueden superar el 100 % de la diferencia del club.");
+    const deliveryDaysKind = (["PENDING", "CALENDAR", "BUSINESS"] as const).find((k) => k === str(fd, "deliveryDaysKind")) ?? c.deliveryDaysKind;
+    const tracked = { clubTaxBp, deductionBpA, deductionBpB, deliveryDaysKind, closesAt, opensAt, policyLegendChanges: opt(fd, "policyLegendChanges"), policyPlainChanges: opt(fd, "policyPlainChanges") };
+    const diff = diffFields(c as unknown as Record<string, unknown>, tracked);
+    await db.campaign.update({ where: { id }, data: { ...data, ...tracked } });
     await audit(actor, {
       entity: "Campaign", entityId: id, clubId: c.clubId, action: "campaign.updated",
       data: { deposit: [c.paymentMode, c.depositType, c.depositValue, "→", paymentMode, depositType, depositValue], closesAt: closesAt.toISOString(), receiver: acc.id },
+      before: diff.before, after: diff.after,
     });
     revalidatePath(`/admin/campanas/${id}`);
   });
@@ -318,7 +327,7 @@ export async function minDecisionAction(id: string, _p: FormState, fd: FormData)
 
 export async function settlementAction(id: string, _p: FormState, fd: FormData): Promise<FormState> {
   return run(async () => {
-    const u = await requireUser();
+    const u = await requireWriter();
     assertCan(u, "benefit.settle");
     const amount = parsePesos(str(fd, "amount"));
     const at = parseArLocal(`${str(fd, "date")}T12:00`);
@@ -332,7 +341,7 @@ export async function settlementAction(id: string, _p: FormState, fd: FormData):
 export async function generateLotAction(id: string, _p: FormState, _fd: FormData): Promise<FormState> {
   let lotId = "";
   const res = await run(async () => {
-    const u = await requireUser();
+    const u = await requireWriter();
     assertCan(u, "production.plan");
     const lot = await generateLot({ ...actorOf(u, await clientIp()), id: u.id }, id);
     lotId = lot.id;

@@ -13,6 +13,19 @@ export default async function ClubSheet({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   const u = await requireUser();
   const clubId = u.role === "TEXTIL_ADMIN" ? sp.club : u.clubId;
+  if (!clubId && u.role === "TEXTIL_ADMIN") {
+    const clubs = await db.club.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } });
+    return (
+      <>
+        <PageHeader eyebrow="Empresa" title="Planillas de clubes">Cobros del saldo, retiros y cancelaciones que comunica cada club.</PageHeader>
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {clubs.map((c) => (
+            <li key={c.id}><Link href={`/admin/planilla?club=${c.id}`} className="card block p-4 font-semibold hover:border-ink">{c.name}</Link></li>
+          ))}
+        </ul>
+      </>
+    );
+  }
   if (!clubId) notFound();
   const club = await db.club.findUnique({ where: { id: clubId } });
   if (!club || !canViewSheet(u, club)) notFound();
@@ -32,10 +45,10 @@ export default async function ClubSheet({ searchParams }: { searchParams: Promis
         actions={<a className="btn btn-ghost" href={`/api/admin/planilla?club=${clubId}${sp.campana ? `&campana=${sp.campana}` : ""}`}>Descargar (CSV)</a>}
       >
         {edit
-          ? "Tu copia de lo que se compró y quién. Acá anotás cobros del saldo, retiros y cancelaciones. Es tu registro: no modifica los pedidos ni los datos de la textil."
-          : "Registro propio del club (solo lectura para la textil). No afecta los pedidos ni los estados del sistema."}
+          ? "Lo que se compró y quién. Acá la empresa registra los cobros del saldo, retiros y cancelaciones que comunica el club. No modifica los pedidos."
+          : "Lo que se compró y quién, con los cobros, retiros y cancelaciones registrados. Para informar novedades, comunicate con la empresa."}
       </PageHeader>
-      {!club.managementPanel && <p className="notice notice-warn mb-4">La planilla está desactivada para este club (servicio adicional).</p>}
+      {!club.managementPanel && <p className="notice notice-info mb-4">El club no tiene habilitada la consulta de la planilla (servicio adicional). La empresa igual puede registrar novedades.</p>}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Pedidos" value={rows.length} />

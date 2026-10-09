@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/shared/db";
 import { run, str, opt, bool, type FormState } from "@/shared/actions";
 import { UserError } from "@/shared/errors";
-import { requireUser, assertCan, actorOf, clientIp } from "@/modules/auth";
+import { requireWriter, assertCan, actorOf, clientIp } from "@/modules/auth";
 import { audit } from "@/modules/audit";
 import { sealCredential, maskTail } from "@/modules/payments";
 
@@ -17,7 +17,7 @@ function bank(fd: FormData) {
 
 export async function createAccount(_p: FormState, fd: FormData): Promise<FormState> {
   return run(async () => {
-    const u = await requireUser();
+    const u = await requireWriter();
     assertCan(u, "clubs.manage");
     const clubId = opt(fd, "clubId");
     const data = bank(fd);
@@ -31,7 +31,7 @@ export async function createAccount(_p: FormState, fd: FormData): Promise<FormSt
 
 export async function updateAccount(id: string, _p: FormState, fd: FormData): Promise<FormState> {
   return run(async () => {
-    const u = await requireUser();
+    const u = await requireWriter();
     assertCan(u, "clubs.manage");
     const data: Record<string, unknown> = bank(fd);
     const token = str(fd, "mpAccessToken");

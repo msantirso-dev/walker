@@ -60,6 +60,8 @@ export async function dispatchShipment(actor: Actor, shipmentId: string, input: 
 
 /** El club confirma la recepción: los lotes pasan a "recibido por el club" y los pedidos quedan listos para retirar. */
 export async function receiveShipment(actor: Actor, clubIdOfUser: string | null, shipmentId: string, input: { receivedAt: Date; receivedBy: string; notes?: string | null }) {
+  // Confirmar la disponibilidad en el club es tarea de la empresa (el club la comunica; no la registra).
+  if (actor.role !== "TEXTIL_ADMIN" && actor.role !== "SYSTEM") throw new OrderError("La recepción en el club la confirma la empresa.");
   const s = await db.clubShipment.findUniqueOrThrow({ where: { id: shipmentId }, include: { lots: true } });
   if (clubIdOfUser && clubIdOfUser !== s.clubId) throw new OrderError("El envío no es de tu club.");
   if (s.status !== "DISPATCHED") throw new OrderError("El envío todavía no fue despachado.");

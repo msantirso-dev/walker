@@ -4,14 +4,14 @@ import { db } from "@/shared/db";
 import { run, str, type FormState } from "@/shared/actions";
 import { UserError } from "@/shared/errors";
 import { parsePesos } from "@/shared/money";
-import { requireUser, assertCan, actorOf, clientIp } from "@/modules/auth";
+import { requireWriter, assertCan, actorOf, clientIp } from "@/modules/auth";
 import { reviewTransfer, registerManualPayment, registerRefund } from "@/modules/payments";
 import { cancelOrder, cancelUnit, editUnit, resendOrderLink, type EditReason } from "@/modules/orders";
 import { deliverPending } from "@/modules/notifications";
 import type { PaymentKind } from "@/generated/prisma/client";
 
 async function ctx(orderId: string, cap: "orders.manage" | "payments.review" | "orders.view" = "orders.manage") {
-  const u = await requireUser();
+  const u = await requireWriter();
   const o = await db.order.findUnique({ where: { id: orderId }, select: { clubId: true } });
   if (!o) throw new UserError("Pedido inexistente.");
   assertCan(u, cap, o.clubId);

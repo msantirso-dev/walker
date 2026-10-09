@@ -56,7 +56,7 @@ export default async function CampaignOverview({ params }: { params: Promise<{ i
         <section className="card mb-6 p-5">
           <div className="eyebrow">Activación de la campaña</div>
           <p className="mt-1 text-sm text-muted">
-            El club arma la campaña (productos, precio al socio, alcance: {AUDIENCE_LABEL[c.audience]}) y solicita la activación. La textil la autoriza por separado. Con la autorización, se publica.
+            La empresa arma la campaña con lo acordado con el club (productos, precio al socio, alcance: {AUDIENCE_LABEL[c.audience]}), registra la autorización y la publica. El club la consulta.
           </p>
           {c.activationNote && <p className="notice notice-info mt-3 text-sm">Nota: {c.activationNote}</p>}
           {problems.length > 0 ? (
@@ -67,7 +67,7 @@ export default async function CampaignOverview({ params }: { params: Promise<{ i
           <div className="mt-4 flex flex-wrap gap-2">
             {c.status === "DRAFT" && requester && (
               <ActionForm action={activationAction.bind(null, id, "request")} className="flex flex-wrap items-end gap-2">
-                <input name="note" className="input w-64" placeholder="Comentario para la textil (opcional)" aria-label="Comentario" />
+                <input name="note" className="input w-64" placeholder="Comentario (opcional)" aria-label="Comentario" />
                 <SubmitButton className="btn btn-primary">Solicitar activación</SubmitButton>
               </ActionForm>
             )}
@@ -75,7 +75,7 @@ export default async function CampaignOverview({ params }: { params: Promise<{ i
               <ActionForm action={activationAction.bind(null, id, "approve")} className=""><SubmitButton className="btn btn-primary">Autorizar activación</SubmitButton></ActionForm>
             )}
             {manage && ["ACTIVATION_REQUESTED", "ACTIVATION_APPROVED"].includes(c.status) && (
-              <ConfirmAction label="Devolver al club" confirmLabel="La campaña vuelve a borrador con el motivo.">
+              <ConfirmAction label="Volver a borrador" confirmLabel="La campaña vuelve a borrador con el motivo.">
                 <ActionForm action={activationAction.bind(null, id, "reject")} className="grid gap-2">
                   <input name="reason" className="input" placeholder="Motivo" aria-label="Motivo" />
                   <SubmitButton className="btn btn-danger">Devolver</SubmitButton>

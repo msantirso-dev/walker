@@ -101,7 +101,7 @@ export async function decideMinimum(actor: Actor & { id: string }, id: string, d
 
 /** Métricas de una campaña (o de varias, si se pasa un filtro por club). */
 export async function campaignMetrics(campaignId: string) {
-  const [orders, units, components, players, inLots, settlements, cancelledUnits] = await Promise.all([
+  const [orders, units, components, players, inLots, settlements, cancelledUnits, sheets, purchases] = await Promise.all([
     db.order.findMany({
       where: { campaignId },
       select: { status: true, total: true, paidAmount: true, inReviewAmount: true, depositRequired: true, deliveryStatus: true, refundedAmount: true, pricingModel: true, advanceRequired: true, advancePaid: true, clubBalanceRequired: true },
@@ -118,7 +118,11 @@ export async function campaignMetrics(campaignId: string) {
     db.productionLotUnit.aggregate({ where: { lot: { campaignId, status: { not: "PENDING_APPROVAL" } } }, _sum: { delta: true } }),
     db.benefitSettlement.aggregate({ where: { campaignId }, _sum: { amount: true } }),
     db.orderUnit.findMany({ where: { status: "CANCELLED", order: { campaignId, confirmedAt: { not: null } } }, select: { benefitAmount: true } }),
+    db.clubOrderSheet.aggregate({ where: { order: { campaignId, status: "CONFIRMED" } }, _sum: { balancePaid: true } }),
+    db.clubPurchase.findMany({ where: { campaignId }, select: { agreedAmount: true, paidAmount: true, purposes: true, payments: { select: { amount: true } } } }),
   ]);
+  const purchaseAgreed = purchases.reduce((a, p) => a + (p.agreedAmount ?? 0), 0);
+  const purchasePaid = purchases.reduce((a, p) => a + p.payments.reduce((x, y) => x + y.amount, 0), 0);
 
   const confirmed = orders.filter((o) => o.status === "CONFIRMED");
   const unitsConfirmed = units.filter((u) => u.order.status === "CONFIRMED");
@@ -164,6 +168,13 @@ export async function campaignMetrics(campaignId: string) {
     advanceCollected: orders.reduce((a, o) => a + o.advancePaid, 0),
     // Saldo que corresponde al club (lo cobra el club fuera del sistema)
     clubBalanceDue: confirmed.filter((o) => o.pricingModel === "TEXTIL_ADVANCE").reduce((a, o) => a + o.clubBalanceRequired, 0),
+    // Pendientes de pago (anticipo todavía no aprobado)
+    pendingAdvance: orders.filter((o) => o.status === "PENDING_PAYMENT").reduce((a, o) => a + (o.pricingModel === "TEXTIL_ADVANCE" ? o.advanceRequired : o.depositRequired), 0),
+    // Saldo que la empresa registró como cobrado por el club (planilla)
+    clubBalanceCollected: sheets._sum.balancePaid ?? 0,
+    // Compras del club en esta campaña: acordado y pagado
+    clubPurchaseAgreed: purchaseAgreed,
+    clubPurchasePaid: purchasePaid,
     ordersClubPending: confirmed.filter((o) => o.pricingModel === "TEXTIL_ADVANCE" && o.clubBalanceRequired > 0).length,
     refundPending: orders.filter((o) => o.status === "CANCELLED").reduce((a, o) => a + o.paidAmount, 0),
     byProduct: [...byProduct.values()].sort((a, b) => b.confirmed - a.confirmed),

@@ -5,7 +5,7 @@ import { run, str, opt, type FormState } from "@/shared/actions";
 import { UserError } from "@/shared/errors";
 import { parseArLocal } from "@/shared/dates";
 import { parsePesos } from "@/shared/money";
-import { requireUser, assertCan, can, actorOf, clientIp } from "@/modules/auth";
+import { requireWriter, assertCan, can, actorOf, clientIp } from "@/modules/auth";
 import { createShipment, dispatchShipment, receiveShipment } from "@/modules/logistics";
 import type { CostBearer } from "@/generated/prisma/client";
 
@@ -13,7 +13,7 @@ const day = (v: string) => (v ? parseArLocal(`${v}T12:00`) : null);
 
 export async function createShipmentAction(campaignId: string, _p: FormState, fd: FormData): Promise<FormState> {
   return run(async () => {
-    const u = await requireUser();
+    const u = await requireWriter();
     assertCan(u, "shipments.manage");
     const bearer = str(fd, "costBearer") as CostBearer;
     await createShipment({ ...actorOf(u, await clientIp()), id: u.id }, campaignId, {
@@ -28,7 +28,7 @@ export async function createShipmentAction(campaignId: string, _p: FormState, fd
 
 export async function dispatchAction(campaignId: string, shipmentId: string, _p: FormState, fd: FormData): Promise<FormState> {
   return run(async () => {
-    const u = await requireUser();
+    const u = await requireWriter();
     assertCan(u, "shipments.manage");
     const at = day(str(fd, "dispatchedAt"));
     if (!at) throw new UserError("Indicá la fecha de despacho.");
@@ -40,7 +40,7 @@ export async function dispatchAction(campaignId: string, shipmentId: string, _p:
 
 export async function receiveAction(campaignId: string, shipmentId: string, _p: FormState, fd: FormData): Promise<FormState> {
   return run(async () => {
-    const u = await requireUser();
+    const u = await requireWriter();
     const s = await db.clubShipment.findUnique({ where: { id: shipmentId }, select: { clubId: true } });
     if (!s) throw new UserError("Envío inexistente.");
     assertCan(u, "lot.receive", s.clubId);

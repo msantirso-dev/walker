@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db } from "@/shared/db";
 import { run, str, opt, type FormState } from "@/shared/actions";
 import { UserError } from "@/shared/errors";
-import { requireUser, assertCan, actorOf, clientIp, hashPassword } from "@/modules/auth";
+import { requireWriter, assertCan, actorOf, clientIp, hashPassword } from "@/modules/auth";
 import { audit } from "@/modules/audit";
 
 const schema = z.object({
@@ -17,7 +17,7 @@ const schema = z.object({
 
 export async function createUser(_p: FormState, fd: FormData): Promise<FormState> {
   return run(async () => {
-    const u = await requireUser();
+    const u = await requireWriter();
     assertCan(u, "clubs.manage");
     const d = schema.parse({ name: str(fd, "name"), email: str(fd, "email"), role: str(fd, "role"), clubId: opt(fd, "clubId"), password: str(fd, "password") });
     if ((d.role === "CLUB_ADMIN" || d.role === "DELIVERY") && !d.clubId) throw new UserError("Los usuarios de club necesitan un club asignado.");
@@ -31,7 +31,7 @@ export async function createUser(_p: FormState, fd: FormData): Promise<FormState
 }
 
 export async function toggleUser(userId: string) {
-  const u = await requireUser();
+  const u = await requireWriter();
   assertCan(u, "clubs.manage");
   if (userId === u.id) return;
   const t = await db.user.findUnique({ where: { id: userId } });
@@ -44,7 +44,7 @@ export async function toggleUser(userId: string) {
 
 export async function resetPassword(userId: string, _p: FormState, fd: FormData): Promise<FormState> {
   return run(async () => {
-    const u = await requireUser();
+    const u = await requireWriter();
     assertCan(u, "clubs.manage");
     const pw = str(fd, "password");
     if (pw.length < 10) throw new UserError("La contraseña debe tener al menos 10 caracteres.");

@@ -50,11 +50,30 @@ export default async function ClubDetail({ params, searchParams }: { params: Pro
       <Tabs items={tabs} current={tab} />
 
       {tab === "perfil" && textil && (
-        <ActionForm action={setManagementPanel.bind(null, id)} className="card mb-6 flex flex-wrap items-center gap-4 p-4">
-          <label className="flex items-center gap-2 font-semibold"><input type="checkbox" name="managementPanel" defaultChecked={club.managementPanel} className="h-5 w-5" /> Planilla de gestión del club (servicio adicional)</label>
-          <span className="text-sm text-muted">El club ve lo que se compró y quién, y anota cobros y retiros. Lo que carga no modifica los datos del sistema.</span>
-          <SubmitButton className="btn btn-ghost btn-sm">Guardar</SubmitButton>
-          {club.managementPanel && <Link href={`/admin/planilla?club=${id}`} className="text-sm underline">Ver planilla</Link>}
+        <ActionForm action={setManagementPanel.bind(null, id)} className="card mb-6 grid gap-4 p-4 md:grid-cols-3 md:items-end">
+          <label className="flex items-center gap-2 font-semibold md:col-span-3"><input type="checkbox" name="managementPanel" defaultChecked={club.managementPanel} className="h-5 w-5" /> El club consulta su planilla de gestión (servicio adicional)</label>
+          <div className="field">
+            <label htmlFor="memberNumberMode">Número de socio en la tienda</label>
+            <select id="memberNumberMode" name="memberNumberMode" className="input" defaultValue={club.memberNumberMode}>
+              <option value="HIDDEN">No pedir</option>
+              <option value="OPTIONAL">Opcional</option>
+              <option value="REQUIRED">Obligatorio</option>
+            </select>
+            <small>Lo declara el socio; no equivale a una membresía validada.</small>
+          </div>
+          <div className="field">
+            <label htmlFor="debtBlockScope">Bloqueo por deuda de compras adicionales</label>
+            <select id="debtBlockScope" name="debtBlockScope" className="input" defaultValue={club.debtBlockScope ?? ""}>
+              <option value="">Usar el valor de la marca</option>
+              <option value="ADDITIONAL_ONLY">Solo las unidades adicionales</option>
+              <option value="WHOLE_SHIPMENT">Todo el despacho</option>
+            </select>
+            <small>Decisión comercial explícita.</small>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <SubmitButton className="btn btn-ghost">Guardar</SubmitButton>
+            {club.managementPanel && <Link href={`/admin/planilla?club=${id}`} className="text-sm underline">Ver planilla</Link>}
+          </div>
         </ActionForm>
       )}
       {tab === "perfil" && <ClubForm action={updateClub.bind(null, id)} club={club} canSlug={textil} />}

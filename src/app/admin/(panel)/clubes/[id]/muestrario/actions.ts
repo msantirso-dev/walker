@@ -4,12 +4,12 @@ import { run, str, opt, int, type FormState } from "@/shared/actions";
 import { UserError } from "@/shared/errors";
 import { parseArLocal } from "@/shared/dates";
 import { parsePesos } from "@/shared/money";
-import { requireUser, assertCan, actorOf, clientIp } from "@/modules/auth";
+import { requireWriter, assertCan, actorOf, clientIp } from "@/modules/auth";
 import { saveSampleSet, setProductSampleLink, savePurchase, approvePurchase } from "@/modules/samples";
 import type { PurchasePurpose, SampleAvailability, SampleKind } from "@/generated/prisma/client";
 
 async function manager() {
-  const u = await requireUser();
+  const u = await requireWriter();
   assertCan(u, "samples.manage");
   return { u, actor: { ...actorOf(u, await clientIp()), id: u.id, role: u.role } };
 }

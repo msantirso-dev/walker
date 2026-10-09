@@ -119,7 +119,7 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
           )}
           <p className="text-sm text-muted">
             {advance
-              ? `El precio textil lo fija la textil. El club fija el precio al socio (directo o con recargo %), nunca menor al textil. El anticipo que paga el comprador por Mercado Pago es el precio textil más ${c.clubTaxBp / 100} % de la diferencia (cobertura impositiva: la venta total la factura el fabricante); el resto es el saldo que cobra el club. El comprador ve solo anticipo y saldo. Si completás el recargo, se usa en lugar del precio directo. Los pedidos hechos conservan su precio.`
+              ? `El precio textil lo fija la textil. El club fija el precio al socio (directo o con recargo %), nunca menor al textil. El anticipo que paga el comprador por Mercado Pago es el precio de la empresa más ${String(c.clubTaxBp / 100).replace(".", ",")} % de la diferencia del club (deducciones, hipótesis pendiente); el resto es el saldo que cobra el club. El comprador ve solo anticipo y saldo. Si completás el recargo, se usa en lugar del precio directo. Los pedidos hechos conservan su precio.`
               : "El precio de lista solo se muestra tachado si es mayor que el de preventa. El cupo por producto es opcional; sin cupo no se muestra disponibilidad."}
           </p>
           <SubmitButton className="btn btn-primary justify-self-start">Guardar colección</SubmitButton>
@@ -270,6 +270,16 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
             <div className="field"><label htmlFor="closesAt">Cierre (hora Argentina)</label><input id="closesAt" name="closesAt" type="datetime-local" className="input" defaultValue={toArLocal(c.closesAt)} /></div>
             <div className="field"><label htmlFor="deliveryDaysMin">Entrega: desde (días del cierre)</label><input id="deliveryDaysMin" name="deliveryDaysMin" type="number" className="input" defaultValue={c.deliveryDaysMin} /></div>
             <div className="field"><label htmlFor="deliveryDaysMax">Entrega: hasta (días del cierre)</label><input id="deliveryDaysMax" name="deliveryDaysMax" type="number" className="input" defaultValue={c.deliveryDaysMax} /></div>
+            <div className="field">
+              <label htmlFor="deliveryDaysKind">Tipo de días del plazo</label>
+              <select id="deliveryDaysKind" name="deliveryDaysKind" className="input" defaultValue={c.deliveryDaysKind}>
+                <option value="PENDING">A confirmar (se informa así)</option>
+                <option value="CALENDAR">Corridos</option>
+                <option value="BUSINESS">Hábiles</option>
+              </select>
+            </div>
+            <T name="policyLegendChanges" label="Cambios: prendas con leyenda de disciplina" value={c.policyLegendChanges} hint="Según lo acordado con el club. Si queda vacío, la tienda indica que se consulta con el club." />
+            <T name="policyPlainChanges" label="Cambios: productos sin personalizar" value={c.policyPlainChanges} hint="Según lo acordado con el club." />
             {advance ? (
               <p className="text-sm text-muted md:col-span-2">Entrega consolidada al club: sin envío a domicilio. El envío textil → club se registra en Logística.</p>
             ) : (
@@ -286,10 +296,20 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
           <fieldset className="card grid gap-4 p-5 md:grid-cols-2">
             <legend className="px-1 font-display text-lg font-bold uppercase">Cobro</legend>
             {advance && (
-              <div className="field md:col-span-2">
-                <label htmlFor="clubTaxPercent">Cobertura impositiva sobre la diferencia del club (%)</label>
-                <input id="clubTaxPercent" name="clubTaxPercent" className="input" inputMode="decimal" defaultValue={String(c.clubTaxBp / 100).replace(".", ",")} />
-                <small>Se suma al anticipo (21 % + 3 % = 24 % por defecto). Rige para pedidos nuevos; no se muestra desglosada al comprador.</small>
+              <div className="grid gap-3 md:col-span-2 md:grid-cols-2">
+                <p className="notice notice-warn md:col-span-2">
+                  <b>Hipótesis pendiente de aprobación.</b> Anticipo = precio de la empresa + deducciones sobre la diferencia del club. Falta confirmar las bases de cada porcentaje, a quién corresponde la deducción y cómo se liquida. No se denomina impuesto.
+                </p>
+                <div className="field">
+                  <label htmlFor="deductionA">Deducción 1 sobre la diferencia (%)</label>
+                  <input id="deductionA" name="deductionA" className="input" inputMode="decimal" defaultValue={String(c.deductionBpA / 100).replace(".", ",")} />
+                  <small>Hipótesis: 21 %.</small>
+                </div>
+                <div className="field">
+                  <label htmlFor="deductionB">Deducción 2 sobre la diferencia (%)</label>
+                  <input id="deductionB" name="deductionB" className="input" inputMode="decimal" defaultValue={String(c.deductionBpB / 100).replace(".", ",")} />
+                  <small>Hipótesis: 3,5 %. Total actual {String(c.clubTaxBp / 100).replace(".", ",")} %. Rige para pedidos nuevos; el comprador ve solo anticipo y saldo.</small>
+                </div>
               </div>
             )}
             <div className="field md:col-span-2">
@@ -338,16 +358,7 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
 
           <fieldset className="card grid gap-4 p-5 md:grid-cols-2">
             <legend className="px-1 font-display text-lg font-bold uppercase">Formulario y políticas</legend>
-            <div className="field">
-              <label htmlFor="memberNumberMode">Número de socio</label>
-              <select id="memberNumberMode" name="memberNumberMode" className="input" defaultValue={c.memberNumberMode}>
-                <option value="HIDDEN">No pedir</option>
-                <option value="OPTIONAL">Opcional (declarativo)</option>
-                <option value="REQUIRED">Obligatorio (declarativo)</option>
-              </select>
-              <small>Es un dato declarado por el comprador; no se presenta como verificado.</small>
-            </div>
-            <div />
+            <p className="text-sm text-muted md:col-span-2">El número de socio se configura en el club (Clubes → perfil).</p>
             <T name="policyChanges" label="Política de cambios" value={c.policyChanges} />
             <T name="policyCancellation" label="Política de cancelación" value={c.policyCancellation} />
             <T name="policyRefunds" label="Política de devoluciones" value={c.policyRefunds} />

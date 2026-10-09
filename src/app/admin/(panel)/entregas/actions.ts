@@ -4,13 +4,13 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/shared/db";
 import { run, str, type FormState } from "@/shared/actions";
 import { UserError } from "@/shared/errors";
-import { requireUser, actorOf, clientIp, clubScope, can } from "@/modules/auth";
+import { requireWriter, actorOf, clientIp, clubScope, can } from "@/modules/auth";
 import { registerDelivery, normalizePickupCode } from "@/modules/deliveries";
 import { deliverPending } from "@/modules/notifications";
 
 export async function deliverAction(orderId: string, _p: FormState, fd: FormData): Promise<FormState> {
   return run(async () => {
-    const u = await requireUser();
+    const u = await requireWriter();
     await registerDelivery(u, actorOf(u, await clientIp()), orderId, {
       unitIds: fd.getAll("unit").map(String),
       receivedByName: str(fd, "receivedByName"),
@@ -27,7 +27,7 @@ export async function deliverAction(orderId: string, _p: FormState, fd: FormData
 export async function findByCodeAction(_p: FormState, fd: FormData): Promise<FormState> {
   let target = "";
   const res = await run(async () => {
-    const u = await requireUser();
+    const u = await requireWriter();
     if (!can(u, "deliveries.register")) throw new UserError("Sin permiso.");
     const raw = str(fd, "code");
     const pickup = normalizePickupCode(raw);

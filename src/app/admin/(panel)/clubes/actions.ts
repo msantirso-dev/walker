@@ -7,8 +7,8 @@ import { run, str, opt, bool, fileBuf, type FormState } from "@/shared/actions";
 import { UserError } from "@/shared/errors";
 import { isHex } from "@/shared/colors";
 import { SLUG_RE, slugify } from "@/shared/slug";
-import { requireUser, assertCan, actorOf, clientIp } from "@/modules/auth";
-import { audit } from "@/modules/audit";
+import { requireWriter, assertCan, actorOf, clientIp } from "@/modules/auth";
+import { audit, diffFields } from "@/modules/audit";
 import { saveImage } from "@/modules/storage";
 
 const profile = z.object({
@@ -45,7 +45,7 @@ function readProfile(fd: FormData) {
 export async function createClub(_p: FormState, fd: FormData): Promise<FormState> {
   let id = "";
   const res = await run(async () => {
-    const u = await requireUser();
+    const u = await requireWriter();
     assertCan(u, "clubs.manage");
     const data = readProfile(fd);
     const slug = str(fd, "slug") || slugify(data.name);
@@ -61,7 +61,7 @@ export async function createClub(_p: FormState, fd: FormData): Promise<FormState
 
 export async function updateClub(clubId: string, _p: FormState, fd: FormData): Promise<FormState> {
   return run(async () => {
-    const u = await requireUser();
+    const u = await requireWriter();
     assertCan(u, "club.profile", clubId);
     const data = readProfile(fd);
     const extra: Record<string, unknown> = {};
@@ -87,7 +87,7 @@ export async function updateClub(clubId: string, _p: FormState, fd: FormData): P
 
 export async function setSports(clubId: string, _p: FormState, fd: FormData): Promise<FormState> {
   return run(async () => {
-    const u = await requireUser();
+    const u = await requireWriter();
     assertCan(u, "clubs.manage");
     const ids = fd.getAll("sport").map(String);
     const newSport = str(fd, "newSport");
@@ -102,7 +102,7 @@ export async function setSports(clubId: string, _p: FormState, fd: FormData): Pr
 
 export async function addCategory(clubId: string, _p: FormState, fd: FormData): Promise<FormState> {
   return run(async () => {
-    const u = await requireUser();
+    const u = await requireWriter();
     assertCan(u, "club.profile", clubId);
     const name = str(fd, "name");
     if (name.length < 2 || name.length > 40) throw new UserError("Nombre de categoría inválido.");
@@ -117,7 +117,7 @@ export async function addCategory(clubId: string, _p: FormState, fd: FormData): 
 }
 
 export async function toggleCategory(clubId: string, categoryId: string) {
-  const u = await requireUser();
+  const u = await requireWriter();
   assertCan(u, "club.profile", clubId);
   const c = await db.category.findFirst({ where: { id: categoryId, clubId } });
   if (c) await db.category.update({ where: { id: c.id }, data: { active: !c.active } });
@@ -126,7 +126,7 @@ export async function toggleCategory(clubId: string, categoryId: string) {
 
 export async function addPhoto(clubId: string, _p: FormState, fd: FormData): Promise<FormState> {
   return run(async () => {
-    const u = await requireUser();
+    const u = await requireWriter();
     assertCan(u, "club.profile", clubId);
     const f = await fileBuf(fd, "photo");
     if (!f) throw new UserError("Elegí una imagen.");
@@ -139,7 +139,7 @@ export async function addPhoto(clubId: string, _p: FormState, fd: FormData): Pro
 }
 
 export async function removePhoto(clubId: string, photoId: string) {
-  const u = await requireUser();
+  const u = await requireWriter();
   assertCan(u, "club.profile", clubId);
   await db.clubPhoto.deleteMany({ where: { id: photoId, clubId } });
   revalidatePath(`/admin/clubes/${clubId}`);
@@ -148,12 +148,18 @@ export async function removePhoto(clubId: string, photoId: string) {
 /** Servicio adicional: planilla de gestión propia del club (no afecta los datos del sistema). */
 export async function setManagementPanel(clubId: string, _p: FormState, fd: FormData): Promise<FormState> {
   return run(async () => {
-    const u = await requireUser();
+    const u = await requireWriter();
     assertCan(u, "clubs.manage");
-    const on = bool(fd, "managementPanel");
-    await db.club.update({ where: { id: clubId }, data: { managementPanel: on } });
-    await audit(actorOf(u, await clientIp()), { entity: "Club", entityId: clubId, clubId, action: "club.management_panel", data: { on } });
+    const prev = await db.club.findUniqueOrThrow({ where: { id: clubId } });
+    const next = {
+      managementPanel: bool(fd, "managementPanel"),
+      memberNumberMode: (["HIDDEN", "OPTIONAL", "REQUIRED"] as const).find((m) => m === str(fd, "memberNumberMode")) ?? prev.memberNumberMode,
+      debtBlockScope: (["ADDITIONAL_ONLY", "WHOLE_SHIPMENT"] as const).find((m) => m === str(fd, "debtBlockScope")) ?? null,
+    };
+    const d = diffFields(prev as unknown as Record<string, unknown>, next);
+    await db.club.update({ where: { id: clubId }, data: next });
+    await audit(actorOf(u, await clientIp()), { entity: "Club", entityId: clubId, clubId, action: "club.settings", before: d.before, after: d.after });
     revalidatePath(`/admin/clubes/${clubId}`);
-    return on ? "Planilla de gestión activada para el club." : "Planilla de gestión desactivada.";
+    return "Configuración del club guardada.";
   });
 }

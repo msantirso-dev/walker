@@ -139,10 +139,10 @@ export async function activationProblems(campaignId: string): Promise<string[]> 
   return out;
 }
 
-function assertClubOrTextil(user: SessionUser, clubId: string) {
+/** Las campañas, precios y reglas los carga y modifica solo la empresa (el club es de consulta). */
+function assertClubOrTextil(user: SessionUser, _clubId: string) {
   if (user.role === "TEXTIL_ADMIN") return;
-  if (user.role === "CLUB_ADMIN" && user.clubId === clubId) return;
-  throw new OrderError("No tenés permiso sobre esta campaña.");
+  throw new OrderError("Solo la empresa modifica campañas y precios. El club las consulta.");
 }
 
 /** El club pide activar la campaña. No la publica: falta la autorización de la textil. */

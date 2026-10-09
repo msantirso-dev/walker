@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { requireUser, clubScope, can } from "@/modules/auth";
+import { requireUser, clubScope, can, isReadOnly } from "@/modules/auth";
+import { ClubHome } from "./club-home";
 import { campaignMetrics, CAMPAIGN_STATUS_LABEL, effectiveStatus } from "@/modules/campaigns";
 import { db } from "@/shared/db";
 import { expiringAgreements } from "@/modules/agreements";
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function Dashboard() {
   const u = await requireUser();
   if (u.role === "PRODUCTION") redirect("/admin/produccion");
-  if (u.role === "DELIVERY") redirect("/admin/entregas");
+  if (isReadOnly(u)) return <ClubHome u={u} />;
   const scope = clubScope(u);
 
   const campaigns = await db.campaign.findMany({
@@ -26,11 +27,7 @@ export default async function Dashboard() {
   const overCap = await db.order.count({ where: { ...scope, overCapacity: true, status: "CONFIRMED" } });
   const refundPending = await db.order.count({ where: { ...scope, status: "CANCELLED", paidAmount: { gt: 0 } } });
   const expiring = can(u, "agreements.manage") ? await expiringAgreements() : [];
-  const activations = await db.campaign.findMany({ where: { ...scope, status: u.role === "TEXTIL_ADMIN" ? "ACTIVATION_REQUESTED" : "ACTIVATION_APPROVED" }, select: { id: true, title: true, club: { select: { name: true } } } });
-  // Club con planilla: pedidos ya en el club que su planilla todavía no marca como entregados o cancelados
-  const clubPending = u.role !== "TEXTIL_ADMIN" && u.clubId
-    ? await db.order.count({ where: { clubId: u.clubId, club: { managementPanel: true }, pricingModel: "TEXTIL_ADVANCE", status: "CONFIRMED", deliveryStatus: { in: ["READY", "PARTIAL"] }, NOT: { clubSheet: { status: { in: ["DELIVERED", "CANCELLED"] } } } } })
-    : 0;
+  const activations = await db.campaign.findMany({ where: { ...scope, status: "ACTIVATION_REQUESTED" }, select: { id: true, title: true, club: { select: { name: true } } } });
 
   const tot = metrics.reduce(
     (a, m) => ({ collected: a.collected + m.collected, balance: a.balance + m.balanceDue, units: a.units + m.unitsConfirmed, review: a.review + m.inReview }),
@@ -47,11 +44,11 @@ export default async function Dashboard() {
         <Stat label="En revisión" value={<Money cents={tot.review} />} hint={`${reviewCount} comprobante(s)`} tone={reviewCount ? "warn" : undefined} />
       </div>
 
-      {(reviewCount > 0 || pendingLots > 0 || overCap > 0 || refundPending > 0 || expiring.length > 0 || activations.length > 0 || clubPending > 0) && (
+      {(reviewCount > 0 || pendingLots > 0 || overCap > 0 || refundPending > 0 || expiring.length > 0 || activations.length > 0) && (
         <div className="mt-6 grid gap-2">
           {activations.map((a) => (
             <Link key={a.id} href={`/admin/campanas/${a.id}`} className="notice notice-info font-semibold">
-              {u.role === "TEXTIL_ADMIN" ? `${a.club.name} solicitó activar “${a.title}”: revisá y autorizá →` : `“${a.title}” está autorizada: ya la podés publicar →`}
+              {`“${a.title}” (${a.club.name}) espera la autorización de activación →`}
             </Link>
           ))}
           {expiring.map((a) => (
@@ -59,7 +56,6 @@ export default async function Dashboard() {
               {`El acuerdo con ${a.club.name} ${a.daysLeft > 0 ? `vence en ${a.daysLeft} días (${fmtDate(a.endsAt)})` : "está vencido"} →`}
             </Link>
           ))}
-          {clubPending > 0 && <Link href="/admin/planilla" className="notice notice-warn font-semibold">{clubPending} pedido(s) en el club sin retiro anotado en tu planilla →</Link>}
           {reviewCount > 0 && can(u, "payments.review") && <Link href="/admin/pagos" className="notice notice-info font-semibold">Hay {reviewCount} comprobante(s) esperando revisión →</Link>}
           {pendingLots > 0 && <Link href="/admin/produccion" className="notice notice-warn font-semibold">Hay {pendingLots} lote(s) de producción pendientes de aprobación →</Link>}
           {overCap > 0 && <Link href="/admin/pedidos?alerta=cupo" className="notice notice-danger font-semibold">{overCap} pedido(s) confirmados fuera de cupo requieren una decisión →</Link>}

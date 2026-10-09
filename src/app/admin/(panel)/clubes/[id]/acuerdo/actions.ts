@@ -3,14 +3,14 @@ import { revalidatePath } from "next/cache";
 import { run, str, opt, bool, int, fileBuf, type FormState } from "@/shared/actions";
 import { UserError } from "@/shared/errors";
 import { parseArLocal } from "@/shared/dates";
-import { requireUser, assertCan, actorOf, clientIp } from "@/modules/auth";
+import { requireWriter, assertCan, actorOf, clientIp } from "@/modules/auth";
 import { saveAgreement } from "@/modules/agreements";
 import { saveContract } from "@/modules/storage";
 import type { AgreementStatus } from "@/generated/prisma/client";
 
 export async function saveAgreementAction(clubId: string, agreementId: string | null, _p: FormState, fd: FormData): Promise<FormState> {
   return run(async () => {
-    const u = await requireUser();
+    const u = await requireWriter();
     assertCan(u, "agreements.manage");
     const startsAt = parseArLocal(`${str(fd, "startsAt")}T00:00`);
     const endsAt = parseArLocal(`${str(fd, "endsAt")}T23:59`);

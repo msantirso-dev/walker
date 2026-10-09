@@ -16,6 +16,7 @@ import { ActionForm, ConfirmAction, SubmitButton } from "@/shared/ui/client";
 import { SheetForm } from "../../planilla/sheet-form";
 import { canEditSheet, SHEET_STATUS_LABEL } from "@/modules/clubsheet";
 import { cancelOrderAction, cancelUnitAction, editUnitAction, manualPaymentAction, refundAction, resendLinkAction, reviewAction } from "../actions";
+import { orderAdvanceSplit, paymentReconciliation } from "@/shared/advance";
 
 export const dynamic = "force-dynamic";
 const payTone: Record<string, Tone> = { APPROVED: "ok", IN_REVIEW: "info", PENDING: "warn", REJECTED: "danger", REFUNDED: "info" };
@@ -46,6 +47,7 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
   const productOf = new Map(catalog.map((p) => [p.id, p]));
   const lockedByLot = (x: (typeof o.units)[number]) => x.lotUnits.filter((l) => l.lot.status !== "PENDING_APPROVAL").reduce((a, l) => a + l.delta, 0) > 0;
   const adv = o.pricingModel === "TEXTIL_ADVANCE";
+  const split = orderAdvanceSplit(o.units);
   const st = adv ? advanceStates(o) : null;
   const balance = adv ? st!.clubDue : Math.max(0, o.total - o.paidAmount);
   const sheetEdit = adv && canEditSheet(u, o.club);
@@ -236,6 +238,18 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
                         {p.installments ? ` · ${p.installments} cuota(s)` : ""}
                       </div>
                     )}
+                    {adv && p.status === "APPROVED" && !p.simulated && p.method === "MERCADOPAGO" && (() => {
+                      const r = paymentReconciliation(p, split);
+                      return (
+                        <dl className="mt-1 grid grid-cols-2 gap-x-4 text-xs text-muted sm:grid-cols-5">
+                          <div><dt>Bruto cobrado</dt><dd className="num font-semibold text-ink"><Money cents={r.gross} /></dd></div>
+                          <div><dt>Comisión del proveedor</dt><dd className="num font-semibold text-ink">{r.fee != null ? <Money cents={r.fee} /> : "—"}</dd></div>
+                          <div><dt>Neto recibido</dt><dd className="num font-semibold text-ink">{r.net != null ? <Money cents={r.net} /> : "—"}</dd></div>
+                          <div><dt>Parte de la empresa</dt><dd className="num font-semibold text-ink"><Money cents={r.back} /></dd></div>
+                          <div><dt>Otros importes (deducciones)</dt><dd className="num font-semibold text-ink"><Money cents={r.other} /></dd></div>
+                        </dl>
+                      );
+                    })()}
                     {p.reviewNote && <div className="text-sm">{p.status === "REJECTED" ? "Motivo: " : "Nota: "}{p.reviewNote}</div>}
                   </div>
                   <Badge tone={payTone[p.status] ?? "muted"}>{PAYMENT_STATUS_LABEL[p.status]}</Badge>
@@ -264,19 +278,33 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
             ))}
           </div>
         )}
+        {adv && (
+          <div className="card mt-4 p-4">
+            <div className="font-bold">Composición del importe</div>
+            <dl className="num mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-3">
+              <div><dt className="text-muted">Precio final al socio (P)</dt><dd className="font-semibold"><Money cents={o.total} /></dd></div>
+              <div><dt className="text-muted">Precio de la empresa (B)</dt><dd className="font-semibold"><Money cents={split.back} /></dd></div>
+              <div><dt className="text-muted">Diferencia del club (G)</dt><dd className="font-semibold"><Money cents={o.total - split.back} /></dd></div>
+              <div><dt className="text-muted">Deducciones (D{o.clubTaxBp != null ? `, ${String(o.clubTaxBp / 100).replace(".", ",")} %` : ""})</dt><dd className="font-semibold"><Money cents={split.other} /></dd></div>
+              <div><dt className="text-muted">Anticipo online (A)</dt><dd className="font-semibold"><Money cents={o.advanceRequired} /></dd></div>
+              <div><dt className="text-muted">Saldo al club (S)</dt><dd className="font-semibold"><Money cents={o.clubBalanceRequired} /></dd></div>
+            </dl>
+            <p className="mt-2 text-xs text-muted">Valores congelados al comprar. Deducciones: hipótesis pendiente de aprobación; no se denominan impuesto.</p>
+          </div>
+        )}
         {adv && o.status === "CONFIRMED" && (
           <div className="card mt-4 p-4">
-            <div className="font-bold">Planilla del club</div>
-            <p className="mt-1 text-xs text-muted">El seguimiento del sistema termina con la producción en el club. El saldo (<Money cents={o.clubBalanceRequired} />) y el retiro los gestiona el club en su planilla, que no modifica este pedido.</p>
+            <div className="font-bold">Saldo y retiro en el club</div>
+            <p className="mt-1 text-xs text-muted">El saldo (<Money cents={o.clubBalanceRequired} />) se paga solo al club. La empresa registra acá lo que el club comunica (cobros, retiros, cancelaciones), sin modificar el pedido.</p>
             {sheetEdit ? (
               <div className="mt-3"><SheetForm orderId={o.id} sheet={sheet} balance={o.clubBalanceRequired} /></div>
             ) : sheet ? (
               <p className="mt-2 text-sm">
-                Según el club: <b>{SHEET_STATUS_LABEL[sheet.status]}</b>{sheet.balancePaid ? <> · cobrado <Money cents={sheet.balancePaid} /></> : null}
+                Registrado: <b>{SHEET_STATUS_LABEL[sheet.status]}</b>{sheet.balancePaid ? <> · cobrado <Money cents={sheet.balancePaid} /></> : null}
                 {sheet.deliveredTo ? ` · retiró ${sheet.deliveredTo}` : ""}{sheet.notes ? ` · ${sheet.notes}` : ""}
               </p>
             ) : (
-              <p className="mt-2 text-sm text-muted">{o.club.managementPanel ? "El club todavía no cargó datos." : "El club no tiene activada la planilla de gestión."}</p>
+              <p className="mt-2 text-sm text-muted">Sin novedades registradas.</p>
             )}
           </div>
         )}

@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "@/shared/db";
-import { audit, type Actor } from "@/modules/audit";
+import { audit, diffFields, type Actor } from "@/modules/audit";
 import { OrderError } from "@/modules/orders/pricing";
 import type { SessionUser } from "@/modules/auth";
 import type { ClubSheetStatus, LotStatus } from "@/generated/prisma/client";
@@ -31,12 +31,15 @@ export function systemStage(o: { status: string; units: { lotUnits: { delta: num
   return "En producción";
 }
 
-export function canEditSheet(user: SessionUser, club: { id: string; managementPanel: boolean }) {
-  return club.managementPanel && (user.role === "CLUB_ADMIN" || user.role === "DELIVERY") && user.clubId === club.id;
+/** La planilla la carga la empresa con las novedades y pagos externos que comunica el club. */
+export function canEditSheet(user: SessionUser, _club: { id: string; managementPanel: boolean }) {
+  return user.role === "TEXTIL_ADMIN";
 }
 
+/** El club la consulta (servicio adicional habilitado); la empresa siempre. */
 export function canViewSheet(user: SessionUser, club: { id: string; managementPanel: boolean }) {
-  return canEditSheet(user, club) || user.role === "TEXTIL_ADMIN";
+  if (user.role === "TEXTIL_ADMIN") return true;
+  return club.managementPanel && (user.role === "CLUB_ADMIN" || user.role === "DELIVERY") && user.clubId === club.id;
 }
 
 export type SheetInput = {
@@ -57,9 +60,12 @@ export async function saveSheet(user: SessionUser, actor: Actor, orderId: string
     deliveredAt: i.deliveredAt ?? (i.status === "DELIVERED" ? new Date() : null), deliveredTo: i.deliveredTo?.trim() || null, notes: i.notes?.trim() || null,
     updatedById: user.id,
   };
+  const prev = await db.clubOrderSheet.findUnique({ where: { orderId } });
   const s = await db.clubOrderSheet.upsert({ where: { orderId }, create: { ...data, orderId, clubId: o.clubId }, update: data });
-  // Se registra quién cargó qué en la planilla; no se toca el pedido
-  await audit(actor, { entity: "ClubOrderSheet", entityId: s.id, clubId: o.clubId, action: "clubsheet.updated", data: { order: o.code, status: i.status, balancePaid: i.balancePaid } });
+  // Se registra quién cargó qué (valor anterior y nuevo); no se toca el pedido
+  const { updatedById: _u, ...tracked } = data;
+  const d = diffFields((prev ?? {}) as Record<string, unknown>, tracked);
+  await audit(actor, { entity: "ClubOrderSheet", entityId: s.id, clubId: o.clubId, action: "clubsheet.updated", data: { order: o.code }, before: d.before, after: d.after });
   return s;
 }
 

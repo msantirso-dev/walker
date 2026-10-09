@@ -6,7 +6,7 @@ import { db } from "@/shared/db";
 import { run, str, opt, bool, int, fileBuf, type FormState } from "@/shared/actions";
 import { UserError } from "@/shared/errors";
 import { parsePesos } from "@/shared/money";
-import { requireUser, assertCan, actorOf, clientIp } from "@/modules/auth";
+import { requireWriter, assertCan, actorOf, clientIp } from "@/modules/auth";
 import { audit } from "@/modules/audit";
 import { saveImage } from "@/modules/storage";
 import type { SizeGroup } from "@/generated/prisma/client";
@@ -16,7 +16,7 @@ const CODE_RE = /^[A-Z0-9][A-Z0-9-]{1,29}$/;
 
 
 async function guard(clubId: string) {
-  const u = await requireUser();
+  const u = await requireWriter();
   assertCan(u, "catalog.manage");
   const club = await db.club.findUnique({ where: { id: clubId } });
   if (!club) throw new UserError("Club inexistente.");
