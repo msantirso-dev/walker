@@ -11,7 +11,16 @@ export const PROVIDER: Actor = { role: "PROVIDER" };
 /** Registra una operación sensible. Usa la transacción si se pasa. */
 export async function audit(
   actor: Actor,
-  entry: { entity: string; entityId: string; action: string; clubId?: string | null; data?: Prisma.InputJsonValue },
+  entry: {
+    entity: string;
+    entityId: string;
+    action: string;
+    clubId?: string | null;
+    data?: Prisma.InputJsonValue;
+    /** Modificaciones sensibles: valor anterior y nuevo de los campos que cambiaron */
+    before?: Prisma.InputJsonValue;
+    after?: Prisma.InputJsonValue;
+  },
   tx?: Tx,
 ) {
   const client = tx ?? db;
@@ -24,9 +33,26 @@ export async function audit(
       entityId: entry.entityId,
       action: entry.action,
       data: entry.data,
+      before: entry.before,
+      after: entry.after,
       ip: actor.ip ?? null,
     },
   });
+}
+
+/** Devuelve solo los campos que cambiaron, como { before, after }. */
+export function diffFields<T extends Record<string, unknown>>(prev: T, next: Partial<T>) {
+  const before: Record<string, unknown> = {};
+  const after: Record<string, unknown> = {};
+  for (const k of Object.keys(next)) {
+    const a = prev[k] instanceof Date ? (prev[k] as Date).toISOString() : prev[k];
+    const b = next[k] instanceof Date ? (next[k] as Date).toISOString() : next[k];
+    if (JSON.stringify(a ?? null) !== JSON.stringify(b ?? null)) {
+      before[k] = a ?? null;
+      after[k] = b ?? null;
+    }
+  }
+  return { before: before as Prisma.InputJsonValue, after: after as Prisma.InputJsonValue, changed: Object.keys(after).length > 0 };
 }
 
 export async function history(entity: string, entityId: string) {

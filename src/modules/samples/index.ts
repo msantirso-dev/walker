@@ -14,7 +14,7 @@ import type { PurchasePurpose, SampleAvailability, SampleKind } from "@/generate
 
 export const SAMPLE_KIND_LABEL: Record<SampleKind, string> = { TOP: "Prendas superiores", BOTTOM: "Prendas inferiores", OTHER: "Otra" };
 export const SAMPLE_AVAILABILITY_LABEL: Record<SampleAvailability, string> = { PENDING_DELIVERY: "Pendiente de entrega", AVAILABLE: "Disponible en el club", NOT_AVAILABLE: "No disponible" };
-export const PURPOSE_LABEL: Record<PurchasePurpose, string> = { SAMPLE: "Muestrario", INITIAL: "Compra inicial", BACKUP: "Respaldo para cambios" };
+export const PURPOSE_LABEL: Record<PurchasePurpose, string> = { SAMPLE: "Muestrario", INITIAL: "Compra inicial", BACKUP: "Respaldo para cambios", ADDITIONAL: "Compra adicional posterior al cierre" };
 /** Texto público, solo si el producto tiene una curva aprobada y disponible. */
 export { SAMPLE_TEXT as SAMPLE_PUBLIC_TEXT } from "@/shared/copy";
 

@@ -99,6 +99,10 @@ model Club {
   active         Boolean   @default(true)
   /// Servicio adicional: planilla de gestión propia del club (no afecta los datos del sistema)
   managementPanel Boolean @default(false)
+  /// Número de socio en el registro de la tienda: HIDDEN | OPTIONAL | REQUIRED (solo si el club lo configura)
+  memberNumberMode String  @default("HIDDEN")
+  /// Bloqueo por deuda del club para el despacho; null = valor por defecto de la marca
+  debtBlockScope DebtBlockScope?
   /// Club de demostración: la tienda muestra un aviso y solo admite pagos simulados.
   isDemo         Boolean   @default(false)
   createdAt      DateTime  @default(now())
@@ -119,6 +123,7 @@ model Club {
   purchases       ClubPurchase[]
   shipments       ClubShipment[]
   orderSheets     ClubOrderSheet[]
+  members         MemberClub[]
 }
 
 model ClubSport {
@@ -311,6 +316,7 @@ model Product {
   purchases         ClubPurchase[]
 
   @@unique([clubId, code])
+  purchaseItems     ClubPurchaseItem[]
 }
 
 /// Grupo de opciones del configurador (personalización, leyenda, etc.).
@@ -369,6 +375,7 @@ model ProductComponent {
 enum ImageView {
   FRONT
   BACK
+  SIZE_CHART // tabla o curva de talles como imagen (también se muestra como tabla legible)
   DETAIL
   OTHER
 }
@@ -456,8 +463,19 @@ model Campaign {
   audience            CampaignAudience @default(ALL)
   audienceSports      Sport[]         @relation("CampaignSports")
   audienceCategories  Category[]      @relation("CampaignCategories")
-  /// Cobertura impositiva que se suma al anticipo: % de la diferencia del club (2400 = 21 % + 3 %)
-  clubTaxBp           Int             @default(2400)
+  /// Deducciones sobre la diferencia del club que integran el anticipo (hipótesis pendiente de aprobación).
+  /// clubTaxBp = deductionBpA + deductionBpB (2450 = 21 % + 3,5 %).
+  clubTaxBp           Int             @default(2450)
+  deductionBpA        Int             @default(2100)
+  deductionBpB        Int             @default(350)
+  /// Si el plazo de 30 a 45 días es en días corridos o hábiles (pendiente de definición)
+  deliveryDaysKind    DeliveryDaysKind @default(PENDING)
+  /// Inicio real de producción (el previsto es el cierre)
+  productionStartedAt DateTime?
+  productionStartedById String?
+  /// Política de cambios para prendas con leyenda de disciplina y para productos sin personalizar (según acuerdo)
+  policyLegendChanges String?
+  policyPlainChanges  String?
   activationRequestedAt DateTime?
   activationRequestedById String?
   activationApprovedAt DateTime?
@@ -494,7 +512,7 @@ model Campaign {
   shippingPrice       Int             @default(0)
   shippingNotes       String?
   // Formulario
-  memberNumberMode    String          @default("OPTIONAL") // HIDDEN | OPTIONAL | REQUIRED
+  memberNumberMode    String          @default("OPTIONAL") // (modelo anterior) HIDDEN | OPTIONAL | REQUIRED
   // Políticas
   policyChanges       String?
   policyCancellation  String?
@@ -617,6 +635,12 @@ enum DeliveryStatus {
 }
 
 model Order {
+  /// Socio con cuenta que hizo el pedido (pedidos nuevos)
+  memberId            String?
+  member              Member?         @relation(fields: [memberId], references: [id])
+  /// Deducciones congeladas al comprar (centésimos de punto)
+  deductionBpA        Int?
+  deductionBpB        Int?
   id               String         @id @default(cuid())
   code             String         @unique // visible, aleatorio, no da acceso
   accessTokenHash  String         @unique // hash del enlace privado (búsqueda)
@@ -900,6 +924,7 @@ model ProductionLot {
   shipmentId  String?
   shipment    ClubShipment?       @relation(fields: [shipmentId], references: [id])
   units       ProductionLotUnit[]
+  purchaseItems ProductionLotPurchaseItem[]
 
   @@unique([campaignId, number])
 }
@@ -964,6 +989,9 @@ model AuditLog {
   entityId  String
   action    String
   data      Json?
+  /// Valores anteriores y nuevos en modificaciones sensibles
+  before    Json?
+  after     Json?
   ip        String?
   createdAt DateTime @default(now())
 
@@ -1068,6 +1096,25 @@ enum PurchasePurpose {
   SAMPLE // muestrario para probar talles
   INITIAL // compra inicial para garantizar producción
   BACKUP // unidades de respaldo para cambios
+  ADDITIONAL // compra adicional posterior al cierre (fuera de término, boutique, cambios)
+}
+
+enum AdditionalReason {
+  LATE_SALES // ventas fuera de término
+  BOUTIQUE // disponibilidad en boutique
+  SIZE_CHANGES // eventuales cambios de talle
+  OTHER
+}
+
+enum DebtBlockScope {
+  ADDITIONAL_ONLY // solo las unidades adicionales del club
+  WHOLE_SHIPMENT // todo el despacho
+}
+
+enum DeliveryDaysKind {
+  PENDING // a confirmar
+  CALENDAR // corridos
+  BUSINESS // hábiles
 }
 
 enum SizeDistributionStatus {
@@ -1088,6 +1135,11 @@ model ClubPurchase {
   committedQty       Int
   paidQty            Int                    @default(0)
   paidAmount         Int? // centavos, si corresponde
+  /// Compra adicional: importe acordado, vencimiento y motivos (negociado fuera de la web, registrado por la empresa)
+  agreedAmount       Int?
+  dueAt              DateTime?
+  reasons            AdditionalReason[]
+  payments           ClubPurchasePayment[]
   sizeStatus         SizeDistributionStatus @default(PENDING)
   approvedAt         DateTime?
   approvedById       String?
@@ -1104,8 +1156,39 @@ model ClubPurchaseItem {
   id         String       @id @default(cuid())
   purchaseId String
   purchase   ClubPurchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  productId  String?
+  product    Product?     @relation(fields: [productId], references: [id])
   sizeLabel  String
   quantity   Int
+  unitPrice  Int? // precio acordado por unidad (centavos)
+  lotItems   ProductionLotPurchaseItem[]
+}
+
+model ClubPurchasePayment {
+  id          String       @id @default(cuid())
+  purchaseId  String
+  purchase    ClubPurchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  amount      Int
+  paidAt      DateTime
+  method      String
+  reference   String?
+  notes       String?
+  createdById String
+  createdAt   DateTime     @default(now())
+
+  @@index([purchaseId])
+}
+
+/// Unidades de una compra del club incorporadas a un lote por una revisión aprobada (lote de ajuste)
+model ProductionLotPurchaseItem {
+  id             String           @id @default(cuid())
+  lotId          String
+  lot            ProductionLot    @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  purchaseItemId String
+  purchaseItem   ClubPurchaseItem @relation(fields: [purchaseItemId], references: [id])
+  quantity       Int
+
+  @@unique([lotId, purchaseItemId])
 }
 
 // ───────────────────────── Entrega consolidada al club ─────────────────────────
@@ -1178,5 +1261,108 @@ model ClubOrderSheet {
   updatedById  String?
   updatedAt    DateTime        @updatedAt
 
+  @@index([clubId])
+}
+
+// ───────────────────────── Marca y web comercial ─────────────────────────
+
+/// Marca de la empresa (una sola fila). Nombre, logo, colores y contacto configurables desde el panel.
+model BrandSettings {
+  id                  String          @id @default("brand")
+  name                String          @default("BACK")
+  tagline             String?
+  logoUrl             String?
+  colorPrimary        String          @default("#1D2B4F")
+  colorAccent         String          @default("#E9B949")
+  contactEmail        String?
+  whatsapp            String?
+  instagram           String?
+  aboutText           String?
+  /// Aprobación comercial de la fórmula del anticipo. Sin aprobación no se habilitan cobros reales.
+  formulaApprovedAt   DateTime?
+  formulaApprovedById String?
+  formulaNote         String?
+  debtBlockDefault    DebtBlockScope  @default(ADDITIONAL_ONLY)
+  updatedAt           DateTime        @updatedAt
+  updatedById         String?
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  CLOSED
+}
+
+/// Solicitud de reunión desde la web comercial
+model Lead {
+  id          String     @id @default(cuid())
+  name        String
+  clubName    String
+  role        String?
+  email       String
+  phone       String?
+  city        String?
+  message     String?
+  status      LeadStatus @default(NEW)
+  notes       String?
+  ip          String?
+  createdAt   DateTime   @default(now())
+  handledAt   DateTime?
+  handledById String?
+
+  @@index([status, createdAt])
+}
+
+// ───────────────────────── Socios (compradores con cuenta) ─────────────────────────
+
+model Member {
+  id           String          @id @default(cuid())
+  email        String          @unique
+  name         String
+  phone        String?
+  passwordHash String
+  createdAt    DateTime        @default(now())
+  lastLoginAt  DateTime?
+  sessions     MemberSession[]
+  clubs        MemberClub[]
+  orders       Order[]
+  resets       MemberPasswordReset[]
+}
+
+model MemberSession {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  memberId  String
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  ip        String?
+
+  @@index([memberId])
+}
+
+model MemberPasswordReset {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  memberId  String
+  member    Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+/// Asociación del socio a un club. No equivale a membresía validada: validatedAt la registra la empresa.
+model MemberClub {
+  id            String    @id @default(cuid())
+  memberId      String
+  member        Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  clubId        String
+  club          Club      @relation(fields: [clubId], references: [id])
+  memberNumber  String?
+  validatedAt   DateTime?
+  validatedById String?
+  createdAt     DateTime  @default(now())
+
+  @@unique([memberId, clubId])
   @@index([clubId])
 }
