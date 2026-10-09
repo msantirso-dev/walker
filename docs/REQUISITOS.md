@@ -1,6 +1,6 @@
 # Requisitos vigentes
 
-Fuente de verdad de reglas comerciales del proyecto. Versión 2 (07/10/2026), a partir de las definiciones de Fernando Demathias. Reemplaza los supuestos incompatibles de `ARQUITECTURA.md` (seña fija del 50 %, envíos individuales y mínimo único de producción).
+Fuente de verdad de reglas comerciales del proyecto. Versión 3 (09/10/2026, marca provisoria BACK): la sección 9 reemplaza a las anteriores cuando las contradice. Versión 2 (07/10/2026), a partir de las definiciones de Fernando Demathias; reemplaza los supuestos incompatibles de `ARQUITECTURA.md`.
 
 Convenciones: **[Confirmado]** regla del cliente; **[Provisional]** valor editable que el sistema usa mientras no haya definición; **[Pendiente]** decisión comercial abierta: el sistema no activa comportamientos que comprometan cobros, producción o promesas al comprador.
 
@@ -183,3 +183,26 @@ Verificación automática: **45/45** escenarios (`docs/VERIFICACION.md`): 28 del
 - La textil es **WKR Walkersport** (Instagram @walkersport, WhatsApp 11 3610 0004). Su logo (`public/brand/wkr.svg`) se usa en la portada, el panel, el pie de las tiendas y el remito; la plataforma toma su paleta grafito.
 - El piloto de Virreyes usa los **bocetos reales del catálogo "Outfit verano WKR27"**: remera algodón, musculosa run, bermuda, gorra, piluso, toallón, neceser, bolso (con número opcional) y poncho. Los precios siguen siendo de ejemplo y la tienda sigue rotulada como demostración, sujeta a aprobación del club.
 - Las medidas de remera (referencia Remera Run) y bermuda salen del **catálogo de talles WKR26**, que además se ofrece en PDF desde el selector de talle de cada prenda (`/brand/guia-talles-wkr26.pdf`).
+
+## 9. BACK: tercera revisión (09/10/2026)
+
+Reemplaza a las secciones anteriores cuando las contradice, en especial los **permisos del club** y la **composición del anticipo**. El análisis previo (cambios, cuatro áreas, reglas, hipótesis e impacto) está en [`ANALISIS-BACK.md`](ANALISIS-BACK.md).
+
+**Implementado**
+- Marca provisoria **BACK**, configurable desde el panel (nombre, logo, colores, contacto, texto de "Nosotros"). La línea pública del club pasa a ser "Club by BACK".
+- Web comercial con las 9 secciones, navegación Inicio · Propuesta · Nosotros · Contacto · Tu club, simulador (ingreso, unidades financiables = parte entera de ingreso ÷ precio de compra adicional, con supuestos visibles) y solicitudes de reunión en el panel.
+- Club **solo lectura**: toda acción del panel exige usuario de escritura; los módulos rechazan al club (precios, activación, publicación, cierre, pedidos, pagos, entregas, producción, recepción, planilla). El club consulta campañas y fechas, avance de ventas, pedidos, compradores y jugadores, pagos confirmados y pendientes, saldo a cobrar, resultado estimado, producción y entrega, y descarga el Excel de su club.
+- Socios con cuenta: exploran y arman el carrito sin sesión; inician sesión o se registran antes de pagar; el carrito se conserva en el navegador y el acceso vuelve a la misma tienda. Pedido asociado a club, campaña y socio. Número de socio solo si el club lo configura; asociarse no valida la membresía. "Mis pedidos" muestra solo los propios.
+- Anticipo A = B + D, D = (P − B) × (deducción 1 + deducción 2), por defecto 21 % + 3,5 %. Validaciones P ≥ B, A ≤ P, A + S = P, S ≥ 0; centavos enteros, redondeo al centavo con mitades hacia arriba. Deducciones congeladas en cada pedido. D nunca se denomina impuesto.
+- **Cobros reales bloqueados** hasta registrar la aprobación de la fórmula (Marca y fórmula). El simulador y las tiendas demo siguen funcionando.
+- Conciliación por pago: bruto, comisión del proveedor (costo de la empresa), neto, parte de la empresa y otros importes (deducciones).
+- Tienda: productos activos con precio, fecha y hora de cierre y cuenta regresiva (corregida por la hora del servidor, solo informativa); no activados atenuados con "Próximamente"; cerrados con "Preventa finalizada". El servidor decide si una compra es válida.
+- Producto con frente, espalda y tabla de talles (imagen y tabla legible), guía para medir una prenda y el aviso sobre medidas en reposo y elastano. Sin medidas cargadas, la tienda lo dice.
+- Confirmación con el texto acordado, número de pedido, importe abonado, saldo al club, cierre y ventana estimada. Inicio real de producción registrado (automático con el primer lote en producción o manual) y desvío informado. Estados de pago: aprobado, pendiente de confirmación, rechazado, cancelado; reintento sobre el mismo pedido.
+- Aviso de disponibilidad por correo con instrucciones de retiro; el saldo se paga exclusivamente al club.
+- Política de cambios: prendas con nombre o número sin cambio voluntario (aceptación registrada); defectos y errores de fabricación aparte; textos configurables por campaña para prendas con leyenda y productos sin personalizar.
+- Excel de 5 hojas (pedidos detallados por combinación homogénea, resumen por artículo y talle, personalizaciones por unidad, resumen económico, compras del club) para la empresa y el club autorizado. El reporte de fabricación por lote sigue sin datos personales.
+- Compra adicional del club posterior al cierre: productos, talles, cantidades, precio acordado, pagos, vencimiento, motivos y responsable; separada de las ventas a socios; se suma a producción con un lote de ajuste aprobado (el lote original no cambia); impaga no se despacha. Alcance del bloqueo configurable (solo adicionales o todo el despacho).
+- Historial con valor anterior y nuevo en precios, campaña, marca, configuración del club, planilla, compras y aprobaciones.
+
+**Pendiente de decisión** (ver detalle en el análisis): bases y destino de las deducciones del anticipo; días corridos o hábiles del plazo de 30 a 45 días (se muestra "a confirmar"); alcance definitivo del bloqueo por deuda; políticas de cambio para leyendas y productos sin personalizar; relación BACK–Walkersport, logo y colores definitivos; textos institucionales y contacto de BACK.

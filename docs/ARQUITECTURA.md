@@ -224,3 +224,22 @@ Las reglas, supuestos y definiciones pendientes están en `docs/REQUISITOS.md`. 
 | Integración con transportes y firma electrónica | No incluido (se registran como datos) |
 | Correos | Plantillas reales; envío **pendiente de SMTP** (se registra "no enviado" si falta) |
 | Devoluciones vía API de Mercado Pago | Pendiente (se registran manualmente) |
+
+## 8. BACK: cuatro áreas, socios y permisos (desde 09/10/2026)
+
+**Rutas**
+
+| Área | Rutas | Acceso |
+|---|---|---|
+| Web comercial | `/`, `/propuesta`, `/nosotros`, `/contacto`, `/tu-club` (grupo `src/app/(web)`) | Pública. "Tu club" redirige según la sesión: panel o "Mis pedidos". |
+| Panel compartido | `/admin/*` | Empresa: escritura. Club: solo lectura (inicio propio con saldo y resultado, campañas, pedidos, logística, compras del club, planilla si tiene el servicio, Excel). |
+| Tienda del socio | `/club/<club>`, `/club/<club>/<campaña>` | Pública; comprar exige sesión de socio. |
+| Socios | `/socios/ingresar`, `/socios/recuperar`, `/socios/restablecer/<token>`, `/mi-cuenta` | Cookie `back_socio` (30 días), separada de la del panel. |
+
+**Módulos nuevos**: `brand` (marca y aprobación de la fórmula, `getBrand()` memoizado por request), `leads` (solicitudes de reunión), `members` (cuentas, sesiones, asociación al club), `purchases` (compras adicionales, revisión del lote, bloqueo por deuda).
+
+**Permisos**: la matriz de capacidades deja al club solo con lectura (`campaign.view`, `orders.view`, `samples.view`, `benefit.view`, `reports.export`). Además, cada server action del panel arranca con `requireWriter()` y los módulos verifican el rol (precios, activación, publicación y cierre, pedidos, pagos, entregas, producción, recepción, planilla, compras), así que la restricción vale aunque se llame al servidor sin pasar por la interfaz. Las APIs del panel son de solo lectura (exportaciones).
+
+**Datos**: `BrandSettings` (una fila), `Lead`, `Member`, `MemberSession`, `MemberPasswordReset`, `MemberClub`; `Order.memberId` y deducciones congeladas; `Campaign` con dos deducciones, tipo de días del plazo, inicio real de producción y políticas de cambio por tipo; `Club.memberNumberMode` y `debtBlockScope`; `ClubPurchase` con importe acordado, vencimiento, motivos y pagos (`ClubPurchasePayment`); `ProductionLotPurchaseItem` para sumar unidades del club a un lote de ajuste; `ImageView.SIZE_CHART`; `AuditLog.before/after`. Migración `20261009000000_back_marca_socios_formula` (aditiva).
+
+**Hora del servidor**: la ventana de compra la decide `isWindowOpen` con la hora del servidor. Las cuentas regresivas reciben la hora del servidor y corrigen el desfase del dispositivo; son solo informativas.
