@@ -72,7 +72,7 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
               <thead>
                 <tr>
                   <th>Producto</th>
-                  {advance && <th>Precio textil (anticipo)</th>}
+                  {advance && <th>Precio de la empresa (anticipo)</th>}
                   <th>{advance ? "Precio al socio" : "Precio preventa"}</th>
                   {advance && <th>o recargo %</th>}
                   {advance && <th>Anticipo / saldo club</th>}
@@ -89,8 +89,8 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
                     {advance && (
                       <td>
                         {textil ? (
-                          <input name={`textil_${cp.id}`} className="input w-32" inputMode="decimal" defaultValue={pesosInput(cp.textilPrice)} aria-label="Precio textil" disabled={!editable} />
-                        ) : cp.textilPrice != null ? <Money cents={cp.textilPrice} /> : <span className="text-warn">Pendiente de la textil</span>}
+                          <input name={`textil_${cp.id}`} className="input w-32" inputMode="decimal" defaultValue={pesosInput(cp.textilPrice)} aria-label="Precio de la empresa" disabled={!editable} />
+                        ) : cp.textilPrice != null ? <Money cents={cp.textilPrice} /> : <span className="text-warn">Pendiente de la empresa</span>}
                       </td>
                     )}
                     <td><input name={`price_${cp.id}`} className="input w-32" inputMode="decimal" defaultValue={pesosInput(cp.price)} aria-label="Precio al socio" disabled={advance && !editable} /></td>
@@ -119,7 +119,7 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
           )}
           <p className="text-sm text-muted">
             {advance
-              ? `El precio textil lo fija la textil. El club fija el precio al socio (directo o con recargo %), nunca menor al textil. El anticipo que paga el comprador por Mercado Pago es el precio de la empresa más ${String(c.clubTaxBp / 100).replace(".", ",")} % de la diferencia del club (deducciones, hipótesis pendiente); el resto es el saldo que cobra el club. El comprador ve solo anticipo y saldo. Si completás el recargo, se usa en lugar del precio directo. Los pedidos hechos conservan su precio.`
+              ? `El precio de la empresa lo fija la empresa. El club fija el precio al socio (directo o con recargo %), nunca menor al textil. El anticipo que paga el comprador por Mercado Pago es el precio de la empresa más ${String(c.clubTaxBp / 100).replace(".", ",")} % de la diferencia del club (deducciones, hipótesis pendiente); el resto es el saldo que cobra el club. El comprador ve solo anticipo y saldo. Si completás el recargo, se usa en lugar del precio directo. Los pedidos hechos conservan su precio.`
               : "El precio de lista solo se muestra tachado si es mayor que el de preventa. El cupo por producto es opcional; sin cupo no se muestra disponibilidad."}
           </p>
           <SubmitButton className="btn btn-primary justify-self-start">Guardar colección</SubmitButton>
@@ -159,7 +159,7 @@ export default async function EditCampaign({ params }: { params: Promise<{ id: s
       {advance && (
         <Section title="Reglas de producción por producto">
           <p className="mb-3 text-sm text-muted">
-            Las define y aprueba la textil. Categoría completa: la cantidad esperada se fija por campaña (no es universal). Outfit: mínimo de producción {OUTFIT_INITIAL_PURCHASE_DEFAULT} unidades (editable); el club se compromete a comprar la diferencia entre lo vendido y el mínimo, y si se llega se le sugiere un respaldo de {OUTFIT_BACKUP_SUGGESTION}. Ninguna regla se aprueba sola.
+            Las define y aprueba la empresa. Categoría completa: la cantidad esperada se fija por campaña (no es universal). Outfit: mínimo de producción {OUTFIT_INITIAL_PURCHASE_DEFAULT} unidades (editable); el club se compromete a comprar la diferencia entre lo vendido y el mínimo, y si se llega se le sugiere un respaldo de {OUTFIT_BACKUP_SUGGESTION}. Ninguna regla se aprueba sola.
           </p>
           <div className="grid gap-3">
             {c.products.map((cp) => {

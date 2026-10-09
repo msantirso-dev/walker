@@ -21,7 +21,7 @@ export async function startOnlinePayment(orderId: string, kind: PaymentKind, act
   const c = order.campaign;
   if (!c.allowMercadoPago) throw new OrderError("Esta campaña no acepta pagos con Mercado Pago.");
   const advance = order.pricingModel === "TEXTIL_ADVANCE";
-  if (advance && c.paymentAccount.owner !== "TEXTIL") throw new OrderError("El anticipo se cobra en la cuenta de la textil. Revisá la configuración de la campaña.");
+  if (advance && c.paymentAccount.owner !== "TEXTIL") throw new OrderError("El anticipo se cobra en la cuenta de la empresa. Revisá la configuración de la campaña.");
   // Club de demostración: nunca se cobra dinero real
   const provider = c.club.isDemo ? (simulatorEnabled() ? new SimulatorProvider() : null) : providerFor(c.paymentAccount);
   if (!provider) throw new OrderError(c.club.isDemo ? "Tienda de demostración: no admite pagos." : "El pago con Mercado Pago todavía no está habilitado para esta campaña.");

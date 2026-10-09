@@ -21,7 +21,7 @@ export async function createUser(_p: FormState, fd: FormData): Promise<FormState
     assertCan(u, "clubs.manage");
     const d = schema.parse({ name: str(fd, "name"), email: str(fd, "email"), role: str(fd, "role"), clubId: opt(fd, "clubId"), password: str(fd, "password") });
     if ((d.role === "CLUB_ADMIN" || d.role === "DELIVERY") && !d.clubId) throw new UserError("Los usuarios de club necesitan un club asignado.");
-    if ((d.role === "TEXTIL_ADMIN" || d.role === "PRODUCTION") && d.clubId) throw new UserError("Los usuarios de la textil no se asignan a un club.");
+    if ((d.role === "TEXTIL_ADMIN" || d.role === "PRODUCTION") && d.clubId) throw new UserError("Los usuarios de la empresa no se asignan a un club.");
     if (await db.user.findUnique({ where: { email: d.email } })) throw new UserError("Ya existe un usuario con ese correo.");
     const created = await db.user.create({ data: { name: d.name, email: d.email, role: d.role, clubId: d.clubId, passwordHash: await hashPassword(d.password) } });
     await audit(actorOf(u, await clientIp()), { entity: "User", entityId: created.id, clubId: d.clubId, action: "user.created", data: { email: d.email, role: d.role } });

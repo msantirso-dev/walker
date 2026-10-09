@@ -7,7 +7,7 @@ import type { FormState } from "@/shared/actions-types";
 import { BrandMark } from "@/app/_brand/mark";
 
 export const metadata = { title: "Recuperar contraseña", robots: { index: false } };
-const NEUTRAL = "Si el correo corresponde a un usuario activo, te enviamos un enlace para elegir una contraseña nueva. Vence en 30 minutos. Si no llega, pedí a la administración de la textil que restablezca tu contraseña.";
+const NEUTRAL = "Si el correo corresponde a un usuario activo, te enviamos un enlace para elegir una contraseña nueva. Vence en 30 minutos. Si no llega, pedí a la administración de la empresa que restablezca tu contraseña.";
 
 async function request(_p: FormState, fd: FormData): Promise<FormState> {
   "use server";

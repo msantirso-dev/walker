@@ -7,7 +7,7 @@ import type { PurchasePurpose, SampleAvailability, SampleKind } from "@/generate
 /**
  * Muestrario de talles y compras del club.
  * - Las curvas (superior/inferior) son prendas de referencia para probarse en el club.
- * - La equivalencia producto–curva la aprueba la textil por producto: sin aprobación, no se anuncia.
+ * - La equivalencia producto–curva la aprueba la empresa por producto: sin aprobación, no se anuncia.
  * - Muestrario, compra inicial y respaldo son funciones distintas; una compra puede cumplir más de una
  *   solo si se marca explícitamente. La distribución de talles del respaldo es manual.
  */
@@ -55,9 +55,9 @@ export async function saveSampleSet(actor: Actor, clubId: string, id: string | n
   return set;
 }
 
-/** La textil aprueba (o retira) que un producto se pruebe con una curva. */
+/** La empresa aprueba (o retira) que un producto se pruebe con una curva. */
 export async function setProductSampleLink(actor: Actor & { id: string; role: string }, productId: string, setId: string, approved: boolean, notes?: string) {
-  if (actor.role !== "TEXTIL_ADMIN") throw new OrderError("La equivalencia de calce la aprueba la textil.");
+  if (actor.role !== "TEXTIL_ADMIN") throw new OrderError("La equivalencia de calce la aprueba la empresa.");
   const [p, s] = await Promise.all([db.product.findUnique({ where: { id: productId } }), db.sizeSampleSet.findUnique({ where: { id: setId } })]);
   if (!p || !s || p.clubId !== s.clubId) throw new OrderError("Producto o curva inválidos.");
   await db.productSampleLink.upsert({
@@ -117,7 +117,7 @@ export async function savePurchase(actor: Actor & { id: string }, clubId: string
 }
 
 export async function approvePurchase(actor: Actor & { id: string; role: string }, purchaseId: string) {
-  if (actor.role !== "TEXTIL_ADMIN") throw new OrderError("La compra la aprueba la textil.");
+  if (actor.role !== "TEXTIL_ADMIN") throw new OrderError("La compra la aprueba la empresa.");
   const p = await db.clubPurchase.findUniqueOrThrow({ where: { id: purchaseId } });
   if (p.sizeStatus !== "DEFINED") throw new OrderError("Falta la distribución de talles completa.");
   await db.clubPurchase.update({ where: { id: purchaseId }, data: { approvedAt: new Date(), approvedById: actor.id } });

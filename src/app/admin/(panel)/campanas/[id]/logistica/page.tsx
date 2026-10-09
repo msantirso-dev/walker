@@ -21,7 +21,8 @@ export default async function Logistics({ params }: { params: Promise<{ id: stri
   });
   if (!c) notFound();
   const manage = can(u, "shipments.manage");
-  if (!manage) assertCan(u, "lot.receive", c.clubId);
+  // El club consulta la logística de su campaña (solo lectura); la empresa despacha y confirma la recepción
+  if (!manage) assertCan(u, "campaign.view", c.clubId);
   const list = await distributionList(id);
   const readyLots = c.lots.filter((l) => l.status === "READY_TO_SHIP" && !l.shipmentId);
   const today = toArLocal(new Date()).slice(0, 10);
@@ -32,7 +33,7 @@ export default async function Logistics({ params }: { params: Promise<{ id: stri
   return (
     <>
       <PageHeader eyebrow={`${c.club.name} · ${c.title}`} title="Logística y retiros" actions={<Link href={`/admin/campanas/${id}`} className="btn btn-ghost">Volver a la campaña</Link>}>
-        La producción completa se entrega en el club (sin envío a domicilio), por el transporte que se elija. El flete es a cargo del comprador: se registra, no lo paga la textil. El seguimiento del sistema termina con la producción en el club; el saldo y los retiros los gestiona el club en su planilla.
+        La producción completa se entrega en el club (sin envío a domicilio), por el transporte que se elija. El flete es a cargo del comprador: se registra, no lo paga la empresa. El seguimiento del sistema termina con la producción en el club; el club cobra el saldo y entrega; la empresa registra en la planilla lo que el club comunica.
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -67,7 +68,7 @@ export default async function Logistics({ params }: { params: Promise<{ id: stri
                     <SubmitButton className="btn btn-primary btn-sm">Marcar despachado</SubmitButton>
                   </ActionForm>
                 )}
-                {s.status === "DISPATCHED" && (
+                {manage && s.status === "DISPATCHED" && (
                   <ActionForm action={receiveAction.bind(null, id, s.id)} className="flex flex-wrap items-end gap-2">
                     <input name="receivedAt" type="date" className="input w-40" defaultValue={today} aria-label="Fecha de recepción" />
                     <input name="receivedBy" className="input w-48" placeholder="Quién recibió" aria-label="Quién recibió" />

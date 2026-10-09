@@ -80,7 +80,7 @@ export default async function SamplesPage({ params }: { params: Promise<{ id: st
               </div>
               <p className="mt-1 text-sm text-muted">Talles: {sizesText(s.items)}{s.deliveredAt ? ` · entregada ${fmtDate(s.deliveredAt)}` : ""}{s.location ? ` · ${s.location}` : ""}</p>
               <div className="mt-3">
-                <div className="label mb-1">Equivalencia por producto (la aprueba la textil)</div>
+                <div className="label mb-1">Equivalencia por producto (la aprueba la empresa)</div>
                 <div className="flex flex-wrap gap-2">
                   {products.map((p) => {
                     const link = s.productLinks.find((l) => l.productId === p.id);

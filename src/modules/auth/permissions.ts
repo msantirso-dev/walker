@@ -83,7 +83,7 @@ export function canReviewPayments(user: SessionUser, _clubId: string, _accountOw
 }
 
 export const ROLE_LABELS: Record<SessionUser["role"], string> = {
-  TEXTIL_ADMIN: "Administración textil",
+  TEXTIL_ADMIN: "Empresa",
   CLUB_ADMIN: "Club (consulta)",
   PRODUCTION: "Producción",
   DELIVERY: "Club (consulta de entregas)",

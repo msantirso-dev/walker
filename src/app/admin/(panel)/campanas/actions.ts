@@ -56,11 +56,11 @@ export async function createCampaign(_p: FormState, fd: FormData): Promise<FormS
     const opensAt = parseArLocal(str(fd, "opensAt"));
     const closesAt = parseArLocal(str(fd, "closesAt"));
     if (!opensAt || !closesAt || closesAt <= opensAt) throw new UserError("Revisá las fechas: el cierre debe ser posterior a la apertura.");
-    // Modelo v2: el anticipo se cobra en la cuenta de la textil; sin envío a domicilio; transferencia desactivada por defecto.
+    // Modelo v2: el anticipo se cobra en la cuenta de la empresa; sin envío a domicilio; transferencia desactivada por defecto.
     const acc = u.role === "CLUB_ADMIN"
       ? await db.paymentAccount.findFirst({ where: { owner: "TEXTIL" }, orderBy: { createdAt: "asc" } })
       : await accountFor(clubId, str(fd, "paymentAccountId"));
-    if (!acc) throw new UserError("No hay una cuenta de cobro de la textil configurada.");
+    if (!acc) throw new UserError("No hay una cuenta de cobro de la empresa configurada.");
     const c = await db.campaign.create({
       data: { clubId, slug, title, season: opt(fd, "season"), opensAt, closesAt, paymentAccountId: acc.id, pricingModel: "TEXTIL_ADVANCE", shippingEnabled: false, allowTransfer: false },
     });
@@ -172,7 +172,7 @@ export async function saveCollection(id: string, _p: FormState, fd: FormData): P
       if (advance) {
         const tRaw = str(fd, `textil_${cp.id}`);
         const tp = textil && tRaw ? parsePesos(tRaw) : undefined;
-        if (textil && tRaw && !tp) throw new UserError("Precio textil inválido.");
+        if (textil && tRaw && !tp) throw new UserError("Precio de la empresa inválido.");
         const mk = str(fd, `markup_${cp.id}`).replace(",", ".");
         const price = parsePesos(str(fd, `price_${cp.id}`));
         const input = mk ? { markupPercent: Number(mk) } : { price: price ?? null };
@@ -197,7 +197,7 @@ export async function saveCollection(id: string, _p: FormState, fd: FormData): P
     }
     const addId = str(fd, "addProduct");
     if (addId) {
-      if (!["DRAFT", "ACTIVATION_REQUESTED"].includes(c.status) && !textil) throw new UserError("Con la campaña autorizada, solo la textil agrega productos.");
+      if (!["DRAFT", "ACTIVATION_REQUESTED"].includes(c.status) && !textil) throw new UserError("Con la campaña autorizada, solo la empresa agrega productos.");
       const p = await db.product.findFirst({ where: { id: addId, clubId: c.clubId, active: true } });
       if (!p) throw new UserError("Producto inválido.");
       if (!textil && !["CATALOG", "PRESALE", "PRESALE_CLOSED"].includes(p.catalogStatus)) throw new UserError("Ese producto todavía está en preparación.");
@@ -215,7 +215,7 @@ export async function saveCollection(id: string, _p: FormState, fd: FormData): P
     await audit(actor, { entity: "Campaign", entityId: id, clubId: c.clubId, action: "campaign.collection", data: { priceChanges: changes, added: addId || null } as never });
     revalidatePath(`/admin/campanas/${id}/editar`);
     revalidatePath(`/admin/campanas/${id}`);
-    if (changes.some((x) => x.reopened)) return "Precios guardados. Como cambiaron después de la autorización, la textil tiene que volver a autorizar la campaña.";
+    if (changes.some((x) => x.reopened)) return "Precios guardados. Como cambiaron después de la autorización, la empresa tiene que volver a autorizar la campaña.";
     return changes.length ? "Colección guardada. Los pedidos ya hechos conservan el precio con el que se compraron." : "Colección guardada.";
   });
 }
@@ -263,7 +263,7 @@ export async function activationAction(id: string, action: "request" | "approve"
     if (action === "approve") await approveActivation(u, actor, id);
     if (action === "reject") await rejectActivation(u, actor, id, str(fd, "reason"));
     revalidatePath(`/admin/campanas/${id}`);
-    return { request: "Activación solicitada. La textil la revisa y autoriza.", approve: "Activación autorizada. Ya se puede publicar.", reject: "Solicitud devuelta al club con el motivo." }[action];
+    return { request: "Activación solicitada. La empresa la revisa y autoriza.", approve: "Activación autorizada. Ya se puede publicar.", reject: "Solicitud devuelta al club con el motivo." }[action];
   });
 }
 
@@ -289,10 +289,10 @@ export async function saveBenefit(id: string, _p: FormState, fd: FormData): Prom
 export async function campaignAction(id: string, action: "publish" | "close" | "finish", _p: FormState, _fd: FormData): Promise<FormState> {
   return run(async () => {
     if (action === "publish") {
-      // Con la activación autorizada por la textil, el club también puede publicar (elige el momento).
+      // Con la activación autorizada por la empresa, el club también puede publicar (elige el momento).
       const { actor, textil } = await editor(id);
       const c = await db.campaign.findUniqueOrThrow({ where: { id }, select: { pricingModel: true } });
-      if (!textil && c.pricingModel !== "TEXTIL_ADVANCE") throw new UserError("Solo la textil publica campañas del modelo anterior.");
+      if (!textil && c.pricingModel !== "TEXTIL_ADVANCE") throw new UserError("Solo la empresa publica campañas del modelo anterior.");
       await publishCampaign(actor, id);
       revalidatePath(`/admin/campanas/${id}`);
       return "Campaña publicada.";
@@ -375,5 +375,24 @@ export async function shortfallPurchaseAction(id: string, cpId: string, _p: Form
     await createShortfallPurchase(u, actor, cpId);
     revalidatePath(`/admin/campanas/${id}/editar`);
     return "Compra registrada con los talles sugeridos. Revisala y aprobala en Muestrario y compras.";
+  });
+}
+
+/** Registra o corrige el inicio real de producción (el previsto es el cierre de la preventa). */
+export async function productionStartAction(id: string, _p: FormState, fd: FormData): Promise<FormState> {
+  return run(async () => {
+    const u = await requireWriter();
+    assertCan(u, "production.plan");
+    const c = await db.campaign.findUniqueOrThrow({ where: { id } });
+    const raw = str(fd, "startedAt");
+    const at = raw ? new Date(`${raw}T12:00:00-03:00`) : null;
+    if (at && Number.isNaN(at.getTime())) throw new UserError("Fecha inválida.");
+    await db.campaign.update({ where: { id }, data: { productionStartedAt: at, productionStartedById: u.id } });
+    await audit(actorOf(u, await clientIp()), {
+      entity: "Campaign", entityId: id, clubId: c.clubId, action: "campaign.production_started",
+      before: { productionStartedAt: c.productionStartedAt?.toISOString() ?? null }, after: { productionStartedAt: at?.toISOString() ?? null },
+    });
+    revalidatePath(`/admin/campanas/${id}`);
+    return "Inicio de producción registrado.";
   });
 }

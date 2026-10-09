@@ -20,7 +20,7 @@ export async function recomputeOrder(tx: Tx, orderId: string, actor: Actor = SYS
     include: { payments: true, campaign: { include: { benefitRule: true } }, units: { where: { status: "ACTIVE" } } },
   });
   let approvedIn = 0, refundedProvider = 0, refundManual = 0, inReview = 0;
-  // Por destinatario: anticipo de la textil y saldo del club se concilian por separado
+  // Por destinatario: anticipo de la empresa y saldo del club se concilian por separado
   const byReceiver = { TEXTIL: 0, CLUB: 0 };
   for (const p of order.payments) {
     if (p.kind === "REFUND") {
@@ -44,7 +44,7 @@ export async function recomputeOrder(tx: Tx, orderId: string, actor: Actor = SYS
   let newlyConfirmed = false;
 
   const confirmable = order.status === "PENDING_PAYMENT" || order.status === "EXPIRED";
-  // Anticipo textil: confirma solo lo cobrado por la textil. Seña heredada: confirma lo cobrado total.
+  // Anticipo textil: confirma solo lo cobrado por la empresa. Seña heredada: confirma lo cobrado total.
   const covered =
     order.pricingModel === "TEXTIL_ADVANCE" ? byReceiver.TEXTIL >= order.advanceRequired && byReceiver.TEXTIL > 0 : paidAmount >= order.depositRequired && paidAmount > 0;
   if (confirmable && covered) {

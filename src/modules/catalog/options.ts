@@ -39,9 +39,9 @@ export const NAME_RE = /^[A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ .'-]*$/;
 const TEXT_RE = /^[\p{L}\p{N} .,'#-]+$/u;
 
 /** Política de cambios vigente para prendas personalizadas. Cambiar la versión al cambiar el texto. */
-export const CHANGE_POLICY_VERSION = "cambios-personalizadas-v1";
+export const CHANGE_POLICY_VERSION = "cambios-personalizadas-v2";
 export const CHANGE_POLICY_TEXT =
-  "Las prendas con nombre o número estampado no admiten cambio de talle. Esto no afecta los reclamos por fallas de fabricación o errores de la textil.";
+  "Las prendas con nombre o número estampado no admiten cambio de talle. Las prendas con defectos o errores de fabricación se reclaman aparte y no están alcanzadas por esta restricción.";
 export const CHANGE_POLICY_UNPERSONALIZED =
   "Para prendas sin nombre ni número, el cambio de talle depende de la política del club y de las unidades disponibles; no está garantizado.";
 

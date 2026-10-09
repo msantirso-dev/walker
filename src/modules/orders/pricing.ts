@@ -16,12 +16,12 @@ export function assertAdvanceInvariants(r: ReturnType<typeof advanceUnit>, name:
 }
 
 /**
- * Pedidos del modelo v2: los datos del sistema (prendas, cobros, cancelaciones) los gestiona solo la textil.
- * El club lleva su propia planilla, que no modifica el pedido.
+ * Los pedidos (prendas, cobros, cancelaciones) los modifica solo la empresa. El club los consulta y comunica
+ * las novedades; la empresa las registra (en la planilla del club, sin modificar el pedido).
  */
 export function assertTextilManages(order: { pricingModel: string }, actor: { role: string }) {
-  if (order.pricingModel === "TEXTIL_ADVANCE" && actor.role !== "TEXTIL_ADMIN" && actor.role !== "SYSTEM")
-    throw new OrderError("Este pedido lo gestiona la textil. El club registra cobros y retiros en su planilla de gestión, sin modificar el pedido.");
+  if (actor.role !== "TEXTIL_ADMIN" && actor.role !== "SYSTEM")
+    throw new OrderError("Este pedido lo gestiona la empresa. El club consulta y comunica las novedades; la empresa las registra sin modificar el pedido.");
 }
 
 export const PERS_NAME_RE = NAME_RE;
@@ -150,7 +150,7 @@ export function priceCart(c: SaleCampaign, cart: Pick<CartInput, "items" | "play
     }
     const sum = optionsSummary(options);
     if (sum.freeText && item.quantity !== 1) throw new OrderError("Las prendas con nombre o número se agregan de a una unidad.");
-    if (c.pricingModel === "TEXTIL_ADVANCE" && cp.textilPrice == null) throw new OrderError(`${p.name} no tiene precio textil cargado. Avisá al club.`);
+    if (c.pricingModel === "TEXTIL_ADVANCE" && cp.textilPrice == null) throw new OrderError(`${p.name} no tiene precio de la empresa cargado. Avisá al club.`);
 
     // Alcance de la campaña: disciplina o categoría del jugador
     if (c.audience !== "ALL") {
@@ -162,7 +162,7 @@ export function priceCart(c: SaleCampaign, cart: Pick<CartInput, "items" | "play
         throw new OrderError(`Esta preventa es para ${audienceText(c)}. Revisá la categoría de ${pl.name}.`);
     }
 
-    // Modelo v2: adicionales de la textil, recargo del club también sobre ellos, anticipo con cobertura impositiva
+    // Modelo v2: adicionales de la empresa, recargo del club también sobre ellos, anticipo con cobertura impositiva
     const v2 = c.pricingModel === "TEXTIL_ADVANCE" && cp.textilPrice != null
       ? advanceUnit({ textil: cp.textilPrice, price: cp.price, extrasTextil: sum.textil, taxBp: c.clubTaxBp ?? DEFAULT_CLUB_TAX_BP })
       : null;
@@ -217,7 +217,7 @@ export function audienceText(c: { audience: string; audienceSports: { name: stri
   return "todo el club";
 }
 
-/** Precio al socio a partir del precio textil y un recargo en centésimas de % (3000 = 30 %). */
+/** Precio al socio a partir del precio de la empresa y un recargo en centésimas de % (3000 = 30 %). */
 export function priceWithMarkup(textilPrice: number, markupBp: number) {
   return Math.round(textilPrice + (textilPrice * markupBp) / 10000);
 }

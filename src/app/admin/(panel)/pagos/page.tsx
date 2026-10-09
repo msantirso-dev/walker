@@ -24,7 +24,7 @@ export default async function Reviews() {
       <PageHeader eyebrow="Cobros" title="Revisión de pagos">
         Un comprobante no confirma el pago hasta que lo aprobás. Al rechazar, el comprador recibe el motivo y puede subir otro.
       </PageHeader>
-      {others > 0 && <p className="notice notice-info mb-4">{others} comprobante(s) los revisa la textil porque es la destinataria de los cobros.</p>}
+      {others > 0 && <p className="notice notice-info mb-4">{others} comprobante(s) los revisa la empresa porque es la destinataria de los cobros.</p>}
       {list.length === 0 ? <Empty>No hay comprobantes pendientes.</Empty> : (
         <div className="grid gap-4">
           {list.map((p) => (

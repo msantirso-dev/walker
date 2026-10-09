@@ -30,7 +30,7 @@ export async function requestOrderLinks(rawEmail: string) {
   await deliverPending();
 }
 
-/** Reenvío pedido por el club o la textil para un pedido puntual (al correo del comprador). */
+/** Reenvío pedido por el club o la empresa para un pedido puntual (al correo del comprador). */
 export async function resendOrderLink(actor: Actor, orderId: string) {
   const o = await db.order.findUniqueOrThrow({ where: { id: orderId }, select: { ...LINK_SELECT, buyerEmail: true } });
   await queueOrderLinks(o.buyerEmail, [o]);

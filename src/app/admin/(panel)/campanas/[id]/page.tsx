@@ -6,10 +6,10 @@ import { campaignMetrics, CAMPAIGN_STATUS_LABEL, MIN_DECISION_LABEL, effectiveSt
 import { LOT_STATUS_LABEL } from "@/modules/production";
 import { db } from "@/shared/db";
 import { env } from "@/shared/env";
-import { fmtDate, fmtDateTime, toArLocal, addDays } from "@/shared/dates";
+import { deliveryWindowText, fmtDate, fmtDateTime, toArLocal, addDays } from "@/shared/dates";
 import { Badge, Bar, Money, PageHeader, Section, Stat } from "@/shared/ui";
 import { ActionForm, ConfirmAction, CopyButton, SubmitButton } from "@/shared/ui/client";
-import { activationAction, campaignAction, cancelCampaignAction, generateLotAction, minDecisionAction, productionNoticeAction, settlementAction } from "../actions";
+import { activationAction, campaignAction, cancelCampaignAction, generateLotAction, minDecisionAction, productionNoticeAction, productionStartAction, settlementAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -44,12 +44,14 @@ export default async function CampaignOverview({ params }: { params: Promise<{ i
             <Badge tone={st === "PUBLISHED" ? "ok" : st === "CANCELLED" ? "danger" : "info"}>{st === "SCHEDULED" ? "Programada" : CAMPAIGN_STATUS_LABEL[st]}</Badge>
             {requester && <Link href={`/admin/campanas/${id}/editar`} className="btn btn-ghost">{manage ? "Configurar" : "Precios y alcance"}</Link>}
             {manage && advance && <Link href={`/admin/campanas/${id}/logistica`} className="btn btn-ghost">Logística</Link>}
-            {!manage && advance && can(u, "lot.receive", c.clubId) && <Link href={`/admin/campanas/${id}/logistica`} className="btn btn-ghost">Recepción y retiros</Link>}
+            {!manage && advance && <Link href={`/admin/campanas/${id}/logistica`} className="btn btn-ghost">Producción y entrega</Link>}
+            {advance && <Link href={`/admin/campanas/${id}/compras`} className="btn btn-ghost">Compras del club</Link>}
+            <a href={`/api/admin/campanas/${id}/export?format=xlsx`} className="btn btn-ghost">Excel</a>
             <Link href={`/admin/pedidos?campana=${id}`} className="btn btn-primary">Pedidos</Link>
           </>
         }
       >
-        {fmtDateTime(c.opensAt)} → {fmtDateTime(c.closesAt)} · Cobra: {c.paymentAccount.owner === "TEXTIL" ? "la textil" : "el club"} ({c.paymentAccount.label})
+        {fmtDateTime(c.opensAt)} → {fmtDateTime(c.closesAt)} · Cobra: {c.paymentAccount.owner === "TEXTIL" ? "la empresa" : "el club"} ({c.paymentAccount.label})
       </PageHeader>
 
       {pendingActivation && (
@@ -103,6 +105,24 @@ export default async function CampaignOverview({ params }: { params: Promise<{ i
             </ConfirmAction>
           )}
         </div>
+      )}
+
+      {advance && windowEnded && (
+        <section className="card mb-6 p-5">
+          <h2 className="text-xl font-bold">Inicio de producción</h2>
+          <p className="mt-1 text-sm text-muted">
+            Previsto: el cierre ({fmtDateTime(c.closesAt)}). Real: {c.productionStartedAt ? fmtDate(c.productionStartedAt) : "sin registrar"}. El plazo se informa como {deliveryWindowText(c)}.
+          </p>
+          {manage && (
+            <ActionForm action={productionStartAction.bind(null, id)} className="mt-3 flex flex-wrap items-end gap-2">
+              <div className="field">
+                <label htmlFor="startedAt">Inicio real</label>
+                <input id="startedAt" name="startedAt" type="date" className="input" defaultValue={c.productionStartedAt ? c.productionStartedAt.toISOString().slice(0, 10) : ""} />
+              </div>
+              <SubmitButton className="btn btn-ghost">Registrar</SubmitButton>
+            </ActionForm>
+          )}
+        </section>
       )}
 
       <section className="card grid gap-4 p-5 md:grid-cols-[auto_1fr] md:items-center">

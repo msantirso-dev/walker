@@ -83,7 +83,7 @@ export const ACTION_LABELS: Record<string, string> = {
   "shipment.dispatched": "Despacho enviado al club",
   "shipment.received": "Producción recibida por el club",
   "campaign.activation_requested": "Activación solicitada por el club",
-  "campaign.activation_approved": "Activación autorizada por la textil",
+  "campaign.activation_approved": "Activación autorizada por la empresa",
   "campaign.activation_rejected": "Solicitud de activación devuelta",
   "campaign.prices": "Precios de campaña modificados",
   "campaign.rule": "Regla de producción modificada",

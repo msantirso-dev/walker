@@ -5,7 +5,7 @@ import { currentUser, can } from "@/modules/auth";
 
 export const dynamic = "force-dynamic";
 
-/** Comprobantes privados: los ve el comprador (con su enlace) o un usuario autorizado del club o la textil. */
+/** Comprobantes privados: los ve el comprador (con su enlace) o un usuario autorizado del club o la empresa. */
 export async function GET(req: Request, ctx: { params: Promise<{ receiptId: string }> }) {
   const { receiptId } = await ctx.params;
   const r = await db.receipt.findUnique({ where: { id: receiptId }, include: { payment: { include: { order: true } } } });

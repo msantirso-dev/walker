@@ -28,7 +28,7 @@ export function termsOf(c: SaleCampaign) {
     pricingModel: c.pricingModel,
     payments:
       c.pricingModel === "TEXTIL_ADVANCE"
-        ? "El anticipo se paga ahora por Mercado Pago a la textil. El saldo, si lo hay, se paga al club antes del retiro."
+        ? "El anticipo se paga ahora por Mercado Pago a la empresa. El saldo, si lo hay, se paga al club antes del retiro."
         : null,
     changePolicy: { version: CHANGE_POLICY_VERSION, personalized: CHANGE_POLICY_TEXT, other: CHANGE_POLICY_UNPERSONALIZED },
     clubConditions: c.club.conditions,

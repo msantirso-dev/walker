@@ -6,7 +6,7 @@ import { fmtShort } from "@/shared/dates";
 
 export const dynamic = "force-dynamic";
 
-/** Planilla del club en CSV (datos personales: solo el club con el servicio o la textil). */
+/** Planilla del club en CSV (datos personales: solo el club con el servicio o la empresa). */
 export async function GET(req: Request) {
   const u = await currentUser();
   const url = new URL(req.url);

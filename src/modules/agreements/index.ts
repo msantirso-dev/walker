@@ -61,7 +61,7 @@ export async function expiringAgreements(now = new Date()) {
 }
 
 /**
- * Tarea programada: marca vencidos y avisa a la textil una vez por acuerdo dentro de la ventana de aviso.
+ * Tarea programada: marca vencidos y avisa a la empresa una vez por acuerdo dentro de la ventana de aviso.
  * Devuelve la cantidad de avisos generados.
  */
 export async function runAgreementAlerts(now = new Date()) {

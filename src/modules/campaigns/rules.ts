@@ -7,8 +7,8 @@ import type { CampaignAudience, ProductionRuleType } from "@/generated/prisma/cl
 
 /**
  * Reglas comerciales v2 de campaña:
- * - el club solicita la activación; la textil la autoriza (son pasos separados);
- * - precio textil (anticipo) y precio al socio (final ≥ textil), por precio directo o recargo %;
+ * - el club solicita la activación; la empresa la autoriza (son pasos separados);
+ * - precio de la empresa (anticipo) y precio al socio (final ≥ textil), por precio directo o recargo %;
  * - reglas de producción por producto: categoría completa o compra inicial del club.
  * Ninguna regla se aprueba sola.
  */
@@ -67,16 +67,16 @@ export function ruleOpenProblems(cp: RuleCp, name: string): string[] {
   if (cp.ruleType === "FULL_CATEGORY") {
     if (!cp.ruleCategoryId) out.push(`${name}: elegí la categoría de la campaña de categoría completa.`);
     if (!cp.expectedQty) out.push(`${name}: indicá la cantidad esperada de la categoría.`);
-    if (!cp.ruleApprovedAt) out.push(`${name}: falta la aprobación de la textil para la campaña de categoría completa.`);
+    if (!cp.ruleApprovedAt) out.push(`${name}: falta la aprobación de la empresa para la campaña de categoría completa.`);
   }
   if (cp.ruleType === "INITIAL_PURCHASE") {
     if (cp.initialPurchaseWaived) {
-      if (!cp.ruleApprovedAt) out.push(`${name}: la excepción al mínimo necesita aprobación de la textil.`);
+      if (!cp.ruleApprovedAt) out.push(`${name}: la excepción al mínimo necesita aprobación de la empresa.`);
     } else {
       const min = cp.initialPurchaseMin ?? 0;
       if (!min) out.push(`${name}: indicá el mínimo de producción.`);
       else if (!cp.clubCommitAt) out.push(`${name}: falta el compromiso del club de comprar la diferencia hasta ${min} unidades.`);
-      if (!cp.ruleApprovedAt) out.push(`${name}: falta la aprobación de la textil para abrir.`);
+      if (!cp.ruleApprovedAt) out.push(`${name}: falta la aprobación de la empresa para abrir.`);
     }
   }
   return out;
@@ -123,7 +123,7 @@ export async function activationProblems(campaignId: string): Promise<string[]> 
   if (c.audience === "SPORTS" && !c.audienceSports.length) out.push("elegí al menos una disciplina para el alcance.");
   if (c.audience === "CATEGORIES" && !c.audienceCategories.length) out.push("elegí al menos una categoría para el alcance.");
   if (c.pricingModel === "TEXTIL_ADVANCE") {
-    if (c.paymentAccount.owner !== "TEXTIL") out.push("el anticipo se cobra en la cuenta de la textil: elegí una cuenta de la textil.");
+    if (c.paymentAccount.owner !== "TEXTIL") out.push("el anticipo se cobra en la cuenta de la empresa: elegí una cuenta de la empresa.");
     if (!c.allowMercadoPago && !c.allowTransfer) out.push("habilitá Mercado Pago para el anticipo.");
   }
   for (const cp of c.products) {
@@ -131,8 +131,8 @@ export async function activationProblems(campaignId: string): Promise<string[]> 
     if (!cp.product.active || cp.product.catalogStatus === "PREPARATION" || cp.product.catalogStatus === "ARCHIVED")
       out.push(`${n}: el producto está en preparación o archivado.`);
     if (c.pricingModel === "TEXTIL_ADVANCE") {
-      if (!cp.textilPrice) out.push(`${n}: falta el precio textil.`);
-      else if (cp.price < cp.textilPrice) out.push(`${n}: el precio al socio no puede ser menor que el precio textil.`);
+      if (!cp.textilPrice) out.push(`${n}: falta el precio de la empresa.`);
+      else if (cp.price < cp.textilPrice) out.push(`${n}: el precio al socio no puede ser menor que el precio de la empresa.`);
     }
     out.push(...ruleOpenProblems(cp, n));
   }
@@ -145,7 +145,7 @@ function assertClubOrTextil(user: SessionUser, _clubId: string) {
   throw new OrderError("Solo la empresa modifica campañas y precios. El club las consulta.");
 }
 
-/** El club pide activar la campaña. No la publica: falta la autorización de la textil. */
+/** El club pide activar la campaña. No la publica: falta la autorización de la empresa. */
 export async function requestActivation(user: SessionUser, actor: Actor, campaignId: string, note?: string) {
   const c = await db.campaign.findUniqueOrThrow({ where: { id: campaignId } });
   assertClubOrTextil(user, c.clubId);
@@ -158,9 +158,9 @@ export async function requestActivation(user: SessionUser, actor: Actor, campaig
   await audit(actor, { entity: "Campaign", entityId: campaignId, clubId: c.clubId, action: "campaign.activation_requested", data: { note: note ?? null } });
 }
 
-/** La textil autoriza la activación. Verifica precios y reglas de producción; nunca se aprueba sola. */
+/** La empresa autoriza la activación. Verifica precios y reglas de producción; nunca se aprueba sola. */
 export async function approveActivation(user: SessionUser, actor: Actor, campaignId: string) {
-  if (user.role !== "TEXTIL_ADMIN") throw new OrderError("Solo la textil autoriza la activación.");
+  if (user.role !== "TEXTIL_ADMIN") throw new OrderError("Solo la empresa autoriza la activación.");
   const c = await db.campaign.findUniqueOrThrow({ where: { id: campaignId } });
   if (!["DRAFT", "ACTIVATION_REQUESTED"].includes(c.status)) throw new OrderError("La campaña no está pendiente de autorización.");
   const problems = await activationProblems(campaignId);
@@ -170,7 +170,7 @@ export async function approveActivation(user: SessionUser, actor: Actor, campaig
 }
 
 export async function rejectActivation(user: SessionUser, actor: Actor, campaignId: string, reason: string) {
-  if (user.role !== "TEXTIL_ADMIN") throw new OrderError("Solo la textil responde la solicitud.");
+  if (user.role !== "TEXTIL_ADMIN") throw new OrderError("Solo la empresa responde la solicitud.");
   if (reason.trim().length < 5) throw new OrderError("Indicá el motivo para el club.");
   const c = await db.campaign.findUniqueOrThrow({ where: { id: campaignId } });
   if (!["ACTIVATION_REQUESTED", "ACTIVATION_APPROVED"].includes(c.status)) throw new OrderError("La campaña no tiene una solicitud pendiente.");
@@ -181,7 +181,7 @@ export async function rejectActivation(user: SessionUser, actor: Actor, campaign
 export type PriceInput = { textilPrice?: number | null; price?: number | null; markupPercent?: number | null };
 
 /**
- * Precios de un producto en la campaña. La textil fija el precio textil; el club fija el precio al socio
+ * Precios de un producto en la campaña. La empresa fija el precio de la empresa; el club fija el precio al socio
  * (directo o como % de recargo). Solo antes de publicar: los pedidos guardan su propio precio.
  */
 export async function setCampaignProductPrices(user: SessionUser, actor: Actor, campaignProductId: string, input: PriceInput) {
@@ -190,14 +190,14 @@ export async function setCampaignProductPrices(user: SessionUser, actor: Actor, 
   if (!isEditable(cp.campaign.status)) throw new OrderError("Los precios no se cambian con la campaña publicada. Las reglas nuevas aplican a campañas nuevas.");
   let textilPrice = cp.textilPrice;
   if (input.textilPrice !== undefined && input.textilPrice !== cp.textilPrice) {
-    if (user.role !== "TEXTIL_ADMIN") throw new OrderError("El precio textil lo define la textil.");
-    if (input.textilPrice == null || !Number.isInteger(input.textilPrice) || input.textilPrice <= 0) throw new OrderError("Precio textil inválido.");
+    if (user.role !== "TEXTIL_ADMIN") throw new OrderError("El precio de la empresa lo define la empresa.");
+    if (input.textilPrice == null || !Number.isInteger(input.textilPrice) || input.textilPrice <= 0) throw new OrderError("Precio de la empresa inválido.");
     textilPrice = input.textilPrice;
   }
   let price = cp.price;
   let markupBp = cp.markupBp;
   if (input.markupPercent != null) {
-    if (!textilPrice) throw new OrderError("Primero tiene que estar el precio textil.");
+    if (!textilPrice) throw new OrderError("Primero tiene que estar el precio de la empresa.");
     if (!Number.isFinite(input.markupPercent) || input.markupPercent < 0 || input.markupPercent > 500) throw new OrderError("El recargo debe estar entre 0 % y 500 %.");
     markupBp = Math.round(input.markupPercent * 100);
     price = priceWithMarkup(textilPrice, markupBp);
@@ -207,7 +207,7 @@ export async function setCampaignProductPrices(user: SessionUser, actor: Actor, 
     markupBp = null;
   }
   if (cp.campaign.pricingModel === "TEXTIL_ADVANCE" && textilPrice && price < textilPrice)
-    throw new OrderError(`${cp.product.name}: el precio al socio no puede ser menor que el precio textil.`);
+    throw new OrderError(`${cp.product.name}: el precio al socio no puede ser menor que el precio de la empresa.`);
   // Un cambio de precio del club después de la autorización vuelve a requerirla.
   const reopen = cp.campaign.status === "ACTIVATION_APPROVED" && user.role !== "TEXTIL_ADMIN" && (price !== cp.price || textilPrice !== cp.textilPrice);
   await db.$transaction([
@@ -216,7 +216,9 @@ export async function setCampaignProductPrices(user: SessionUser, actor: Actor, 
   ]);
   await audit(actor, {
     entity: "Campaign", entityId: cp.campaignId, clubId: cp.campaign.clubId, action: "campaign.prices",
-    data: { product: cp.productId, textil: [cp.textilPrice, textilPrice], price: [cp.price, price], markupBp, reopened: reopen },
+    data: { product: cp.productId, reopened: reopen },
+    before: { textilPrice: cp.textilPrice, price: cp.price, markupBp: cp.markupBp },
+    after: { textilPrice, price, markupBp },
   });
   return { textilPrice, price, markupBp, reopened: reopen };
 }
@@ -227,9 +229,9 @@ export type RuleInput = {
   clubPurchaseId?: string | null; ruleNote?: string | null;
 };
 
-/** Regla de producción de un producto en la campaña (la define la textil). Cambiarla quita la aprobación previa. */
+/** Regla de producción de un producto en la campaña (la define la empresa). Cambiarla quita la aprobación previa. */
 export async function setProductRule(user: SessionUser, actor: Actor, campaignProductId: string, r: RuleInput) {
-  if (user.role !== "TEXTIL_ADMIN") throw new OrderError("Las reglas de producción las define la textil.");
+  if (user.role !== "TEXTIL_ADMIN") throw new OrderError("Las reglas de producción las define la empresa.");
   const cp = await db.campaignProduct.findUniqueOrThrow({ where: { id: campaignProductId }, include: { campaign: true } });
   if (!isEditable(cp.campaign.status)) throw new OrderError("La regla no se cambia con la campaña publicada.");
   if (r.ruleType === "FULL_CATEGORY") {
@@ -261,9 +263,9 @@ export async function setProductRule(user: SessionUser, actor: Actor, campaignPr
   await audit(actor, { entity: "Campaign", entityId: cp.campaignId, clubId: cp.campaign.clubId, action: "campaign.rule", data: { product: cp.productId, ...data } });
 }
 
-/** Aprobación explícita de la textil: abrir (regla) o producir con menos de lo esperado (categoría completa). */
+/** Aprobación explícita de la empresa: abrir (regla) o producir con menos de lo esperado (categoría completa). */
 export async function approveProductRule(user: SessionUser, actor: Actor, campaignProductId: string, what: "open" | "production", note: string) {
-  if (user.role !== "TEXTIL_ADMIN") throw new OrderError("Solo la textil aprueba reglas de producción.");
+  if (user.role !== "TEXTIL_ADMIN") throw new OrderError("Solo la empresa aprueba reglas de producción.");
   const cp = await db.campaignProduct.findUniqueOrThrow({ where: { id: campaignProductId }, include: { campaign: true, product: true, ruleCategory: true } });
   if (cp.ruleType === "NONE") throw new OrderError("El producto no tiene regla de producción.");
   if (what === "production") {
@@ -322,11 +324,11 @@ export async function commitShortfall(user: SessionUser, actor: Actor, campaignP
 }
 
 /**
- * Al cerrar: la textil registra la compra del club por la diferencia (o el respaldo sugerido) con la distribución
+ * Al cerrar: la empresa registra la compra del club por la diferencia (o el respaldo sugerido) con la distribución
  * de talles sugerida. Queda sin aprobar: se revisa y aprueba en "Muestrario y compras".
  */
 export async function createShortfallPurchase(user: SessionUser, actor: Actor, campaignProductId: string) {
-  if (user.role !== "TEXTIL_ADMIN") throw new OrderError("La compra del club la registra la textil.");
+  if (user.role !== "TEXTIL_ADMIN") throw new OrderError("La compra del club la registra la empresa.");
   const cp = await db.campaignProduct.findUniqueOrThrow({ where: { id: campaignProductId }, include: { campaign: true } });
   const st = (await productionRuleStatus(cp.campaignId)).find((r) => r.id === cp.id);
   if (!st || cp.ruleType !== "INITIAL_PURCHASE") throw new OrderError("El producto no tiene mínimo de producción.");

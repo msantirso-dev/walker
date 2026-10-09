@@ -2,6 +2,7 @@ import Link from "next/link";
 import { campaignMetrics, CAMPAIGN_STATUS_LABEL, effectiveStatus } from "@/modules/campaigns";
 import { db } from "@/shared/db";
 import { fmtDateTime } from "@/shared/dates";
+import { ars } from "@/shared/money";
 import { Badge, Bar, Empty, Money, PageHeader, Stat } from "@/shared/ui";
 import type { SessionUser } from "@/modules/auth";
 
@@ -35,7 +36,7 @@ export async function ClubHome({ u }: { u: SessionUser }) {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Pagos confirmados" value={<Money cents={t.advance} />} hint="Anticipos aprobados por Mercado Pago" />
         <Stat label="Pagos pendientes" value={<Money cents={t.pending} />} hint="Pedidos esperando la acreditación" tone={t.pending ? "warn" : undefined} />
-        <Stat label="Saldo a cobrar a socios" value={<Money cents={toCollect} />} hint={`De ${new Intl.NumberFormat("es-AR").format(t.balance / 100)} pesos; registrado cobrado: ${new Intl.NumberFormat("es-AR").format(t.collected / 100)}`} />
+        <Stat label="Saldo a cobrar a socios" value={<Money cents={toCollect} />} hint={`Total ${ars(t.balance)} · cobrado registrado ${ars(t.collected)}`} />
         <Stat label="Resultado estimado" value={<Money cents={result} />} hint="Saldo de socios − compras del club acordadas" tone={result < 0 ? "danger" : undefined} />
       </div>
       <p className="mt-2 text-xs text-muted">

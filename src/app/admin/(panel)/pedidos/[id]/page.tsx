@@ -29,7 +29,7 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
   const o = await orderById(id);
   if (!o) notFound();
   assertCan(u, "orders.view", o.clubId);
-  // Pedidos v2: los datos del pedido los gestiona solo la textil; el club usa su planilla
+  // Pedidos v2: los datos del pedido los gestiona solo la empresa; el club usa su planilla
   const manage = can(u, "orders.manage", o.clubId) && (o.pricingModel !== "TEXTIL_ADVANCE" || u.role === "TEXTIL_ADMIN");
   const review = canReviewPayments(u, o.clubId, o.campaign.paymentAccount.owner) && (o.pricingModel !== "TEXTIL_ADVANCE" || u.role === "TEXTIL_ADMIN");
   const [log, emails, users] = await Promise.all([
@@ -193,9 +193,9 @@ export default async function OrderAdmin({ params }: { params: Promise<{ id: str
                                   <select id={`rs-${x.id}`} name="reason" className="input" defaultValue="DATA_ERROR">
                                     {Object.entries(EDIT_REASON_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                                   </select>
-                                  {x.noSizeChange && <small>Prenda personalizada: el cambio de talle voluntario no está permitido. Falla o error de la textil, sí (con nota).</small>}
+                                  {x.noSizeChange && <small>Prenda personalizada: el cambio de talle voluntario no está permitido. Falla o error de la empresa, sí (con nota).</small>}
                                 </div>
-                                <input name="note" className="input" placeholder="Nota (obligatoria para falla o error de la textil)" aria-label="Nota" />
+                                <input name="note" className="input" placeholder="Nota (obligatoria para falla o error de la empresa)" aria-label="Nota" />
                                 <p className="text-xs text-muted">El precio de la prenda no cambia. Agregar o quitar nombre o número recalcula la personalización.</p>
                                 <SubmitButton className="btn btn-primary btn-sm">Guardar cambios</SubmitButton>
                               </ActionForm>

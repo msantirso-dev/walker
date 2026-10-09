@@ -60,7 +60,7 @@ export default async function AgreementPage({ params }: { params: Promise<{ id: 
   return (
     <>
       <PageHeader eyebrow={club.name} title="Acuerdo comercial" actions={<Link href={`/admin/clubes/${id}`} className="btn btn-ghost">Volver al club</Link>}>
-        Información privada entre la textil y el club. Nunca se publica en la tienda ni se muestra a compradores.
+        Información privada entre la empresa y el club. Nunca se publica en la tienda ni se muestra a compradores.
       </PageHeader>
       {list.map((a) => {
         const days = Math.ceil((a.endsAt.getTime() - Date.now()) / DAY);

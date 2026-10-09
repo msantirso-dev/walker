@@ -11,7 +11,7 @@ export type EditReason = "VOLUNTARY" | "DATA_ERROR" | "TEXTIL_ERROR" | "DEFECT";
 export const EDIT_REASON_LABEL: Record<EditReason, string> = {
   VOLUNTARY: "Cambio voluntario del comprador",
   DATA_ERROR: "Error de carga (antes de fabricar)",
-  TEXTIL_ERROR: "Error de la textil",
+  TEXTIL_ERROR: "Error de la empresa",
   DEFECT: "Falla de fabricación",
 };
 
@@ -35,7 +35,7 @@ export async function unitLockedByLot(unitId: string) {
  * - Valida contra los talles habilitados y las reglas de personalización vigentes.
  * - El precio de la prenda no cambia; los adicionales solo se recalculan si se agregan o se quitan.
  * - Prendas con nombre o número: el cambio de talle voluntario no está permitido (política de cambios);
- *   sí se corrige un error de carga o de la textil, con motivo registrado.
+ *   sí se corrige un error de carga o de la empresa, con motivo registrado.
  */
 export async function editUnit(actor: Actor, unitId: string, input: UnitEdit) {
   const reason: EditReason = input.reason ?? "DATA_ERROR";
@@ -68,7 +68,7 @@ export async function editUnit(actor: Actor, unitId: string, input: UnitEdit) {
   });
   const sizeChanged = unit.components.some((c) => newComponents.find((n) => n.label === c.label)?.sizeLabel !== c.sizeLabel);
   if (sizeChanged && unit.noSizeChange && reason === "VOLUNTARY")
-    throw new OrderError("Esta prenda tiene nombre o número: no admite cambio de talle voluntario. Si es un error de carga, de la textil o una falla, indicá el motivo.");
+    throw new OrderError("Esta prenda tiene nombre o número: no admite cambio de talle voluntario. Si es un error de carga, de la empresa o una falla, indicá el motivo.");
 
   // undefined = conservar; null o vacío = quitar
   const name = input.persName === undefined ? unit.persName : input.persName?.trim().toUpperCase() || null;
@@ -114,7 +114,7 @@ export async function editUnit(actor: Actor, unitId: string, input: UnitEdit) {
     optionsClub = options.reduce((a, o) => a + o.priceClub, 0);
     persPrice = optionsTextil + optionsClub;
     if (unit.order.pricingModel === "TEXTIL_ADVANCE" && unit.textilPrice != null) {
-      // v2: adicionales de la textil con el recargo del club; anticipo con la cobertura vigente al comprar
+      // v2: adicionales de la empresa con el recargo del club; anticipo con la cobertura vigente al comprar
       const v2 = advanceUnit({ textil: unit.textilPrice, price: unit.unitPrice, extrasTextil: optionsTextil, taxBp: unit.order.clubTaxBp ?? 0 });
       persPrice = v2.extrasFinal;
       optionsClub = v2.extrasFinal - optionsTextil;

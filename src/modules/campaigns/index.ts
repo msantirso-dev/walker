@@ -40,10 +40,16 @@ export async function closeExpiredCampaigns() {
   return due.length;
 }
 
+/** Abrir, cerrar o cancelar campañas: solo la empresa (o una tarea del sistema). */
+function assertCompanyActor(actor: Actor) {
+  if (actor.role !== "TEXTIL_ADMIN" && actor.role !== "SYSTEM") throw new OrderError("Solo la empresa abre, cierra o cancela campañas.");
+}
+
 export async function publishCampaign(actor: Actor, id: string) {
+  assertCompanyActor(actor);
   const c = await db.campaign.findUniqueOrThrow({ where: { id }, include: { products: { where: { active: true } } } });
   if (c.pricingModel === "TEXTIL_ADVANCE") {
-    if (c.status !== "ACTIVATION_APPROVED") throw new OrderError("La campaña necesita la autorización de la textil antes de publicarse.");
+    if (c.status !== "ACTIVATION_APPROVED") throw new OrderError("La campaña necesita la autorización de la empresa antes de publicarse.");
     const problems = await activationProblems(id);
     if (problems.length) throw new OrderError(`No se puede publicar: ${problems[0]}`);
   } else if (c.status !== "DRAFT") throw new OrderError("Solo se publica una campaña en borrador.");
@@ -57,6 +63,7 @@ export async function publishCampaign(actor: Actor, id: string) {
 }
 
 export async function closeCampaign(actor: Actor, id: string) {
+  assertCompanyActor(actor);
   const c = await db.campaign.findUniqueOrThrow({ where: { id } });
   if (c.status !== "PUBLISHED") throw new OrderError("La campaña no está publicada.");
   const now = new Date();
@@ -74,6 +81,7 @@ export async function finishCampaign(actor: Actor, id: string) {
 
 /** Cancelar la campaña no cancela pedidos ni devuelve dinero: eso se registra pedido por pedido. */
 export async function cancelCampaign(actor: Actor, id: string, reason: string) {
+  assertCompanyActor(actor);
   if (reason.trim().length < 5) throw new OrderError("Indicá el motivo de la cancelación.");
   const c = await db.campaign.findUniqueOrThrow({ where: { id } });
   if (["FINISHED", "CANCELLED"].includes(c.status)) throw new OrderError("La campaña ya está finalizada o cancelada.");

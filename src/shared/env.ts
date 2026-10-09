@@ -13,7 +13,7 @@ const schema = z.object({
   UPLOAD_DIR: z.string().default("/data/uploads"),
   /** "enabled" habilita el simulador de pagos. Nunca usar con dinero real. */
   PAYMENT_SIMULATOR: z.enum(["enabled", "disabled"]).default("disabled"),
-  /** Credenciales de Mercado Pago de la textil (opcionales; los clubes cargan las suyas en el panel). */
+  /** Credenciales de Mercado Pago de la empresa (opcionales; los clubes cargan las suyas en el panel). */
   MP_ACCESS_TOKEN: z.string().optional(),
   MP_WEBHOOK_SECRET: z.string().optional(),
   MP_API_BASE: z.string().url().default("https://api.mercadopago.com"),

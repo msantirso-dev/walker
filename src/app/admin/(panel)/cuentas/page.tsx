@@ -33,7 +33,7 @@ export default async function Accounts() {
   return (
     <>
       <PageHeader eyebrow="Cobros" title="Cuentas de cobro">
-        Cada campaña cobra a una sola cuenta: la de la textil o la del club. Las credenciales de Mercado Pago se guardan cifradas y nunca se muestran.
+        Cada campaña cobra a una sola cuenta: la de la empresa o la del club. Las credenciales de Mercado Pago se guardan cifradas y nunca se muestran.
       </PageHeader>
       <div className="grid gap-4">
         {accounts.map((a) => {

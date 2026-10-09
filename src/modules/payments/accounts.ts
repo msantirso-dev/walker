@@ -12,7 +12,7 @@ type Account = {
   mpWebhookSecretEnc: string | null;
 };
 
-/** Credenciales de Mercado Pago de la cuenta (o de la textil por entorno). Nunca salen del servidor. */
+/** Credenciales de Mercado Pago de la cuenta (o de la empresa por entorno). Nunca salen del servidor. */
 export function mpCredentials(a: Account): { accessToken: string; webhookSecret: string } | null {
   if (a.mpAccessTokenEnc && a.mpWebhookSecretEnc) {
     return { accessToken: decryptSecret(a.mpAccessTokenEnc), webhookSecret: decryptSecret(a.mpWebhookSecretEnc) };

@@ -1,9 +1,9 @@
 /**
  * Cálculo del modelo v2 (anticipo textil + saldo club). Compartido por la tienda y el servidor; el servidor siempre recalcula.
  *
- * - Los adicionales (nombre, número, leyenda) son de la textil: se suman al precio textil.
+ * - Los adicionales (nombre, número, leyenda) son de la empresa: se suman al precio de la empresa.
  * - El recargo del club se aplica sobre el total textil de la unidad (producto + adicionales), con la misma
- *   proporción precio al socio / precio textil del producto.
+ *   proporción precio al socio / precio de la empresa del producto.
  * - Anticipo A = B + D, con B = total de la empresa (producto + adicionales), P = precio final,
  *   G = P − B (diferencia del club) y D = G × deducciones (hipótesis 21 % + 3,5 % = 24,5 %, pendiente de aprobación).
  *   Saldo al club S = P − A. El comprador ve solo el anticipo y el saldo, sin este desglose.

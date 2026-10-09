@@ -4,7 +4,7 @@ import { currentUser, can } from "@/modules/auth";
 
 export const dynamic = "force-dynamic";
 
-/** Contrato del acuerdo: solo la textil. */
+/** Contrato del acuerdo: solo la empresa. */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const u = await currentUser();

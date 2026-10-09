@@ -97,7 +97,11 @@ export async function ensureClubLink(memberId: string, clubId: string, memberNum
   const num = memberNumber?.trim().slice(0, 30) || null;
   const link = await db.memberClub.findUnique({ where: { memberId_clubId: { memberId, clubId } } });
   if (mode === "REQUIRED" && !num && !link?.memberNumber) throw new UserError("Este club pide tu número de socio para comprar.");
-  if (!link) return db.memberClub.create({ data: { memberId, clubId, memberNumber: mode === "HIDDEN" ? null : num } });
+  // Dos envíos simultáneos del mismo socio: upsert evita la carrera sobre la asociación
+  if (!link)
+    return db.memberClub
+      .create({ data: { memberId, clubId, memberNumber: mode === "HIDDEN" ? null : num } })
+      .catch(() => db.memberClub.findUniqueOrThrow({ where: { memberId_clubId: { memberId, clubId } } }));
   if (num && mode !== "HIDDEN" && num !== link.memberNumber) return db.memberClub.update({ where: { id: link.id }, data: { memberNumber: num, validatedAt: null, validatedById: null } });
   return link;
 }

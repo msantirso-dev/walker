@@ -17,7 +17,7 @@ export default async function NewCampaign({ searchParams }: { searchParams: Prom
   const now = new Date();
   return (
     <>
-      <PageHeader eyebrow="Campañas" title="Nueva campaña">Se crea como borrador con el modelo de anticipo textil. Después se eligen productos, precio al socio y alcance, el club solicita la activación y la textil la autoriza.</PageHeader>
+      <PageHeader eyebrow="Campañas" title="Nueva campaña">Se crea como borrador con el modelo de anticipo textil. Después se eligen productos, precio al socio y alcance, el club solicita la activación y la empresa la autoriza.</PageHeader>
       <ActionForm action={createCampaign} className="card grid gap-4 p-5 md:grid-cols-2">
         <div className="field">
           <label htmlFor="clubId">Club</label>
@@ -32,11 +32,11 @@ export default async function NewCampaign({ searchParams }: { searchParams: Prom
         <div className="field"><label htmlFor="opensAt">Apertura (hora Argentina)</label><input id="opensAt" name="opensAt" type="datetime-local" className="input" defaultValue={toArLocal(now)} required /></div>
         <div className="field"><label htmlFor="closesAt">Cierre (hora Argentina)</label><input id="closesAt" name="closesAt" type="datetime-local" className="input" defaultValue={toArLocal(addDays(now, 21))} required /></div>
         {textil && <div className="field md:col-span-2">
-          <label htmlFor="paymentAccountId">Cuenta de la textil para el anticipo</label>
+          <label htmlFor="paymentAccountId">Cuenta de la empresa para el anticipo</label>
           <select id="paymentAccountId" name="paymentAccountId" className="input" required>
             {accounts.map((a) => <option key={a.id} value={a.id}>{a.owner === "TEXTIL" ? "Textil" : `Club ${a.club?.name ?? ""}`} · {a.label}</option>)}
           </select>
-          <small>El anticipo se cobra por Mercado Pago en la cuenta de la textil. El saldo al club se registra aparte.</small>
+          <small>El anticipo se cobra por Mercado Pago en la cuenta de la empresa. El saldo al club se registra aparte.</small>
         </div>}
         <SubmitButton className="btn btn-primary justify-self-start">Crear borrador</SubmitButton>
       </ActionForm>
