@@ -373,24 +373,32 @@ async function main() {
   const gNec = await one("NEC", "Neceser", "Neoprene (dato de ejemplo)");
   const gPon = await one("PON", "Poncho", "Toalla de algodón con capucha (dato de ejemplo)");
   const sketch = (file: string, alt: string) => photo(`demo/virreyes-${file}`, file).then((url) => ({ create: [{ url, view: "FRONT" as const, tag: "DESIGN" as const, alt: `Boceto Walkersport · ${alt}` }] }));
+  const views = async (base: string, chart: string, alt: string) => ({
+    create: [
+      { url: await photo(`demo/virreyes-${base}-frente.webp`, `${base}-frente.webp`), view: "FRONT" as const, tag: "DESIGN" as const, alt: `Boceto Walkersport · ${alt}, frente`, sort: 0 },
+      { url: await photo(`demo/virreyes-${base}-espalda.webp`, `${base}-espalda.webp`), view: "BACK" as const, tag: "DESIGN" as const, alt: `Boceto Walkersport · ${alt}, espalda`, sort: 1 },
+      { url: await photo(`demo/virreyes-${chart}.webp`, `${chart}.webp`), view: "SIZE_CHART" as const, tag: "REFERENCE" as const, alt: `Tabla de talles Walkersport · ${alt}`, sort: 2 },
+      { url: await photo(`demo/virreyes-${base}.webp`, `${base}.webp`), view: "DETAIL" as const, tag: "DESIGN" as const, alt: `Boceto Walkersport · ${alt}, frente y espalda`, sort: 3 },
+    ],
+  });
   const outfit = { clubId: demo.id, kind: "SIMPLE" as const, technique: "PENDING" as const, catalogStatus: "PRESALE" as const };
   const dRem = await prod({
     ...outfit, code: "D-REM", name: "Remera algodón", family: "OUTFIT",
     description: "Remera de algodón verde con franja del club. Admite leyenda de disciplina y nombre. Precio de ejemplo.", basePrice: pesos(13000),
     components: { create: [{ garmentId: gRem.id, label: "Remera", printTarget: true }] },
-    images: await sketch("remera.webp", "remera algodón, frente y espalda"),
+    images: await views("remera", "talles-remera", "remera algodón"),
   });
   const dSho = await prod({
     ...outfit, code: "D-SHO", name: "Bermuda", family: "OUTFIT",
     description: "Bermuda verde con escudo y logo WKR. Precio de ejemplo.", basePrice: pesos(15000),
     components: { create: [{ garmentId: gSho.id, label: "Bermuda", printTarget: true }] },
-    images: await sketch("bermuda.webp", "bermuda, frente y espalda"),
+    images: await views("bermuda", "talles-bermuda", "bermuda"),
   });
   const dMus = await prod({
     ...outfit, code: "D-MUS", name: "Musculosa run", family: "OUTFIT",
     description: "Musculosa para correr con franja naranja. Precio de ejemplo igual al precio textil: sin saldo al club.", basePrice: pesos(9000),
     components: { create: [{ garmentId: gMus.id, label: "Musculosa" }] },
-    images: await sketch("musculosa.webp", "musculosa run, frente y espalda"),
+    images: await views("musculosa", "talles-remera", "musculosa run"),
   });
   const dBol = await prod({
     ...outfit, code: "D-BOL", name: "Bolso", family: "ACCESSORY",
