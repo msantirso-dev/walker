@@ -33,7 +33,14 @@ export type StoreConfig = {
   audienceText: string;
   demo: boolean;
   policiesAnchor: string;
+  /** Socio con sesión (los datos del pedido salen de su cuenta) o null. */
+  member: { name: string; email: string; phone: string | null; memberNumber: string | null } | null;
+  /** Acceso o registro del socio, conservando el club y volviendo a esta tienda. */
+  loginUrl: string;
 };
+
+const CART_KEY = (id: string) => `back-cart:${id}`;
+type SavedCart = { players: Player[]; lines: Line[]; notes: string };
 
 
 const GROUP_LABEL: Record<string, string> = { KIDS: "Infantiles", NUMERIC: "Infantiles · 1 (6-8) · 2 (10-12) · 3 (14-16)", ALPHA: "Adultos", OTHER: "Otros" };
@@ -97,7 +104,8 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
   const [sheet, setSheet] = useState<StoreProduct | null>(null);
   const [review, setReview] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [buyer, setBuyer] = useState({ name: "", email: "", phone: "", memberNumber: "" });
+  const [buyer, setBuyer] = useState({ name: cfg.member?.name ?? "", email: cfg.member?.email ?? "", phone: cfg.member?.phone ?? "", memberNumber: cfg.member?.memberNumber ?? "" });
+  const [restored, setRestored] = useState(false);
   const [delivery, setDelivery] = useState<"PICKUP" | "SHIPPING">(advanceModel || cfg.pickupEnabled ? "PICKUP" : "SHIPPING");
   const [address, setAddress] = useState("");
   const [notes, setNotes] = useState("");
@@ -113,6 +121,35 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
   useEffect(() => {
     idem.current = uid();
   }, [lines, players, buyer, delivery, address, payKind, payMethod]);
+
+  // Carrito conservado en este navegador (para iniciar sesión sin perderlo). Si el almacenamiento no está disponible, sigue en memoria.
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(CART_KEY(cfg.campaignId));
+      if (raw) {
+        const saved = JSON.parse(raw) as SavedCart;
+        const known = saved.lines.filter((l) => products.some((p) => p.id === l.productId));
+        if (known.length) {
+          setPlayers(saved.players ?? []);
+          setLines(known);
+          setNotes(saved.notes ?? "");
+          if (new URLSearchParams(window.location.search).get("checkout") === "1") setTimeout(() => document.getElementById("pedido")?.scrollIntoView({ behavior: "smooth" }), 200);
+        }
+      }
+    } catch {
+      /* sin almacenamiento: el carrito vive solo en memoria */
+    }
+    setRestored(true);
+  }, [cfg.campaignId, products]);
+  useEffect(() => {
+    if (!restored) return;
+    try {
+      if (lines.length) window.localStorage.setItem(CART_KEY(cfg.campaignId), JSON.stringify({ players, lines, notes } satisfies SavedCart));
+      else window.localStorage.removeItem(CART_KEY(cfg.campaignId));
+    } catch {
+      /* sin almacenamiento */
+    }
+  }, [restored, players, lines, notes, cfg.campaignId]);
 
   useEffect(() => {
     if (!toast) return;
@@ -158,8 +195,7 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
 
   function validate(): string | null {
     if (!lines.length) return "Agregá al menos una prenda.";
-    if (buyer.name.trim().length < 3) return "Completá tu nombre y apellido.";
-    if (!/^\S+@\S+\.\S+$/.test(buyer.email.trim())) return "Revisá el correo: ahí te enviamos el enlace del pedido.";
+    if (!cfg.member) return "Ingresá con tu cuenta para continuar: tu pedido queda guardado.";
     if (buyer.phone.replace(/\D/g, "").length < 8) return "Completá un celular con código de área.";
     if (cfg.memberNumberMode === "REQUIRED" && !buyer.memberNumber.trim()) return "Completá tu número de socio.";
     if (delivery === "SHIPPING" && address.trim().length < 6) return "Completá la dirección de envío.";
@@ -191,10 +227,19 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
         }),
       });
       const body = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        window.location.assign(cfg.loginUrl);
+        return;
+      }
       if (!res.ok || !body.redirect) {
         setFormError(body.error ?? "No pudimos registrar el pedido. Intentá de nuevo.");
         setReview(false);
         return;
+      }
+      try {
+        window.localStorage.removeItem(CART_KEY(cfg.campaignId));
+      } catch {
+        /* sin almacenamiento */
       }
       window.location.assign(body.redirect);
     } catch {
@@ -354,20 +399,23 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
               }}
             >
               <h3 className="text-2xl font-bold">Datos y pago</h3>
-              <div className="field">
-                <label htmlFor="bName">Nombre y apellido</label>
-                <input id="bName" className="input" autoComplete="name" value={buyer.name} onChange={(e) => setBuyer({ ...buyer, name: e.target.value })} />
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="field">
-                  <label htmlFor="bEmail">Correo</label>
-                  <input id="bEmail" type="email" className="input" autoComplete="email" value={buyer.email} onChange={(e) => setBuyer({ ...buyer, email: e.target.value })} />
+              {cfg.member ? (
+                <>
+                  <p className="rounded-lg bg-surface-2 p-3 text-sm">
+                    Comprás como <b>{cfg.member.name}</b> ({cfg.member.email}). El enlace y los avisos del pedido llegan a ese correo.
+                  </p>
+                  <div className="field">
+                    <label htmlFor="bPhone">Celular</label>
+                    <input id="bPhone" type="tel" className="input" autoComplete="tel" placeholder="11 5555 5555" value={buyer.phone} onChange={(e) => setBuyer({ ...buyer, phone: e.target.value })} />
+                  </div>
+                </>
+              ) : (
+                <div className="grid gap-2 rounded-lg border-[1.5px] border-club p-3">
+                  <b>Ingresá para comprar</b>
+                  <span className="text-sm text-muted">Podés armar el pedido sin cuenta. Para pagar, ingresá o creá tu cuenta: el pedido queda guardado y volvés a esta tienda.</span>
+                  <a href={cfg.loginUrl} className="btn btn-club">Ingresar o crear cuenta</a>
                 </div>
-                <div className="field">
-                  <label htmlFor="bPhone">Celular</label>
-                  <input id="bPhone" type="tel" className="input" autoComplete="tel" placeholder="11 5555 5555" value={buyer.phone} onChange={(e) => setBuyer({ ...buyer, phone: e.target.value })} />
-                </div>
-              </div>
+              )}
               {cfg.memberNumberMode !== "HIDDEN" && (
                 <div className="field">
                   <label htmlFor="bMember">
@@ -474,7 +522,11 @@ export function StoreApp({ products, cfg }: { products: StoreProduct[]; cfg: Sto
                 </span>
               </label>
               {formError && <p role="alert" className="notice notice-danger">{formError}</p>}
-              <button type="submit" className="btn btn-club w-full">Revisar pedido</button>
+              {cfg.member ? (
+                <button type="submit" className="btn btn-club w-full">Revisar pedido</button>
+              ) : (
+                <a href={cfg.loginUrl} className="btn btn-club w-full">Ingresar para revisar y pagar</a>
+              )}
             </form>
           </div>
         </section>

@@ -39,7 +39,14 @@ export function termsOf(c: SaleCampaign) {
 
 export type CreateResult = { token: string; orderId: string; code: string; payMethod: CartInput["payMethod"]; payKind: CartInput["payKind"]; existing: boolean };
 
-export async function createOrder(campaignId: string, raw: unknown): Promise<CreateResult> {
+/** Socio con sesión que hace el pedido: sus datos reemplazan los del formulario. */
+export type OrderMember = { id: string; name: string; email: string; phone: string | null };
+
+export async function createOrder(campaignId: string, raw: unknown, member?: OrderMember): Promise<CreateResult> {
+  if (member && raw && typeof raw === "object") {
+    const r = raw as { buyer?: Record<string, unknown> };
+    r.buyer = { ...(r.buyer ?? {}), name: member.name, email: member.email, phone: member.phone || r.buyer?.phone };
+  }
   const parsed = cartSchema.safeParse(raw);
   if (!parsed.success) throw new OrderError(parsed.error.issues[0]?.message ?? "Datos inválidos");
   const cart = parsed.data;
@@ -60,7 +67,9 @@ export async function createOrder(campaignId: string, raw: unknown): Promise<Cre
         if (cart.payMethod === "TRANSFER" && !c.allowTransfer) throw new OrderError("Esta campaña no acepta transferencias.");
         if (c.pricingModel === "LEGACY_DEPOSIT" && cart.payKind === "DEPOSIT" && c.paymentMode === "FULL") throw new OrderError("Esta campaña requiere el pago total.");
         if (c.club.isDemo && !simulatorEnabled()) throw new OrderError("Esta es una tienda de demostración: no admite compras.");
-        if (c.memberNumberMode === "REQUIRED" && !cart.buyer.memberNumber) throw new OrderError("Completá tu número de socio.");
+        // Número de socio: solo si el club lo configura (y no equivale a membresía validada)
+        const numberMode = c.club.memberNumberMode;
+        if (numberMode === "REQUIRED" && !cart.buyer.memberNumber) throw new OrderError("Este club pide tu número de socio para comprar.");
 
         const priced = priceCart(c, cart);
         // Política de cambios de prendas personalizadas: rige para las campañas del modelo v2
@@ -92,7 +101,10 @@ export async function createOrder(campaignId: string, raw: unknown): Promise<Cre
             buyerName: cart.buyer.name,
             buyerEmail: cart.buyer.email,
             buyerPhone: cart.buyer.phone,
-            memberNumber: c.memberNumberMode === "HIDDEN" ? null : cart.buyer.memberNumber || null,
+            memberNumber: numberMode === "HIDDEN" ? null : cart.buyer.memberNumber || null,
+            memberId: member?.id ?? null,
+            deductionBpA: c.pricingModel === "TEXTIL_ADVANCE" ? c.deductionBpA : null,
+            deductionBpB: c.pricingModel === "TEXTIL_ADVANCE" ? c.deductionBpB : null,
             deliveryMethod: cart.delivery.method,
             shippingAddress: cart.delivery.method === "SHIPPING" ? cart.delivery.address : null,
             notes: cart.notes || null,

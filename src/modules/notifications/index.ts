@@ -137,12 +137,12 @@ export async function queueOrderLinks(
   });
 }
 
-export async function queuePasswordReset(user: { email: string; name: string }, link: string, minutes: number) {
+export async function queuePasswordReset(user: { email: string; name: string }, link: string, minutes: number, subject = "Restablecer tu contraseña del panel") {
   await db.emailOutbox.create({
     data: {
       to: user.email,
       template: "PASSWORD_RESET",
-      subject: "Restablecer tu contraseña del panel",
+      subject,
       body: `Hola ${user.name.split(" ")[0]}:\n\nPara elegir una contraseña nueva, entrá a este enlace (vence en ${minutes} minutos y se usa una sola vez):\n${link}\n\nSi no lo pediste vos, ignorá este correo: tu contraseña actual sigue funcionando.`,
     },
   });

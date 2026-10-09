@@ -3,6 +3,9 @@ import { startOnlinePayment } from "@/modules/payments";
 import { deliverPending } from "@/modules/notifications";
 import { allow, ipOf } from "@/shared/rate-limit";
 import { env } from "@/shared/env";
+import { db } from "@/shared/db";
+import { UserError } from "@/shared/errors";
+import { ensureClubLink, memberFromRequest } from "@/modules/members";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +17,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const len = Number(req.headers.get("content-length") ?? 0);
   if (len > 64_000) return Response.json({ error: "Pedido demasiado grande." }, { status: 413 });
 
+  // El socio inicia sesión antes de completar la compra (puede armar el carrito sin cuenta)
+  const member = await memberFromRequest(req);
+  if (!member) return Response.json({ error: "Ingresá con tu cuenta para completar la compra.", code: "login" }, { status: 401 });
+
   let body: unknown;
   try {
     body = await req.json();
@@ -21,7 +28,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return Response.json({ error: "Datos inválidos." }, { status: 400 });
   }
   try {
-    const r = await createOrder(id, body);
+    const campaign = await db.campaign.findUnique({ where: { id }, select: { clubId: true, club: { select: { memberNumberMode: true } } } });
+    if (!campaign) return Response.json({ error: "La campaña no existe." }, { status: 404 });
+    const memberNumber = (body as { buyer?: { memberNumber?: string } })?.buyer?.memberNumber ?? null;
+    await ensureClubLink(member.id, campaign.clubId, memberNumber, campaign.club.memberNumberMode);
+    const r = await createOrder(id, body, member);
     const page = `/pedido/${r.token}`;
     void deliverPending().catch(() => {});
     if (r.payMethod === "MERCADOPAGO") {
@@ -36,6 +47,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
     return Response.json({ redirect: `${page}?nuevo=1`, order: r.code });
   } catch (e) {
+    if (e instanceof UserError && !(e instanceof OrderError)) return Response.json({ error: e.message }, { status: 409 });
     if (e instanceof OrderError) return Response.json({ error: e.message, code: e.code }, { status: e.code === "not_found" ? 404 : 409 });
     console.error(e);
     return Response.json({ error: "No pudimos registrar el pedido. Intentá de nuevo." }, { status: 500 });

@@ -119,12 +119,20 @@ async function main() {
     return;
   }
   console.log("Limpiando datos…");
-  await db.$executeRawUnsafe(`TRUNCATE "ClubShipment","ClubPurchaseItem","ClubPurchase","ProductSampleLink","SizeSampleItem","SizeSampleSet","ClubAgreement","OrderUnitOption","ProductOptionValue","ProductOptionGroup","PasswordReset","AuditLog","EmailOutbox","WebhookEvent","SimulatedPayment","ProductionLotUnit","ProductionLot","Delivery","Receipt","Payment","OrderUnitComponent","OrderUnit","Player","Order","Buyer","BenefitSettlement","BenefitRule","CampaignProduct","Campaign","ProductImage","ProductComponent","Product","GarmentSize","Garment","PaymentAccount","ClubPhoto","Category","ClubSport","Session","User","Club","Sport" CASCADE`);
+  await db.$executeRawUnsafe(`TRUNCATE "ClubPurchasePayment","ProductionLotPurchaseItem","MemberClub","MemberSession","MemberPasswordReset","Member","Lead","ClubShipment","ClubPurchaseItem","ClubPurchase","ProductSampleLink","SizeSampleItem","SizeSampleSet","ClubAgreement","OrderUnitOption","ProductOptionValue","ProductOptionGroup","PasswordReset","AuditLog","EmailOutbox","WebhookEvent","SimulatedPayment","ProductionLotUnit","ProductionLot","Delivery","Receipt","Payment","OrderUnitComponent","OrderUnit","Player","Order","Buyer","BenefitSettlement","BenefitRule","CampaignProduct","Campaign","ProductImage","ProductComponent","Product","GarmentSize","Garment","PaymentAccount","ClubPhoto","Category","ClubSport","Session","User","Club","Sport" CASCADE`);
+  // Marca: valores por defecto (nombre provisorio BACK) y fórmula del anticipo pendiente de aprobación
+  await db.brandSettings.upsert({
+    where: { id: "brand" },
+    create: { id: "brand" },
+    update: { name: "BACK", tagline: null, logoUrl: null, colorPrimary: "#1D2B4F", colorAccent: "#E9B949", formulaApprovedAt: null, formulaApprovedById: null, formulaNote: null, debtBlockDefault: "ADDITIONAL_ONLY" },
+  });
 
   const sports = Object.fromEntries(
     await Promise.all(["Rugby", "Hockey", "Fútbol", "Básquet", "Vóley"].map(async (name) => [name, await db.sport.create({ data: { name } })])),
   );
   const hash = await bcrypt.hash(PASSWORD, 10);
+  // Socio de demostración (compra en las tiendas; consulta solo sus pedidos)
+  await db.member.create({ data: { email: "socio@demo.test", name: "Socio Demo", phone: "11 5555 0000", passwordHash: hash } });
 
   // ───────── Textil ─────────
   const textilAccount = await db.paymentAccount.create({
@@ -286,7 +294,7 @@ async function main() {
   // Acuerdo privado próximo a vencer (para ver la alerta en el panel de la textil)
   await db.clubAgreement.create({
     data: {
-      clubId: club.id, status: "ACTIVE", startsAt: days(-320), endsAt: days(45), exclusive: true, brandLine: `LNRC by ${process.env.TEXTIL_BRAND ?? "Walkersport"}`,
+      clubId: club.id, status: "ACTIVE", startsAt: days(-320), endsAt: days(45), exclusive: true, brandLine: `LNRC by BACK`,
       samplesCommitted: "Curva superior e inferior completa en la sede.", catalogAgreed: "Indumentaria de juego, entrenamiento y outfit.",
       activationConditions: "Cada campaña la solicita el club y la autoriza la textil.", pricingRules: "Precio textil por producto; el club define el precio al socio.",
       createdById: textilUser.id,
@@ -464,7 +472,7 @@ async function main() {
   });
   await db.clubAgreement.create({
     data: {
-      clubId: demo.id, status: "DRAFT", startsAt: days(0), endsAt: days(365), exclusive: true, brandLine: `Virreyes by ${process.env.TEXTIL_BRAND ?? "Walkersport"}`,
+      clubId: demo.id, status: "DRAFT", startsAt: days(0), endsAt: days(365), exclusive: true, brandLine: `Virreyes by BACK`,
       notes: "Borrador de ejemplo para la demostración. Sin valor contractual.", createdById: textilUser.id,
     },
   });
@@ -501,10 +509,11 @@ Datos de demostración creados.
   Contraseña de todos los usuarios demo: ${PASSWORD}
     textil@camada.test       Administración textil
     produccion@camada.test   Producción
-    club@nandues.test        Administración del club (Los Ñandúes)
-    entregas@nandues.test    Entregas (Los Ñandúes)
-    club@sauce.test          Administración del club (El Sauce)
-    club@virreyes-demo.test  Administración del club (piloto demo)`);
+    club@nandues.test        Club en modo consulta (Los Ñandúes)
+    entregas@nandues.test    Club, consulta de entregas (Los Ñandúes)
+    club@sauce.test          Club en modo consulta (El Sauce)
+    club@virreyes-demo.test  Club en modo consulta (piloto demo)
+    socio@demo.test          Socio (tiendas y "Mis pedidos")`);
 }
 
 main()

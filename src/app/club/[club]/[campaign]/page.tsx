@@ -9,6 +9,8 @@ import { ClubBar, Contact, DemoBanner, Faq, PlatformFooter, Steps, WindowLine } 
 import { CHANGE_POLICY_TEXT, CHANGE_POLICY_UNPERSONALIZED } from "@/modules/catalog/options";
 import { MP_FINANCING_TEXT, SAMPLE_TEXT } from "@/shared/copy";
 import { StoreApp, type StoreConfig } from "./store-app";
+import { currentMember } from "@/modules/members";
+import { db } from "@/shared/db";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,8 @@ export default async function CampaignPage({ params }: P) {
   const d = await getCampaignStore(clubSlug, campaignSlug);
   if (!d) notFound();
   const { club, campaign: c, open, products, payments } = d;
+  const member = await currentMember();
+  const link = member ? await db.memberClub.findUnique({ where: { memberId_clubId: { memberId: member.id, clubId: club.id } } }) : null;
   const showCatalog = open || c.showCatalogWhenClosed || (c.status === "PUBLISHED" && c.opensAt > new Date());
   const advance = c.pricingModel === "TEXTIL_ADVANCE";
   const deposit = c.paymentMode === "DEPOSIT";
@@ -50,7 +54,7 @@ export default async function CampaignPage({ params }: P) {
     shippingEnabled: c.shippingEnabled,
     shippingPrice: c.shippingPrice,
     shippingNotes: c.shippingNotes,
-    memberNumberMode: c.memberNumberMode,
+    memberNumberMode: club.memberNumberMode,
     mercadopago: payments.mercadopago,
     simulated: payments.simulated,
     transfer: payments.transfer,
@@ -61,6 +65,8 @@ export default async function CampaignPage({ params }: P) {
     audience: c.audience,
     audienceText: d.audience,
     demo: club.isDemo,
+    member: member ? { name: member.name, email: member.email, phone: member.phone, memberNumber: link?.memberNumber ?? null } : null,
+    loginUrl: `/socios/ingresar?club=${club.slug}&next=${encodeURIComponent(`/club/${club.slug}/${c.slug}?checkout=1`)}`,
     policiesAnchor: "#condiciones",
   };
 
