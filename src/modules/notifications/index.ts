@@ -4,6 +4,7 @@ import { db, type Tx } from "@/shared/db";
 import { env, emailConfigured } from "@/shared/env";
 import { decryptSecret } from "@/shared/crypto";
 import { ars } from "@/shared/money";
+import { CONFIRMATION_TEXT } from "@/shared/copy";
 
 export type Template =
   | "ORDER_RECEIVED"
@@ -72,7 +73,7 @@ function compose(t: Template, o: OrderForMail, extra: { amount?: number; reason?
     PAYMENT_CONFIRMED: [
       `Pago confirmado · pedido ${o.code}`,
       adv
-        ? `${hi}\n\nConfirmamos un pago de ${ars(extra.amount ?? 0)}. Anticipo acreditado: ${ars(o.advancePaid ?? 0)}.${balance > 0 ? ` Saldo a pagar al club: ${ars(balance)}.` : ""}`
+        ? `${hi}\n\n${CONFIRMATION_TEXT()}\n\nPedido: ${o.code}\nImporte abonado: ${ars(o.advancePaid ?? 0)}\n${balance > 0 ? `Saldo a pagar al club: ${ars(balance)} (se paga solo al club, por los medios que el club disponga).` : "Sin saldo a pagar al club."}`
         : `${hi}\n\nConfirmamos un pago de ${ars(extra.amount ?? 0)}. Total pagado: ${ars(o.paidAmount)}. Saldo: ${ars(balance)}.`,
     ],
     RECEIPT_REJECTED: [
@@ -91,7 +92,9 @@ function compose(t: Template, o: OrderForMail, extra: { amount?: number; reason?
     ],
     READY_FOR_PICKUP: [
       `Tu pedido ${o.code} está listo para retirar`,
-      `${hi}\n\nYa podés retirar tu pedido en el club.\n${pickup}\n\nPresentá el código QR de retiro que figura en el enlace.${balance > 0 ? `\nAntes de retirar, ${adv ? "pagá al club" : "completá"} el saldo de ${ars(balance)}.` : ""}`,
+      adv
+        ? `${hi}\n\nTus prendas ya están disponibles en ${o.club.name}.\n${pickup}\n\nEl retiro se hace solo contra el pago total.${balance > 0 ? ` Saldo a pagar: ${ars(balance)}. Se paga exclusivamente al club, por los medios que el club disponga; no se paga por la plataforma.` : ""}\nPresentá el código de retiro que figura en el enlace.`
+        : `${hi}\n\nYa podés retirar tu pedido en el club.\n${pickup}\n\nPresentá el código QR de retiro que figura en el enlace.${balance > 0 ? `\nAntes de retirar, completá el saldo de ${ars(balance)}.` : ""}`,
     ],
     DELIVERED: [
       `Entrega registrada · pedido ${o.code}`,

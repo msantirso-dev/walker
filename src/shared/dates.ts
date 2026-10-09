@@ -29,3 +29,12 @@ export function toArLocal(d: Date | null | undefined): string {
 export function addDays(d: Date, days: number) {
   return new Date(d.getTime() + days * 86400_000);
 }
+
+/** Plazo estimado de entrega: con días corridos se pueden mostrar fechas; si no, solo el plazo (sin prometer más). */
+export function deliveryWindowText(c: { closesAt: Date; deliveryDaysMin: number; deliveryDaysMax: number; deliveryDaysKind?: string | null }) {
+  const kind = c.deliveryDaysKind ?? "PENDING";
+  const span = `${c.deliveryDaysMin} a ${c.deliveryDaysMax} días`;
+  if (kind === "CALENDAR") return `${span} corridos desde el cierre (entre el ${fmtDate(addDays(c.closesAt, c.deliveryDaysMin))} y el ${fmtDate(addDays(c.closesAt, c.deliveryDaysMax))})`;
+  if (kind === "BUSINESS") return `${span} hábiles desde el cierre`;
+  return `${span} desde el cierre (a confirmar si son corridos o hábiles)`;
+}

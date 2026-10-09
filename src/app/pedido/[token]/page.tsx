@@ -7,7 +7,8 @@ import { DemoBanner } from "@/app/club/_ui/parts";
 import { LOT_PUBLIC_LABEL } from "@/modules/production";
 import { clubTheme } from "@/modules/clubs/public";
 import { pickupQrPayload } from "@/modules/deliveries";
-import { addDays, fmtDate, fmtDateTime, fmtShortTime } from "@/shared/dates";
+import { deliveryWindowText, fmtDate, fmtDateTime, fmtShortTime } from "@/shared/dates";
+import { CONFIRMATION_TEXT } from "@/shared/copy";
 import { ars } from "@/shared/money";
 import { ActionForm, SubmitButton } from "@/shared/ui/client";
 import { Badge, type Tone } from "@/shared/ui";
@@ -39,13 +40,19 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const lastTransfer = [...o.payments].reverse().find((p) => p.method === "TRANSFER");
   const waitingProvider = o.payments.some((p) => p.method === "MERCADOPAGO" && ["CREATED", "PENDING"].includes(p.status) && Date.now() - p.createdAt.getTime() < 60 * 60_000);
   const activeUnits = o.units.filter((u) => u.status === "ACTIVE");
+  const lastMp = [...o.payments].reverse().find((p) => p.method === "MERCADOPAGO") ?? null;
+  // Inicio previsto = cierre; si el inicio real se corre, se informa el desvío
+  const startNote = c.productionStartedAt
+    ? Math.abs(c.productionStartedAt.getTime() - c.closesAt.getTime()) > 86400_000
+      ? `La producción comenzó el ${fmtDate(c.productionStartedAt)} (estaba prevista para el cierre, el ${fmtDate(c.closesAt)}). El plazo estimado corre desde el inicio real.`
+      : `La producción comenzó el ${fmtDate(c.productionStartedAt)}.`
+    : null;
 
   // Avance de fabricación publicado: el estado más atrasado entre los lotes que contienen sus prendas
   const ORDER: LotStatus[] = ["PENDING_APPROVAL", "APPROVED", "IN_PRODUCTION", "QUALITY_CONTROL", "READY_TO_SHIP", "RECEIVED_BY_CLUB"];
   const lotStates = activeUnits.flatMap((u) => u.lotUnits.filter((lu) => lu.delta > 0 && lu.lot.status !== "PENDING_APPROVAL").map((lu) => lu.lot.status));
   const production =
     o.status !== "CONFIRMED" ? "Se fabrica cuando el pedido está confirmado" : lotStates.length ? LOT_PUBLIC_LABEL[lotStates.sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b))[0]] : "A la espera del cierre de la preventa";
-  const eta = `${fmtDate(addDays(c.closesAt, c.deliveryDaysMin))} al ${fmtDate(addDays(c.closesAt, c.deliveryDaysMax))}`;
   const ready = o.deliveryStatus === "READY" || o.deliveryStatus === "PARTIAL";
   const qr = ready ? await QRCode.toString(pickupQrPayload(o.pickupCode), { type: "svg", margin: 1, width: 220 }) : null;
   const playerGroups = [...o.players.map((p) => ({ p, units: activeUnits.filter((u) => u.playerId === p.id) })), { p: null, units: activeUnits.filter((u) => !u.playerId) }].filter((g) => g.units.length);
@@ -65,6 +72,29 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
           </div>
         )}
         {sp.pago === "error" && <div className="notice notice-warn mb-4">No pudimos abrir Mercado Pago. Tu pedido está guardado: intentá de nuevo con el botón de pago.</div>}
+        {sp.pago === "no-habilitado" && <div className="notice notice-warn mb-4">Tu pedido quedó registrado, pero los cobros con Mercado Pago todavía no están habilitados para esta preventa. Te avisamos por correo cuando puedas pagar.</div>}
+        {adv && lastMp && o.status !== "CONFIRMED" && ["REJECTED", "CANCELLED"].includes(lastMp.status) && (
+          <div className="notice notice-danger mb-4">
+            <b>Pago {lastMp.status === "REJECTED" ? "rechazado" : "cancelado"}.</b> No se cobró nada. Podés intentarlo de nuevo con el botón de pago: es el mismo pedido.
+          </div>
+        )}
+        {adv && o.status === "PENDING_PAYMENT" && lastMp && ["CREATED", "PENDING"].includes(lastMp.status) && !sp.retorno && (
+          <div className="notice notice-info mb-4"><b>Pago pendiente de confirmación.</b> Volver de Mercado Pago no confirma el pago: lo confirmamos cuando Mercado Pago nos informa la acreditación.</div>
+        )}
+        {adv && o.status === "CONFIRMED" && (
+          <section className="mb-6 rounded-2xl border-2 border-ok bg-ok-bg p-5 text-ink">
+            <h2 className="text-3xl font-extrabold text-ok">Pago aprobado</h2>
+            <p className="mt-2 max-w-[70ch]">{CONFIRMATION_TEXT(c.deliveryDaysMin, c.deliveryDaysMax)}</p>
+            <dl className="num mt-4 grid gap-3 text-sm sm:grid-cols-3">
+              <div><dt className="text-muted">Pedido</dt><dd className="font-mono text-lg font-bold">{o.code}</dd></div>
+              <div><dt className="text-muted">Importe abonado</dt><dd className="text-lg font-bold">{ars(o.advancePaid)}</dd></div>
+              <div><dt className="text-muted">Saldo a pagar al club</dt><dd className="text-lg font-bold">{ars(o.clubBalanceRequired)}</dd></div>
+              <div><dt className="text-muted">Cierre de la preventa</dt><dd className="font-semibold">{fmtDateTime(c.closesAt)}</dd></div>
+              <div className="sm:col-span-2"><dt className="text-muted">Entrega estimada</dt><dd className="font-semibold">{deliveryWindowText(c)}</dd></div>
+            </dl>
+            {startNote && <p className="mt-3 text-sm">{startNote}</p>}
+          </section>
+        )}
         {sp.retorno && <div className="mb-4"><Refresher active={waitingProvider && o.status !== "CONFIRMED"} /></div>}
 
         <div className="flex flex-wrap items-end justify-between gap-4">
@@ -103,7 +133,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
             <div className="flex justify-between border-t-2 border-ink pt-2 text-lg font-bold"><dt>Total</dt><dd>{ars(o.total)}</dd></div>
             {adv ? (
               <>
-                <div className="flex justify-between"><dt>Anticipo (Mercado Pago · lo cobra la textil)</dt><dd>{ars(o.advanceRequired)}</dd></div>
+                <div className="flex justify-between"><dt>Anticipo (Mercado Pago)</dt><dd>{ars(o.advanceRequired)}</dd></div>
                 <div className="flex justify-between text-ok"><dt>Anticipo acreditado</dt><dd>{ars(o.advancePaid)}</dd></div>
                 <div className="flex justify-between"><dt>Saldo al club (lo cobra {club.name})</dt><dd>{ars(o.clubBalanceRequired)}</dd></div>
               </>
@@ -229,7 +259,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               </ul>
             </div>
           ))}
-          <p className="mt-3 text-sm text-muted">Entrega estimada: del {eta}. {c.productionNotice}</p>
+          <p className="mt-3 text-sm text-muted">Entrega estimada: {deliveryWindowText(c)}. {c.productionNotice}</p>
         </section>
 
         {o.payments.length > 0 && (

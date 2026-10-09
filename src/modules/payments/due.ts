@@ -11,7 +11,7 @@ type CampaignMode = { paymentMode: string; status: string };
 export function dueOptions(o: OrderAmounts, c: CampaignMode): { kind: PaymentKind; amount: number; label: string }[] {
   if (o.status === "CANCELLED" || c.status === "CANCELLED") return [];
   if (o.pricingModel === "TEXTIL_ADVANCE") {
-    // Online solo se cobra el anticipo de la textil; el saldo del club se registra aparte
+    // Online solo se cobra el anticipo de la empresa; el saldo del club se registra aparte
     const adv = (o.advanceRequired ?? 0) - (o.advancePaid ?? 0);
     return adv > 0 && o.status !== "CONFIRMED" ? [{ kind: "ADVANCE", amount: adv, label: "Anticipo" }] : [];
   }
@@ -30,8 +30,8 @@ export function amountFor(o: OrderAmounts, c: CampaignMode, kind: PaymentKind) {
 }
 
 export const PAYMENT_STATUS_LABEL: Record<string, string> = {
-  CREATED: "Iniciado",
-  PENDING: "Pendiente",
+  CREATED: "Pendiente de confirmación",
+  PENDING: "Pendiente de confirmación",
   IN_REVIEW: "En revisión",
   APPROVED: "Aprobado",
   REJECTED: "Rechazado",
@@ -39,9 +39,9 @@ export const PAYMENT_STATUS_LABEL: Record<string, string> = {
   EXPIRED: "Vencido",
   REFUNDED: "Devuelto",
 };
-export const PAYMENT_KIND_LABEL: Record<string, string> = { DEPOSIT: "Seña", BALANCE: "Saldo", FULL: "Pago total", REFUND: "Devolución", ADVANCE: "Anticipo textil", CLUB_BALANCE: "Saldo al club" };
+export const PAYMENT_KIND_LABEL: Record<string, string> = { DEPOSIT: "Seña", BALANCE: "Saldo", FULL: "Pago total", REFUND: "Devolución", ADVANCE: "Anticipo", CLUB_BALANCE: "Saldo al club" };
 export const PAYMENT_METHOD_LABEL: Record<string, string> = { TRANSFER: "Transferencia", MERCADOPAGO: "Mercado Pago", CASH: "Efectivo", OTHER: "Otro medio" };
-export const RECEIVER_LABEL: Record<string, string> = { TEXTIL: "Textil", CLUB: "Club" };
+export const RECEIVER_LABEL: Record<string, string> = { TEXTIL: "Empresa", CLUB: "Club" };
 
 /**
  * Estado de cobro para el modelo de anticipo textil. El sistema sigue el anticipo; el saldo lo cobra y registra

@@ -41,6 +41,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         return Response.json({ redirect: url, order: r.code });
       } catch (e) {
         // El pedido quedó registrado: el comprador puede reintentar el pago desde su enlace.
+        if (e instanceof OrderError && e.code === "formula_pending") return Response.json({ redirect: `${page}?nuevo=1&pago=no-habilitado`, order: r.code });
         console.error("No se pudo iniciar el checkout", e);
         return Response.json({ redirect: `${page}?nuevo=1&pago=error`, order: r.code });
       }
