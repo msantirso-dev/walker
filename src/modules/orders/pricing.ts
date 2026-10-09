@@ -9,6 +9,12 @@ import { NAME_RE, OptionError, optionsSummary, resolveOptions, type OptionGroupT
 
 export class OrderError extends UserError {}
 
+/** Reglas del importe por unidad: P ≥ B, A ≤ P, A + S = P y S ≥ 0. */
+export function assertAdvanceInvariants(r: ReturnType<typeof advanceUnit>, name: string) {
+  if (r.final < r.base) throw new OrderError(`${name}: el precio final no puede ser menor que el precio de la empresa.`);
+  if (r.advance > r.final || r.club < 0 || r.advance + r.club !== r.final) throw new OrderError(`${name}: el anticipo no puede superar el precio final. Revisá las deducciones de la campaña.`);
+}
+
 /**
  * Pedidos del modelo v2: los datos del sistema (prendas, cobros, cancelaciones) los gestiona solo la textil.
  * El club lleva su propia planilla, que no modifica el pedido.
@@ -160,6 +166,7 @@ export function priceCart(c: SaleCampaign, cart: Pick<CartInput, "items" | "play
     const v2 = c.pricingModel === "TEXTIL_ADVANCE" && cp.textilPrice != null
       ? advanceUnit({ textil: cp.textilPrice, price: cp.price, extrasTextil: sum.textil, taxBp: c.clubTaxBp ?? DEFAULT_CLUB_TAX_BP })
       : null;
+    if (v2) assertAdvanceInvariants(v2, p.name);
     for (let i = 0; i < item.quantity; i++) {
       units.push({
         productId: p.id,
@@ -197,6 +204,7 @@ export function priceCart(c: SaleCampaign, cart: Pick<CartInput, "items" | "play
   if (c.pricingModel === "TEXTIL_ADVANCE") {
     // Anticipo = total textil (producto + adicionales) + cobertura impositiva sobre la diferencia del club
     const advanceRequired = units.reduce((a, u) => a + u.advanceAmount, 0);
+    if (advanceRequired > total || total - advanceRequired < 0) throw new OrderError("El anticipo no puede superar el precio final. Revisá los precios de la campaña.");
     return { units, itemsTotal, persTotal, shippingTotal, total, depositRequired: advanceRequired, advanceRequired, clubBalanceRequired: total - advanceRequired };
   }
   const dep = depositFor(c, itemsTotal + persTotal, total);

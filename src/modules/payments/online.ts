@@ -10,6 +10,7 @@ import { amountFor } from "./due";
 import { SimulatorProvider } from "./providers/simulator";
 import type { PaymentProvider, ProviderStatus } from "./providers/types";
 import type { PaymentKind, PaymentStatus } from "@/generated/prisma/client";
+import { realPaymentsAllowed } from "@/modules/brand";
 
 /**
  * Inicia (o reutiliza) un pago online del pedido y devuelve la URL del checkout alojado.
@@ -24,6 +25,9 @@ export async function startOnlinePayment(orderId: string, kind: PaymentKind, act
   // Club de demostración: nunca se cobra dinero real
   const provider = c.club.isDemo ? (simulatorEnabled() ? new SimulatorProvider() : null) : providerFor(c.paymentAccount);
   if (!provider) throw new OrderError(c.club.isDemo ? "Tienda de demostración: no admite pagos." : "El pago con Mercado Pago todavía no está habilitado para esta campaña.");
+  // Fórmula del anticipo pendiente de aprobación comercial: sin ella no se crean cobros reales (el simulador sí funciona)
+  if (advance && !provider.simulated && !(await realPaymentsAllowed()))
+    throw new OrderError("Los cobros con Mercado Pago todavía no están habilitados: la composición del anticipo está pendiente de aprobación. Tu pedido quedó registrado.", "formula_pending");
   if (order.inReviewAmount > 0) throw new OrderError("Tenés un comprobante de transferencia en revisión. Esperá la respuesta antes de pagar de otra forma.");
 
   const payment = await db.$transaction(async (tx) => {
